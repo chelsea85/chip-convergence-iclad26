@@ -1,0 +1,30 @@
+{
+ "ppa": {
+  "area": 13353.80742,
+  "cells": 97078.0,
+  "ff": 788.0,
+  "setup": -1115.75,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.105
+ },
+ "proxy": {
+  "cells": 158301,
+  "depth": 139,
+  "hist": {
+   "$_AND_": 24378,
+   "$_DFFE_PN0N_": 10,
+   "$_DFFE_PN0P_": 8923,
+   "$_DFFE_PN1N_": 3,
+   "$_DFFE_PN1P_": 460,
+   "$_DFFE_PP_": 788,
+   "$_DFF_PN0_": 183,
+   "$_DFF_PN1_": 117,
+   "$_MUX_": 82341,
+   "$_NOT_": 2696,
+   "$_OR_": 15291,
+   "$_XOR_": 22679,
+   "$scopeinfo": 432
+  }
+ }
+}

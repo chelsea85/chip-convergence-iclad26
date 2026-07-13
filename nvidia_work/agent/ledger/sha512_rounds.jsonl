@@ -1,0 +1,5 @@
+{"ts": "2026-07-03T17:50:25", "round": 1, "parent": "baseline", "tag": "arith-carry-chain", "rungs": ["balanced-tree"], "accepted": 1, "best_adp": 0.7869844503635143, "calls": 1, "tokens": 17412}
+{"ts": "2026-07-12T09:47:02", "round": 1, "parent": "baseline", "tag": "carry-save-gate-fail", "rungs": ["balanced-tree", "carry-save", "arith-arch"], "accepted": 0, "best_adp": 0.7869844503635143, "calls": 4, "tokens": 68859}
+{"ts": "2026-07-12T10:39:58", "round": 1, "parent": "baseline", "tag": "carry-save-gate", "rungs": ["balanced-tree", "carry-save", "arith-arch"], "accepted": 1, "best_adp": 0.7869844503635143, "calls": 4, "tokens": 111592}
+{"ts": "2026-07-12T10:52:57", "round": 1, "parent": "3939ed94c02f", "tag": "micro-opt", "rungs": ["micro-opt", "restructure-select", "balanced-tree"], "accepted": 0, "best_adp": 0.7869844503635143, "calls": 4, "tokens": 126843}
+{"ts": "2026-07-12T10:55:32", "round": 2, "parent": "3939ed94c02f", "tag": "gate-level-verification", "rungs": ["micro-opt", "restructure-select"], "accepted": 1, "best_adp": 0.7869844503635143, "calls": 7, "tokens": 202931}

@@ -1,0 +1,36 @@
+{
+ "ip": "async_fifo",
+ "result": "no-improvement: baseline is the submission",
+ "cid": "baseline",
+ "changed_files": [],
+ "baseline_ppa": {
+  "area": 120.37248,
+  "cells": 918.0,
+  "ff": 170.0,
+  "setup": 22.22,
+  "hold": 46.63,
+  "timing_met": true,
+  "power": 0.00292
+ },
+ "best_ppa": {
+  "area": 120.37248,
+  "cells": 918.0,
+  "ff": 170.0,
+  "setup": 22.22,
+  "hold": 46.63,
+  "timing_met": true,
+  "power": 0.00292
+ },
+ "adp_vs_baseline": 1.0,
+ "verification": "baseline (n/a)",
+ "llm_calls": 1,
+ "llm_tokens_approx": 2989,
+ "rounds": [
+  {
+   "round": 1,
+   "accepted": 0,
+   "note": "no candidates"
+  }
+ ],
+ "ts": "2026-07-12T00:05:28"
+}

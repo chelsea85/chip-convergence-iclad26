@@ -1,0 +1,337 @@
+[
+ {
+  "id": "p2-balanced-tree",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain"
+  ],
+  "content": "P2 (MEASURED, sha512): rewrite serial N-operand add chains as balanced binary adder trees (mod-2^w addition is associative -> provably equivalent). sha512: WNS -97->+235ps, area -0.6%, gate 24/24. Expose sub-terms as wires.",
+  "helpful": 0,
+  "harmful": 1,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "p2b-carry-save",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain"
+  ],
+  "content": "P2b: for 3+ operand adds, use carry-save (3:2 compressor) tree -> single final carry-propagate adder; shorter than balanced CPA tree. Higher rewrite risk; keep operand order documented and let the gate catch errors.",
+  "helpful": 0,
+  "harmful": 1,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "p1-gray-deregister",
+  "section": "timing",
+  "tags": [
+   "cdc",
+   "mixed-comb-depth"
+  ],
+  "content": "P1 (MEASURED, async_fifo): registered gray pointer equals gray(registered binary); replace duplicate gray register with combinational bin>>1 ^ bin. +13ps slack but +0.86% area (FF removal added comb cells). CDC-safe (single-bit change property preserved).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "p4-share-lookahead",
+  "section": "area",
+  "tags": [
+   "arith-carry-chain"
+  ],
+  "content": "P4: share redundant +/-1 lookahead incrementers (e.g. async_fifo computes gray(next) AND gray(next+1) with two adders; derive the second from the first).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "p5-syn-knobs",
+  "section": "tool",
+  "tags": [
+   "tool"
+  ],
+  "content": "P5: VT/CORNER/ABC_AREA knobs exist but env.sh clobbers CLI values during synth while STA uses caller values -> inconsistent libs. Only use knobs via workspace-patched env; keep RVT/TT/speed for scored runs until organizer clarifies legality.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "drrtl-fanout",
+  "section": "timing",
+  "tags": [
+   "control-boolean-network",
+   "wide-gate-decode"
+  ],
+  "content": "High-fanout control signal on critical path -> replicate the driver register/logic per consumer group (signal replication / fanout management).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "drrtl-precompute",
+  "section": "timing",
+  "tags": [
+   "control-boolean-network",
+   "mux-select"
+  ],
+  "content": "Deep FSM/decode condition feeding datapath -> pre-compute the condition one cycle earlier into a register when a spare cycle exists (condition pre-computation). CHECK TB latency tolerance first.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "drrtl-wide-compare",
+  "section": "timing",
+  "tags": [
+   "wide-gate-decode"
+  ],
+  "content": "Wide equality/magnitude compare on critical path -> restructure: split into ranges, early-out constant bits, or one-hot re-encode the compared state.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "drrtl-mux-restructure",
+  "section": "timing",
+  "tags": [
+   "mux-select"
+  ],
+  "content": "Mux-heavy selection tree -> re-balance select logic, convert priority chains to parallel one-hot selects, or insert a register on the select path (selective register insertion; latency check needed).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "alpha-lza-hierarchical",
+  "section": "timing",
+  "tags": [
+   "wide-gate-decode",
+   "mux-select"
+  ],
+  "content": "Wide flat casez/priority encoder -> two-level hierarchy: 4-bit group valid bits + per-group encode (log depth). C910 LZA case: -40% delay, -32% area.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "rtlscout-cutpoints",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain",
+   "mixed-comb-depth"
+  ],
+  "content": "Declare named intermediate wires with explicit widths at logical boundaries \u2014 helps Yosys/ABC partition and optimize independently (RTLScout lesson).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "rtlscout-mux-vs-shift",
+  "section": "area",
+  "tags": [
+   "mux-select"
+  ],
+  "content": "Barrel shifters have overhead; for small index ranges (<=~11) an explicit mux chain is cheaper (RTLScout).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "arith-menu",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain"
+  ],
+  "content": "Arithmetic architecture menu for critical-path * and +: partial products via carry-save/Wallace/Dadda/4:2-compressor tree; final adder Kogge-Stone / Brent-Kung / Sklansky / sparse-KS. Propose ONE alternative per candidate.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "pluto-area",
+  "section": "area",
+  "tags": [
+   "area"
+  ],
+  "content": "Area levers: logic simplification/CSE, FSM re-encoding (binary vs one-hot by state count), resource sharing of mutually-exclusive adders/multipliers, operator strength reduction (x*2^k -> shift).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "pluto-power",
+  "section": "power",
+  "tags": [
+   "power"
+  ],
+  "content": "Power levers: operand isolation (gate inputs of unused units), clock gating via enable registers, minimize shifting register banks (pointer-addressed window instead of physical shift). Power numbers are noisy without activity data \u2014 trust only large deltas.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "shift-to-pointer",
+  "section": "power",
+  "tags": [
+   "power",
+   "area"
+  ],
+  "content": "Large physically-shifting register file (e.g. sha512 w_mem 16x64 shifts 1024 FF/cycle) -> circular buffer with pointer-addressed reads; cuts FF clock activity and mux area. Medium risk: index arithmetic must be exact.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "avoid-rebalance-optimal",
+  "section": "avoid",
+  "tags": [
+   "avoid"
+  ],
+  "content": "AVOID re-balancing logic ABC already optimizes well (absorbed by synthesis, adds churn/risk for ~0 gain) \u2014 e.g. simple 2-3 operand expressions (Dr. RTL AVOID).",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "avoid-move-control-regs",
+  "section": "avoid",
+  "tags": [
+   "avoid"
+  ],
+  "content": "AVOID moving control-signal updates across register boundaries \u2014 top equivalence-breaker class in Dr. RTL (SEC failures).",
+  "helpful": 2,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "avoid-ff-count-chasing",
+  "section": "avoid",
+  "tags": [
+   "avoid"
+  ],
+  "content": "AVOID chasing FF count: in ASAP7 FFs are cheap; removing FFs by adding comb+buffers can INCREASE area (L1, measured in exp1).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "avoid-cdc-restructure",
+  "section": "avoid",
+  "tags": [
+   "avoid",
+   "cdc"
+  ],
+  "content": "AVOID restructuring 2-FF synchronizers or gray-code CDC pointer logic beyond proven P1; every published method scored ZERO on async_fifo by breaking this (Alpha-RTL Table 4).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "p2-pure-sum-noop",
+  "section": "pitfall",
+  "tags": [
+   "arith-carry-chain"
+  ],
+  "content": "P2 applicability (MEASURED, exp3): source-level balancing of a PURE N-operand sum (e.g. w_new = a+b+c+d) is a no-op \u2014 ABC's delay-aware mapping already rebalances clean sums (identical netlist). P2 pays when serial adds are ENTANGLED with nonlinear logic between terms (Ch/Maj/sigma in exp2: +332ps). Target entangled chains only.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "ascon-mux-isolation-noop",
+  "section": "avoid",
+  "tags": [
+   "mux-select",
+   "wide-gate-decode",
+   "avoid"
+  ],
+  "content": "AVOID source-level mux/late-signal-isolation hints (MEASURED, ascon exp4): rewriting a 4-way `unique case` writeback into early-resolve + a single 2:1 on the late round signal is ABSORBED by ABC's timing-driven mapping \u2014 proxy depth unchanged (83->83), setup -430->-443, +101 cells from the duplicated select compare. Corollary to p2-pure-sum-noop: ABC recovers LOCAL restructuring (mux balance, pure-sum assoc). Only GLOBAL algebraic changes ABC can't reverse survive (exp2 entangled adder tree; GF-basis swaps).",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-03"
+ },
+ {
+  "id": "learned-22-74822",
+  "section": "pitfall",
+  "tags": [
+   "carry-save-gate-fail",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual carry-save (3:2 compressor) insertion in sha512 can lead to gate-level synthesis flow failures or tool crashes.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-12"
+ },
+ {
+  "id": "learned-23-77998",
+  "section": "timing",
+  "tags": [
+   "arith-arch",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Selecting specific arithmetic architectures for multi-operand hash functions can recover significant slack while simultaneously reducing area.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-12"
+ },
+ {
+  "id": "learned-24-77998",
+  "section": "pitfall",
+  "tags": [
+   "carry-save-gate",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual carry-save transformations in SHA-512 logic may cause gate-level synthesis or verification failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-12"
+ },
+ {
+  "id": "learned-25-78777",
+  "section": "pitfall",
+  "tags": [
+   "gate-fail",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual restructuring of select logic or tree balancing in SHA512 frequently causes gate-level verification failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-12"
+ },
+ {
+  "id": "learned-26-78777",
+  "section": "timing",
+  "tags": [
+   "micro-opt",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Targeted micro-optimizations in SHA512 can yield significant setup slack gains with minimal area impact.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-12"
+ },
+ {
+  "id": "learned-27-78932",
+  "section": "timing",
+  "tags": [
+   "restructure-select",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Restructuring mux-heavy selection logic can improve setup slack and area by reducing logic depth and gate count.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-12"
+ },
+ {
+  "id": "learned-28-78932",
+  "section": "pitfall",
+  "tags": [
+   "gate-level-verification",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Aggressive micro-optimizations often lead to gate-level or SEC failures, necessitating strict adherence to equivalence-preserving transformations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-12"
+ }
+]

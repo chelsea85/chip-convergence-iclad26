@@ -1,0 +1,26 @@
+{
+ "ppa": {
+  "area": 120.37248,
+  "cells": 918.0,
+  "ff": 170.0,
+  "setup": 22.22,
+  "hold": 46.63,
+  "timing_met": true,
+  "power": 0.00292
+ },
+ "proxy": {
+  "cells": 449,
+  "depth": 15,
+  "hist": {
+   "$_AND_": 60,
+   "$_DFFE_PP_": 128,
+   "$_DFF_PN0_": 41,
+   "$_DFF_PN1_": 1,
+   "$_MUX_": 132,
+   "$_NOT_": 14,
+   "$_OR_": 16,
+   "$_XOR_": 52,
+   "$scopeinfo": 5
+  }
+ }
+}

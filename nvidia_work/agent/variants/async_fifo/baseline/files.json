@@ -1,0 +1,8 @@
+{
+ "async_fifo.v": "async_fifo/rtl/async_fifo.v",
+ "fifomem.v": "async_fifo/rtl/fifomem.v",
+ "rptr_empty.v": "async_fifo/rtl/rptr_empty.v",
+ "sync_r2w.v": "async_fifo/rtl/sync_r2w.v",
+ "sync_w2r.v": "async_fifo/rtl/sync_w2r.v",
+ "wptr_full.v": "async_fifo/rtl/wptr_full.v"
+}

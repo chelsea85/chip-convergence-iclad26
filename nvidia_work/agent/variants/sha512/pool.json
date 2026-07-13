@@ -1,0 +1,66 @@
+[
+ {
+  "cid": "baseline",
+  "ppa": {
+   "area": 3984.2037,
+   "cells": 29307.0,
+   "ff": 3674.0,
+   "setup": -97.3,
+   "hold": 48.66,
+   "timing_met": false,
+   "power": 0.00223
+  },
+  "parent": null,
+  "strategy": "baseline",
+  "wins": 2.8409635902631756,
+  "losses": 4.659036409736824
+ },
+ {
+  "cid": "67ad60a10f97",
+  "ppa": {
+   "area": 3960.2925,
+   "cells": 28955.0,
+   "ff": 3674.0,
+   "setup": 235.36,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "baseline",
+  "strategy": "balanced-tree",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "3939ed94c02f",
+  "ppa": {
+   "area": 3973.6332,
+   "cells": 29186.0,
+   "ff": 3674.0,
+   "setup": 62.12,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "baseline",
+  "strategy": "arith-arch",
+  "wins": 1.4210880640937904,
+  "losses": 3.5789119359062096
+ },
+ {
+  "cid": "e7fee825c983",
+  "ppa": {
+   "area": 3943.90458,
+   "cells": 28917.0,
+   "ff": 3674.0,
+   "setup": 72.73,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "3939ed94c02f",
+  "strategy": "restructure-select",
+  "wins": 0.0,
+  "losses": 0.0
+ }
+]

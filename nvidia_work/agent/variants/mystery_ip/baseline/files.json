@@ -1,0 +1,8 @@
+{
+ "async_fifo.v": "mystery_ip/rtl/async_fifo.v",
+ "fifomem.v": "mystery_ip/rtl/fifomem.v",
+ "rptr_empty.v": "mystery_ip/rtl/rptr_empty.v",
+ "sync_r2w.v": "mystery_ip/rtl/sync_r2w.v",
+ "sync_w2r.v": "mystery_ip/rtl/sync_w2r.v",
+ "wptr_full.v": "mystery_ip/rtl/wptr_full.v"
+}
