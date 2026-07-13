@@ -35,3 +35,7 @@ done
 find "$DST" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 find "$DST/nxp_work" -name agent_out -type d -exec rm -rf {} + 2>/dev/null || true
 echo "synced from $SRC"
+
+# Slides
+mkdir -p "$DST/docs/slides"
+cp "$SRC/slides"/*.md "$SRC/slides"/*.pdf "$DST/docs/slides/" 2>/dev/null || true
