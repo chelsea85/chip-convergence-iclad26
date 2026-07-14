@@ -98,6 +98,15 @@ class Objective:
         }
 
         if self.mode == "pareto":
+            # Headline-metric override (2026-07-13, exp6 lesson): the contest
+            # metric is ADP-shaped, so a strict ADP win is accepted even when
+            # a single axis regresses slightly (exp6: +0.23% area for +73 ps
+            # → ADP 0.787→0.743 was being VETOED by pure epsilon-dominance).
+            # Power guard: ADP ignores power, so cap its regression.
+            adp = self.adp_ratio(cand, base)
+            if (adp is not None and adp < 0.995
+                    and n["power"] <= eps["power"] * 5):
+                return True, f"ADP {adp:.3f} vs parent (headline override)"
             if any(regresses.values()):
                 bad = [k for k, v in regresses.items() if v]
                 return False, f"regresses {','.join(bad)}"

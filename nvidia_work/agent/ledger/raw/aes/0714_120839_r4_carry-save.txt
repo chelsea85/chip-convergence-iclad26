@@ -1,0 +1,63 @@
+// FILE: aes_mix_columns.v
+module aes_mix_columns (
+	op_i,
+	data_i,
+	data_o
+);
+	localparam signed [31:0] aes_pkg_AES_OP_WIDTH = 2;
+	input wire [1:0] op_i;
+	input wire [127:0] data_i;
+	output wire [127:0] data_o;
+
+	// Optimization: Buffer the control signal op_i to reduce fanout and improve 
+	// timing on the control-boolean-network paths identified in the diagnosis.
+	wire [1:0] op_buf;
+	prim_buf #(.Width(2)) u_prim_buf_op (
+		.in_i(op_i),
+		.out_o(op_buf)
+	);
+
+	// Optimization: Use explicit named intermediate wires for transposed data.
+	// This acts as a cutpoint for the Yosys/ABC optimizer (rtlscout-cutpoints),
+	// helping it partition the logic and optimize the XOR trees more effectively.
+	wire [127:0] data_i_transposed;
+	wire [127:0] data_o_transposed;
+
+	// Optimization: Replace the function-based transposition with explicit 
+	// bit-level wiring using generate loops. This ensures the synthesizer 
+	// treats the transposition as a zero-cost wiring operation and avoids 
+	// any potential overhead from function inlining or logic inference.
+	genvar i, j;
+	generate
+		for (i = 0; i < 4; i = i + 1) begin : gen_row_i
+			for (j = 0; j < 4; j = j + 1) begin : gen_col_j
+				// Transpose mapping: out_byte[row][col] = in_byte[col][row]
+				assign data_i_transposed[(i * 4 + j) * 8 +: 8] = data_i[(j * 4 + i) * 8 +: 8];
+			end
+		end
+	endgenerate
+
+	// Optimization: Parallel instantiation of the MixColumn logic.
+	// By providing a clean, balanced structure to the synthesizer, we help 
+	// it optimize the arith-carry-chain (XOR trees) within the sub-modules.
+	generate
+		for (i = 0; i < 4; i = i + 1) begin : gen_mix_column
+			aes_mix_single_column u_aes_mix_column_i (
+				.op_i(op_buf),
+				.data_i(data_i_transposed[i * 32 +: 32]),
+				.data_o(data_o_transposed[i * 32 +: 32])
+			);
+		end
+	endgenerate
+
+	// Optimization: Explicit transposition of the output to restore original orientation.
+	generate
+		for (i = 0; i < 4; i = i + 1) begin : gen_out_row_i
+			for (j = 0; j < 4; j = j + 1) begin : gen_out_col_j
+				assign data_o[(i * 4 + j) * 8 +: 8] = data_o_transposed[(j * 4 + i) * 8 +: 8];
+			end
+		end
+	endgenerate
+
+endmodule
+

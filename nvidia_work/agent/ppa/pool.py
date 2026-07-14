@@ -37,13 +37,17 @@ class DesignState:
 
 
 class DesignPool:
-    def __init__(self, ip: str, seed: int = 0):
+    def __init__(self, ip: str, seed: int = 0, fresh: bool = False):
         self.ip = ip
         self.rng = random.Random(seed)
         self.states: dict[str, DesignState] = {}
         self._dir = VARIANTS / ip
         self._meta = self._dir / "pool.json"
-        self._load()
+        # fresh=True: start from baseline only (ignore prior banked wins) — for
+        # clean coordinate-descent demos where pre-banked wins would dominate
+        # parent selection.
+        if not fresh:
+            self._load()
 
     # ── persistence ──────────────────────────────────────────────────────────
     def _load(self):

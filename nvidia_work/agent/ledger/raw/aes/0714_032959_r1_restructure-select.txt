@@ -1,0 +1,241 @@
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	parameter signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	parameter signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	parameter signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	parameter signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	parameter signed [31:0] top_pkg_TL_AIW = 8;
+	parameter signed [31:0] top_pkg_TL_AW = 32;
+	parameter signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+
+	localparam UserW = tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width + tlul_pkg_H2DCmdIntgWidth + tlul_pkg_DataIntgWidth;
+	localparam TotalW = 1 + 3 + 3 + top_pkg_TL_SZW + top_pkg_TL_AIW + top_pkg_TL_AW + top_pkg_TL_DBW + top_pkg_TL_DW + UserW;
+
+	input wire [TotalW-1:0] tl_i;
+	output wire err_o;
+
+	// Explicitly extract fields to help synthesis partition and optimize the boolean network.
+	// This replaces the complex nested function calls and dynamic-looking index arithmetic.
+	wire [top_pkg_TL_AW-1:0]  a_address;
+	wire [2:0]                a_opcode;
+	wire [top_pkg_TL_DBW-1:0] a_mask;
+	wire [3:0]                a_mubi;
+	wire                      a_valid;
+	wire [6:0]                a_cmd_intg;
+	wire [6:0]                a_data_intg;
+	wire [top_pkg_TL_DW-1:0]  a_data;
+
+	// Field extraction based on TL-UL H2D bus mapping.
+	// Offsets are calculated as constants to ensure clean logic mapping.
+	assign a_address  = tl_i[UserW + top_pkg_TL_DW + top_pkg_TL_DBW + top_pkg_TL_AW - 1 : UserW + top_pkg_TL_DW + top_pkg_TL_DBW];
+	assign a_mask     = tl_i[UserW + top_pkg_TL_DW + top_pkg_TL_DBW - 1 : UserW + top_pkg_TL_DW];
+	assign a_data     = tl_i[UserW + top_pkg_TL_DW - 1 : UserW];
+	
+	// Opcode is located after Address, Source, Size, and Param fields.
+	localparam OpcodeOff = UserW + top_pkg_TL_DW + top_pkg_TL_DBW + top_pkg_TL_AW + top_pkg_TL_AIW + top_pkg_TL_SZW + 3;
+	assign a_opcode   = tl_i[OpcodeOff + 2 : OpcodeOff];
+	
+	// Valid bit is the MSB of the command header.
+	assign a_valid    = tl_i[OpcodeOff + 7];
+
+	// User field breakdown (Integrity and Mubi signals).
+	assign a_mubi      = tl_i[18:15];
+	assign a_cmd_intg  = tl_i[14:8];
+	assign a_data_intg = tl_i[7:1];
+
+	// Construct the 57-bit command payload for the SECDED decoder.
+	// The mapping follows the original tlul_pkg_extract_h2d_cmd_intg logic.
+	wire [56:0] cmd_payload;
+	assign cmd_payload = {14'b0, a_mubi, a_address, a_opcode, a_mask};
+
+	wire [1:0] err;
+	prim_secded_inv_64_57_dec u_chk (
+		.data_i({a_cmd_intg, cmd_payload}),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+
+	wire data_err;
+	tlul_data_integ_dec u_tlul_data_integ_dec (
+		.data_intg_i({a_data_intg, a_data}),
+		.data_err_o(data_err)
+	);
+
+	// Error is only signaled if the command is valid.
+	assign err_o = a_valid & (|err | data_err);
+
+	// Tie-off for unused bits to prevent lint warnings.
+	wire unused_tl;
+	assign unused_tl = |tl_i;
+endmodule
+
+// FILE: aes_ctrl_gcm_reg_shadowed.v
+module aes_ctrl_gcm_reg_shadowed (
+	clk_i,
+	rst_ni,
+	rst_shadowed_ni,
+	qe_o,
+	we_i,
+	phase_o,
+	init_done_i,
+	first_block_i,
+	gcm_phase_o,
+	num_valid_bytes_o,
+	err_update_o,
+	err_storage_o,
+	reg2hw_ctrl_gcm_i,
+	hw2reg_ctrl_gcm_o
+);
+	reg _sv2v_0;
+	parameter [0:0] AESGCMEnable = 1;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire rst_shadowed_ni;
+	output wire qe_o;
+	input wire we_i;
+	output wire phase_o;
+	input wire init_done_i;
+	input wire first_block_i;
+	localparam signed [31:0] aes_pkg_AES_GCMPHASE_WIDTH = 6;
+	output wire [5:0] gcm_phase_o;
+	output wire [4:0] num_valid_bytes_o;
+	output wire err_update_o;
+	output wire err_storage_o;
+	input wire [14:0] reg2hw_ctrl_gcm_i;
+	output wire [10:0] hw2reg_ctrl_gcm_o;
+
+	wire phase_gcm_phase;
+	wire phase_num_valid_bytes;
+	wire err_update_gcm_phase;
+	wire err_update_num_valid_bytes;
+	wire err_storage_gcm_phase;
+	wire err_storage_num_valid_bytes;
+
+	assign qe_o = reg2hw_ctrl_gcm_i[1] & reg2hw_ctrl_gcm_i[9];
+
+	localparam [4:0] AES_GCM_VAL_BYTES_RESVAL = 5'h10;
+	localparam [5:0] AES_GCM_PHASE_RESVAL = 6'h01;
+
+	generate
+		if (AESGCMEnable) begin : gen_ctrl_gcm_reg_shadowed
+			wire [10:0] ctrl_gcm_wd;
+			wire [5:0] gcm_phase_in;
+			reg [5:0] gcm_phase_next;
+			wire [4:0] num_valid_bytes_in;
+
+			assign gcm_phase_in = reg2hw_ctrl_gcm_i[7:2];
+			
+			// Optimize the phase transition logic by flattening the nested conditions.
+			// This reduces the depth of the control boolean network.
+			always @(*) begin
+				case (gcm_phase_o)
+					6'b000001: begin // Init
+						if (init_done_i && (gcm_phase_in == 6'b000010 || gcm_phase_in == 6'b000100 || 
+						                    gcm_phase_in == 6'b001000 || gcm_phase_in == 6'b100000))
+							gcm_phase_next = gcm_phase_in;
+						else
+							gcm_phase_next = gcm_phase_o;
+					end
+					6'b000010: begin // Restore
+						if (gcm_phase_in == 6'b000001 || gcm_phase_in == 6'b000100 || gcm_phase_in == 6'b001000)
+							gcm_phase_next = gcm_phase_in;
+						else
+							gcm_phase_next = gcm_phase_o;
+					end
+					6'b000100: begin // AAD
+						if (gcm_phase_in == 6'b000001 || gcm_phase_in == 6'b001000 || 
+						    (gcm_phase_in == 6'b010000 && !first_block_i) || gcm_phase_in == 6'b100000)
+							gcm_phase_next = gcm_phase_in;
+						else
+							gcm_phase_next = gcm_phase_o;
+					end
+					6'b001000: begin // Text
+						if (gcm_phase_in == 6'b000001 || (gcm_phase_in == 6'b010000 && !first_block_i) || 
+						    gcm_phase_in == 6'b100000)
+							gcm_phase_next = gcm_phase_in;
+						else
+							gcm_phase_next = gcm_phase_o;
+					end
+					6'b010000, 6'b100000: begin // Save, Tag
+						if (gcm_phase_in == 6'b000001)
+							gcm_phase_next = gcm_phase_in;
+						else
+							gcm_phase_next = gcm_phase_o;
+					end
+					default: gcm_phase_next = gcm_phase_o;
+				endcase
+			end
+
+			assign ctrl_gcm_wd[5:0] = gcm_phase_next;
+			assign num_valid_bytes_in = reg2hw_ctrl_gcm_i[14:10];
+			assign ctrl_gcm_wd[10:6] = ((num_valid_bytes_in == 5'd0) || (num_valid_bytes_in > 5'd16)) ? 5'd16 : num_valid_bytes_in;
+
+			prim_subreg_shadow #(
+				.DW(6),
+				.SwAccess(3'd2),
+				.RESVAL(AES_GCM_PHASE_RESVAL)
+			) u_ctrl_gcm_reg_shadowed_phase(
+				.clk_i(clk_i),
+				.rst_ni(rst_ni),
+				.rst_shadowed_ni(rst_shadowed_ni),
+				.re(reg2hw_ctrl_gcm_i[0]),
+				.we(we_i),
+				.wd(ctrl_gcm_wd[5:0]),
+				.de(1'b0),
+				.d(6'b0),
+				.qe(),
+				.q(hw2reg_ctrl_gcm_o[5:0]),
+				.qs(),
+				.ds(),
+				.phase(phase_gcm_phase),
+				.err_update(err_update_gcm_phase),
+				.err_storage(err_storage_gcm_phase)
+			);
+
+			prim_subreg_shadow #(
+				.DW(5),
+				.SwAccess(3'd2),
+				.RESVAL(AES_GCM_VAL_BYTES_RESVAL)
+			) u_ctrl_gcm_reg_shadowed_num_valid_bytes(
+				.clk_i(clk_i),
+				.rst_ni(rst_ni),
+				.rst_shadowed_ni(rst_shadowed_ni),
+				.re(reg2hw_ctrl_gcm_i[8]),
+				.we(we_i),
+				.wd(ctrl_gcm_wd[10:6]),
+				.de(1'b0),
+				.d(5'b0),
+				.qe(),
+				.q(hw2reg_ctrl_gcm_o[10:6]),
+				.qs(),
+				.ds(),
+				.phase(phase_num_valid_bytes),
+				.err_update(err_update_num_valid_bytes),
+				.err_storage(err_storage_num_valid_bytes)
+			);
+		end else begin : gen_no_ctrl_gcm_reg_shadowed
+			assign hw2reg_ctrl_gcm_o = {5'd16, 6'b000001};
+			assign phase_gcm_phase = 1'b1;
+			assign phase_num_valid_bytes = 1'b1;
+			assign err_update_gcm_phase = 1'b0;
+			assign err_update_num_valid_bytes = 1'b0;
+			assign err_storage_gcm_phase = 1'b0;
+			assign err_storage_num_valid_bytes = 1'b0;
+			wire unused_sigs = ^{clk_i, rst_ni, rst_shadowed_ni, we_i, init_done_i, first_block_i, reg2hw_ctrl_gcm_i};
+		end
+	endgenerate
+
+	assign phase_o = phase_gcm_phase | phase_num_valid_bytes;
+	assign err_update_o = err_update_gcm_phase | err_update_num_valid_bytes;
+	assign err_storage_o = err_storage_gcm_phase | err_storage_num_valid_bytes;
+	assign gcm_phase_o = hw2reg_ctrl_gcm_o[5:0];
+	assign num_valid_bytes_o = hw2reg_ctrl_gcm_o[10:6];
+	initial _sv2v_0 = 0;
+endmodule

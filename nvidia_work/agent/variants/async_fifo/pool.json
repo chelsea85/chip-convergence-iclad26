@@ -12,6 +12,22 @@
   },
   "parent": null,
   "strategy": "baseline",
+  "wins": 2.885659778093866,
+  "losses": 2.114340221906134
+ },
+ {
+  "cid": "070ce7b90bd0",
+  "ppa": {
+   "area": 121.40766,
+   "cells": 933.0,
+   "ff": 162.0,
+   "setup": 35.21,
+   "hold": 46.63,
+   "timing_met": true,
+   "power": 0.00291
+  },
+  "parent": "baseline",
+  "strategy": "micro-opt",
   "wins": 0.0,
   "losses": 0.0
  }

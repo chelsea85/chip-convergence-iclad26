@@ -1,0 +1,34 @@
+[
+ {
+  "cid": "baseline",
+  "ppa": {
+   "area": 10100.5137,
+   "cells": 74234.0,
+   "ff": 7478.0,
+   "setup": -848.15,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.0656
+  },
+  "parent": null,
+  "strategy": "baseline",
+  "wins": 5.8,
+  "losses": 7.2
+ },
+ {
+  "cid": "ef6802dbb301",
+  "ppa": {
+   "area": 10139.26734,
+   "cells": 74701.0,
+   "ff": 7478.0,
+   "setup": -844.65,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.0617
+  },
+  "parent": "baseline",
+  "strategy": "arith-arch",
+  "wins": 2.8,
+  "losses": 3.2
+ }
+]

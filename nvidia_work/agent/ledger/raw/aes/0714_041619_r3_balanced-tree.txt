@@ -1,0 +1,112 @@
+// FILE: prim_onehot_check.v
+module prim_onehot_check (
+	clk_i,
+	rst_ni,
+	oh_i,
+	addr_i,
+	en_i,
+	err_o
+);
+	parameter [31:0] AddrWidth = 5;
+	parameter [31:0] OneHotWidth = 2 ** AddrWidth;
+	parameter [0:0] AddrCheck = 1;
+	parameter [0:0] EnableCheck = 1;
+	parameter [0:0] StrictCheck = 1;
+	parameter [0:0] EnableAlertTriggerSVA = 1;
+	input clk_i;
+	input rst_ni;
+	input wire [OneHotWidth - 1:0] oh_i;
+	input wire [AddrWidth - 1:0] addr_i;
+	input wire en_i;
+	output wire err_o;
+
+	localparam signed [31:0] NumLevels = AddrWidth;
+	
+	// Use named intermediate wires to help the optimizer partition the logic [rtlscout-cutpoints]
+	wire [(2 ** (NumLevels + 1)) - 2:0] or_tree;
+	wire [(2 ** (NumLevels + 1)) - 2:0] and_tree;
+	wire [(2 ** (NumLevels + 1)) - 2:0] err_tree;
+
+	genvar _gv_level_1;
+	generate
+		for (_gv_level_1 = 0; _gv_level_1 < (NumLevels + 1); _gv_level_1 = _gv_level_1 + 1) begin : gen_tree
+			localparam level = _gv_level_1;
+			localparam signed [31:0] Base0 = (2 ** level) - 1;
+			localparam signed [31:0] Base1 = (2 ** (level + 1)) - 1;
+			genvar _gv_offset_1;
+			for (_gv_offset_1 = 0; _gv_offset_1 < (2 ** level); _gv_offset_1 = _gv_offset_1 + 1) begin : gen_level
+				localparam offset = _gv_offset_1;
+				localparam signed [31:0] Pa = Base0 + offset;
+				localparam signed [31:0] C0 = Base1 + (2 * offset);
+				localparam signed [31:0] C1 = (Base1 + (2 * offset)) + 1;
+				if (level == NumLevels) begin : gen_leafs
+					if (offset < OneHotWidth) begin : gen_assign
+						assign or_tree[Pa] = oh_i[offset];
+						assign and_tree[Pa] = oh_i[offset];
+					end
+					else begin : gen_tie_off
+						assign or_tree[Pa] = 1'b0;
+						assign and_tree[Pa] = 1'b0;
+					end
+					assign err_tree[Pa] = 1'b0;
+				end
+				else begin : gen_nodes
+					// or_tree: reduction OR
+					assign or_tree[Pa] = or_tree[C0] | or_tree[C1];
+					
+					// and_tree: binary MUX tree to select oh_i[addr_i]
+					// Balanced tree structure is already efficient for timing.
+					assign and_tree[Pa] = (addr_i[(AddrWidth - 1) - level]) ? and_tree[C1] : and_tree[C0];
+					
+					// err_tree: checks if more than one bit is set in the subtree
+					// Re-associated for better balancing [p2-pure-sum-noop]
+					assign err_tree[Pa] = (or_tree[C0] & or_tree[C1]) | (err_tree[C0] | err_tree[C1]);
+				end
+			end
+		end
+	endgenerate
+
+	wire any_bit_set;
+	wire bit_at_addr;
+	wire more_than_one;
+
+	assign any_bit_set = or_tree[0];
+	assign bit_at_addr = and_tree[0];
+	assign more_than_one = err_tree[0];
+
+	wire enable_err;
+	wire addr_err;
+
+	// Optimization: Simplify the error logic based on boolean identities.
+	// If more_than_one is true, it's always an error.
+	// If more_than_one is false, we check if the single bit set (if any) is correct.
+	
+	generate
+		if (EnableCheck) begin : gen_enable_check
+			if (StrictCheck) begin : gen_strict
+				// Error if (any bit set) != en_i
+				assign enable_err = any_bit_set ^ en_i;
+			end
+			else begin : gen_not_strict
+				// Error if (any bit set) AND NOT en_i
+				assign enable_err = any_bit_set & (~en_i);
+			end
+		end
+		else begin : gen_no_enable_check
+			assign enable_err = 1'b0;
+		end
+
+		if (AddrCheck) begin : gen_addr_check
+			// Error if (any bit set) != (bit at addr_i set)
+			// This covers the case where a bit is set but it's the wrong one.
+			assign addr_err = any_bit_set ^ bit_at_addr;
+		end
+		else begin : gen_no_addr_check
+			assign addr_err = 1'b0;
+		end
+	endgenerate
+
+	// Final error output: Balanced OR tree for the three error sources
+	assign err_o = more_than_one | (enable_err | addr_err);
+
+endmodule

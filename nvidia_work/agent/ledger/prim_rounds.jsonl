@@ -1,0 +1,3 @@
+{"ts": "2026-07-13T15:38:34", "round": 1, "parent": "baseline", "tag": "micro-opt-interference", "rungs": ["micro-opt", "balanced-tree", "carry-save"], "accepted": 0, "best_adp": 1.0, "calls": 6, "tokens": 1417500}
+{"ts": "2026-07-13T15:41:32", "round": 2, "parent": "baseline", "tag": "synth-fail", "rungs": ["micro-opt"], "accepted": 0, "best_adp": 1.0, "calls": 8, "tokens": 1670681}
+{"ts": "2026-07-13T15:48:51", "round": 3, "parent": "baseline", "tag": "micro-opt-redundancy", "rungs": ["micro-opt"], "accepted": 0, "best_adp": 1.0, "calls": 10, "tokens": 1945722}

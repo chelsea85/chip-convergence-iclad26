@@ -1,0 +1,67 @@
+// FILE: aes_mix_columns.v
+module aes_mix_columns (
+	op_i,
+	data_i,
+	data_o
+);
+	localparam signed [31:0] aes_pkg_AES_OP_WIDTH = 2;
+	input wire [1:0] op_i;
+	input wire [127:0] data_i;
+	output wire [127:0] data_o;
+
+	// Optimization: Use prim_buf for control signals to potentially improve timing
+	// and help the synthesis tool isolate the control logic from the data path.
+	wire [1:0] op_buf;
+	prim_buf #(.Width(2)) u_prim_buf_op (
+		.in_i(op_i),
+		.out_o(op_buf)
+	);
+
+	// Optimization: Replace the automatic function with explicit wiring.
+	// This avoids potential synthesis overhead and makes the structure clearer.
+	// [rtlscout-cutpoints] Declare named intermediate wires at logical boundaries.
+	wire [31:0] col_i [0:3];
+	wire [31:0] col_o [0:3];
+
+	// AES State is typically stored in column-major order.
+	// data_i = {col3, col2, col1, col0}
+	// Each column is {byte3, byte2, byte1, byte0}
+	// The transpose function in the original code effectively rearranges the bytes
+	// so that aes_mix_single_column can operate on the correct 4-byte groups.
+	
+	genvar i;
+	generate
+		for (i = 0; i < 4; i = i + 1) begin : gen_mix_column
+			// Input Transpose: Extracting "columns" from the input data.
+			// Based on the original function: transpose[((i * 4) + j) * 8+:8] = in[((j * 4) + i) * 8+:8]
+			// For a fixed i (column index of transposed data), we take the i-th byte of each 4-byte word.
+			assign col_i[i] = {
+				data_i[8*(12+i) +: 8],
+				data_i[8*(8+i)  +: 8],
+				data_i[8*(4+i)  +: 8],
+				data_i[8*(i)    +: 8]
+			};
+
+			// Arithmetic Architecture: The MixColumns operation is the core arithmetic of AES.
+			// We keep the instantiation but ensure the surrounding logic is optimized.
+			aes_mix_single_column u_aes_mix_column_i(
+				.op_i(op_buf),
+				.data_i(col_i[i]),
+				.data_o(col_o[i])
+			);
+		end
+	endgenerate
+
+	// Output Transpose: Reassembling the 128-bit state from the mixed columns.
+	// Based on the original function: data_o = transpose(data_o_transposed)
+	// This is the inverse of the input transpose.
+	generate
+		for (i = 0; i < 4; i = i + 1) begin : gen_out_transpose
+			assign data_o[8*i+:8]      = col_o[0][8*i+:8];
+			assign data_o[8*(i+4)+:8]  = col_o[1][8*i+:8];
+			assign data_o[8*(i+8)+:8]  = col_o[2][8*i+:8];
+			assign data_o[8*(i+12)+:8] = col_o[3][8*i+:8];
+		end
+	endgenerate
+
+endmodule

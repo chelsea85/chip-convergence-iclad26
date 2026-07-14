@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import sys
 import threading
@@ -122,7 +123,7 @@ _PPA_RE = re.compile(
 def measure(ws: Workspace, label: str = "m") -> dict | None:
     spec = ws.spec
     r = ws.run(f"bash /harness/measure.sh {spec.syn_dir} {label} RVT TT 0 "
-               f"{spec.skip_sv2v}", timeout=7200)
+               f"{spec.skip_sv2v} {spec.top}", timeout=7200)
     line = (r.stdout or "").strip().splitlines()[-1] if r.stdout else ""
     m = _PPA_RE.search(line)
     if not m:
@@ -181,6 +182,43 @@ def baseline(ip: str, refresh: bool = False) -> dict:
 
 
 # ── per-candidate pipeline ────────────────────────────────────────────────────
+_PRISTINE_LAYER_CACHE: dict[tuple, bool] = {}
+_PRISTINE_LOCK = threading.Lock()
+
+
+def _pristine_layer_fails(ip: str, layer: str) -> bool:
+    """Does this verify layer fail on the PRISTINE design? Cached per IP.
+    Used for differential gating: pre-existing fileset artifacts must not
+    block candidates (they fail with or without the change). Lock-guarded so
+    that k parallel workers do exactly ONE pristine build (unique tag), not a
+    directory-colliding race."""
+    key = (ip, layer)
+    with _PRISTINE_LOCK:
+        if key not in _PRISTINE_LAYER_CACHE:
+            ws = Workspace.create(ip, tag=f"prist_{layer}_{os.getpid()}")
+            try:
+                fn = {"compile": V.compile_gate, "gate": V.tb_gate}[layer]
+                status, _ = fn(ws)
+                _PRISTINE_LAYER_CACHE[key] = status == "FAIL"
+            finally:
+                ws.destroy()
+    return _PRISTINE_LAYER_CACHE[key]
+
+
+def measure_candidate(cand: Candidate) -> dict | None:
+    """Synthesize+STA a candidate to get its PPA, regardless of functional
+    correctness. Used to rank GATE-FAILED candidates for repair: a broken
+    netlist's timing still reveals whether its transform would improve PPA if
+    the functional bug were fixed (2026-07-13, PPA-prioritised repair)."""
+    ws = Workspace.create(cand.ip, cand.files, tag="mc_" + cand.cid[:6])
+    try:
+        return measure(ws, f"{cand.ip}-mc-{cand.cid[:6]}")
+    except Exception:
+        return None
+    finally:
+        ws.destroy()
+
+
 def evaluate_one(cand: Candidate, base: dict, *,
                  use_proxy: bool = True,
                  full_verify: bool = False,
@@ -204,16 +242,30 @@ def evaluate_one(cand: Candidate, base: dict, *,
         return _finish(cand, res, vr, t0)
     try:
         status, detail = V.compile_gate(ws)
-        vr.record("compile", status, detail)
+        if status == "FAIL" and _pristine_layer_fails(cand.ip, "compile"):
+            # DIFFERENTIAL GATING (2026-07-13, kmac finding): the pristine
+            # fileset itself fails this iverilog layer (sv2v artifact — e.g.
+            # kmac's hw2reg variable driven by an instance output; legal SV,
+            # illegal V2001; yosys accepts it fine). A layer that fails
+            # identically on pristine cannot indict the candidate.
+            vr.record("compile", "PRE-EXISTING", detail[-200:])
+            status = "PRE-EXISTING"
+        else:
+            vr.record("compile", status, detail)
         if status == "FAIL":
             res.status, res.detail = "compile-fail", detail
             return _finish(cand, res, vr, t0)
 
-        status, detail = V.tb_gate(ws)
-        vr.record("gate", status, detail)
-        if status == "FAIL":
-            res.status, res.detail = "gate-fail", detail
-            return _finish(cand, res, vr, t0)
+        if status != "PRE-EXISTING":
+            status, detail = V.tb_gate(ws)
+            vr.record("gate", status, detail)
+            if status == "FAIL":
+                res.status, res.detail = "gate-fail", detail
+                return _finish(cand, res, vr, t0)
+        else:
+            # no iverilog elaboration -> TB/dualsim unavailable; LEC (yosys)
+            # remains the correctness gate for this IP
+            vr.record("gate", "SKIP-preexisting", "")
 
         if use_proxy:
             res.proxy = proxy_metrics(ws)
@@ -242,11 +294,14 @@ def evaluate_one(cand: Candidate, base: dict, *,
         if full_verify:
             status, detail = V.lec(ws)
             vr.record("lec", status, detail)
-            status, detail = V.dualsim(ws)
-            vr.record("dualsim", status, detail)
-            if status == "FAIL":
-                res.status, res.detail = "dualsim-fail", detail
-                return _finish(cand, res, vr, t0)
+            if vr.layers.get("compile") == "PRE-EXISTING":
+                vr.record("dualsim", "SKIP-preexisting", "")
+            else:
+                status, detail = V.dualsim(ws)
+                vr.record("dualsim", status, detail)
+                if status == "FAIL":
+                    res.status, res.detail = "dualsim-fail", detail
+                    return _finish(cand, res, vr, t0)
 
         res.status = "measured"
         return _finish(cand, res, vr, t0)

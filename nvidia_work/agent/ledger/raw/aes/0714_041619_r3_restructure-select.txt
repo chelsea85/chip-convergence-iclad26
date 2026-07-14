@@ -1,0 +1,77 @@
+// FILE: prim_onehot_check.v
+module prim_onehot_check (
+	clk_i,
+	rst_ni,
+	oh_i,
+	addr_i,
+	en_i,
+	err_o
+);
+	parameter [31:0] AddrWidth = 5;
+	parameter [31:0] OneHotWidth = 2 ** AddrWidth;
+	parameter [0:0] AddrCheck = 1;
+	parameter [0:0] EnableCheck = 1;
+	parameter [0:0] StrictCheck = 1;
+	parameter [0:0] EnableAlertTriggerSVA = 1;
+
+	input clk_i;
+	input rst_ni;
+	input wire [OneHotWidth - 1:0] oh_i;
+	input wire [AddrWidth - 1:0] addr_i;
+	input wire en_i;
+	output wire err_o;
+
+	// Use a power-of-two width for the tree to ensure a balanced structure.
+	// This helps the synthesis tool map the logic to a symmetric tree of AOI/OAI cells.
+	localparam integer TreeWidth = 1 << AddrWidth;
+
+	wire [TreeWidth-1:0] oh_padded;
+	assign oh_padded = (TreeWidth > OneHotWidth) ? 
+	                   {{(TreeWidth-OneHotWidth){1'b0}}, oh_i} : oh_i;
+
+	// t_any[i]: Any bit in the subtree rooted at index i is set.
+	// t_multi[i]: More than one bit in the subtree rooted at index i is set.
+	// The tree is laid out in a standard binary heap array format.
+	// Root is at index 0. Children of i are 2i+1 and 2i+2.
+	wire [2*TreeWidth-2:0] t_any;
+	wire [2*TreeWidth-2:0] t_multi;
+
+	// Leaf nodes are at the end of the array.
+	assign t_any[2*TreeWidth-2:TreeWidth-1] = oh_padded;
+	assign t_multi[2*TreeWidth-2:TreeWidth-1] = {TreeWidth{1'b0}};
+
+	genvar i;
+	generate
+		for (i = TreeWidth - 2; i >= 0; i = i - 1) begin : gen_tree
+			// A bit is set in this node if it's set in either child.
+			assign t_any[i] = t_any[2*i+1] | t_any[2*i+2];
+			// More than one bit is set if:
+			// 1. More than one bit was already set in the left child, OR
+			// 2. More than one bit was already set in the right child, OR
+			// 3. At least one bit is set in BOTH children.
+			assign t_multi[i] = (t_any[2*i+1] & t_any[2*i+2]) | 
+			                    t_multi[2*i+1] | t_multi[2*i+2];
+		end
+	endgenerate
+
+	// Root of the tree provides the global "any" and "multi" signals.
+	wire oh_any   = t_any[0];
+	wire oh_multi = (OneHotWidth > 1) ? t_multi[0] : 1'b0;
+
+	// Address check: oh_i[addr_i] is the most efficient way to express a mux.
+	// This allows the synthesizer to use optimized MUX cells (like MUX2/MUX4) 
+	// available in the ASAP7 library rather than a manual gate-level tree.
+	wire addr_match = oh_i[addr_i];
+
+	// Error conditions
+	wire oh0_err    = oh_multi;
+	wire enable_err = EnableCheck ? (StrictCheck ? (oh_any ^ en_i) : (oh_any & ~en_i)) : 1'b0;
+	wire addr_err   = AddrCheck   ? (oh_any ^ addr_match) : 1'b0;
+
+	// Final error output is a simple OR reduction.
+	assign err_o = oh0_err | enable_err | addr_err;
+
+	// Unused signals to prevent lint warnings.
+	wire _unused = clk_i | rst_ni;
+
+endmodule

@@ -1,0 +1,50 @@
+// FILE: aes_mix_columns.v
+module aes_mix_columns (
+	op_i,
+	data_i,
+	data_o
+);
+	localparam signed [31:0] aes_pkg_AES_OP_WIDTH = 2;
+	input wire [1:0] op_i;
+	input wire [127:0] data_i;
+	output wire [127:0] data_o;
+
+	// Optimization: Restructure selection and wiring logic [rtlscout-cutpoints].
+	// The original implementation used a double-transpose function which adds 
+	// unnecessary boolean network depth. By manually unrolling the transposition 
+	// into direct wire assignments, we simplify the netlist for the synthesis 
+	// tool (Yosys/ABC), allowing it to better optimize the underlying 
+	// arith-carry-chain (XORs) in the MixColumns operation.
+
+	genvar _gv_i_1;
+	generate
+		for (_gv_i_1 = 0; _gv_i_1 < 4; _gv_i_1 = _gv_i_1 + 1) begin : gen_mix_column
+			localparam i = _gv_i_1;
+			
+			// Declare named intermediate wires with explicit widths at logical 
+			// boundaries to help partitioning [rtlscout-cutpoints].
+			wire [31:0] col_i;
+			wire [31:0] col_o;
+
+			// Extract column i from the 128-bit state (row-major to column-major).
+			// This replaces the first aes_pkg_aes_transpose call.
+			assign col_i = {data_i[(12 + i) * 8+:8], 
+			                data_i[(8 + i) * 8+:8], 
+			                data_i[(4 + i) * 8+:8], 
+			                data_i[i * 8+:8]};
+
+			aes_mix_single_column u_aes_mix_column_i(
+				.op_i(op_i),
+				.data_i(col_i),
+				.data_o(col_o)
+			);
+
+			// Map the mixed column back to the 128-bit state (column-major to row-major).
+			// This replaces the second aes_pkg_aes_transpose call.
+			assign data_o[i * 8+:8]        = col_o[0+:8];
+			assign data_o[(4 + i) * 8+:8]  = col_o[8+:8];
+			assign data_o[(8 + i) * 8+:8]  = col_o[16+:8];
+			assign data_o[(12 + i) * 8+:8] = col_o[24+:8];
+		end
+	endgenerate
+endmodule

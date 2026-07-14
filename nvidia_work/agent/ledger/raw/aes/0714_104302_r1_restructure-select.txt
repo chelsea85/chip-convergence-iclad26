@@ -1,0 +1,574 @@
+// FILE: aes_sbox_dom.v
+module aes_dom_indep_mul_gf2pn (
+	clk_i,
+	rst_ni,
+	we_i,
+	a_x,
+	a_y,
+	b_x,
+	b_y,
+	z_0,
+	a_q,
+	b_q
+);
+	parameter [31:0] NPower = 4;
+	parameter [0:0] Pipeline = 1'b0;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire we_i;
+	input wire [NPower - 1:0] a_x;
+	input wire [NPower - 1:0] a_y;
+	input wire [NPower - 1:0] b_x;
+	input wire [NPower - 1:0] b_y;
+	input wire [NPower - 1:0] z_0;
+	output wire [NPower - 1:0] a_q;
+	output wire [NPower - 1:0] b_q;
+
+	wire [NPower - 1:0] mul_ax_ay_d;
+	wire [NPower - 1:0] mul_bx_by_d;
+
+	function automatic [1:0] aes_mul_gf2p2;
+		input reg [1:0] g;
+		input reg [1:0] d;
+		reg [1:0] f;
+		begin
+			f[1] = (g[1] & d[0]) ^ (g[0] & d[1]) ^ (g[1] & d[1]);
+			f[0] = (g[1] & d[1]) ^ (g[0] & d[0]);
+			aes_mul_gf2p2 = f;
+		end
+	endfunction
+
+	function automatic [1:0] aes_scale_omega2_gf2p2;
+		input reg [1:0] g;
+		reg [1:0] d;
+		begin
+			d[1] = g[0];
+			d[0] = g[1] ^ g[0];
+			aes_scale_omega2_gf2p2 = d;
+		end
+	endfunction
+
+	function automatic [3:0] aes_mul_gf2p4;
+		input reg [3:0] gamma;
+		input reg [3:0] delta;
+		reg [3:0] theta;
+		reg [1:0] a, b, c;
+		begin
+			a = aes_mul_gf2p2(gamma[3:2], delta[3:2]);
+			b = aes_mul_gf2p2(gamma[3:2] ^ gamma[1:0], delta[3:2] ^ delta[1:0]);
+			c = aes_mul_gf2p2(gamma[1:0], delta[1:0]);
+			theta[3:2] = a ^ aes_scale_omega2_gf2p2(b);
+			theta[1:0] = c ^ aes_scale_omega2_gf2p2(b);
+			aes_mul_gf2p4 = theta;
+		end
+	endfunction
+
+	generate
+		if (NPower == 4) begin : gen_inner_mul_gf2p4
+			assign mul_ax_ay_d = aes_mul_gf2p4(a_x, a_y);
+			assign mul_bx_by_d = aes_mul_gf2p4(b_x, b_y);
+		end else begin : gen_inner_mul_gf2p2
+			assign mul_ax_ay_d = aes_mul_gf2p2(a_x, a_y);
+			assign mul_bx_by_d = aes_mul_gf2p2(b_x, b_y);
+		end
+	endgenerate
+
+	wire [NPower - 1:0] mul_ax_by;
+	wire [NPower - 1:0] mul_ay_bx;
+	generate
+		if (NPower == 4) begin : gen_cross_mul_gf2p4
+			assign mul_ax_by = aes_mul_gf2p4(a_x, b_y);
+			assign mul_ay_bx = aes_mul_gf2p4(a_y, b_x);
+		end else begin : gen_cross_mul_gf2p2
+			assign mul_ax_by = aes_mul_gf2p2(a_x, b_y);
+			assign mul_ay_bx = aes_mul_gf2p2(a_y, b_x);
+		end
+	endgenerate
+
+	reg [NPower - 1:0] aq_z0_q, bq_z0_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			aq_z0_q <= {NPower{1'b0}};
+			bq_z0_q <= {NPower{1'b0}};
+		end else if (we_i) begin
+			aq_z0_q <= z_0 ^ mul_ax_by;
+			bq_z0_q <= z_0 ^ mul_ay_bx;
+		end
+	end
+
+	wire [NPower - 1:0] mul_ax_ay, mul_bx_by;
+	generate
+		if (Pipeline == 1'b1) begin : gen_pipeline
+			reg [NPower - 1:0] mul_ax_ay_q, mul_bx_by_q;
+			always @(posedge clk_i or negedge rst_ni) begin
+				if (!rst_ni) begin
+					mul_ax_ay_q <= {NPower{1'b0}};
+					mul_bx_by_q <= {NPower{1'b0}};
+				end else if (we_i) begin
+					mul_ax_ay_q <= mul_ax_ay_d;
+					mul_bx_by_q <= mul_bx_by_d;
+				end
+			end
+			assign mul_ax_ay = mul_ax_ay_q;
+			assign mul_bx_by = mul_bx_by_q;
+		end else begin : gen_no_pipeline
+			assign mul_ax_ay = mul_ax_ay_d;
+			assign mul_bx_by = mul_bx_by_d;
+		end
+	endgenerate
+
+	assign a_q = mul_ax_ay ^ aq_z0_q;
+	assign b_q = mul_bx_by ^ bq_z0_q;
+endmodule
+
+module aes_dom_dep_mul_gf2pn (
+	clk_i,
+	rst_ni,
+	we_i,
+	a_x,
+	a_y,
+	b_x,
+	b_y,
+	a_x_q,
+	a_y_q,
+	b_x_q,
+	b_y_q,
+	z_0,
+	z_1,
+	a_q,
+	b_q,
+	prd_o
+);
+	parameter [31:0] NPower = 4;
+	parameter [0:0] Pipeline = 1'b0;
+	parameter [0:0] PreDomIndep = 1'b0;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire we_i;
+	input wire [NPower - 1:0] a_x;
+	input wire [NPower - 1:0] a_y;
+	input wire [NPower - 1:0] b_x;
+	input wire [NPower - 1:0] b_y;
+	input wire [NPower - 1:0] a_x_q;
+	input wire [NPower - 1:0] a_y_q;
+	input wire [NPower - 1:0] b_x_q;
+	input wire [NPower - 1:0] b_y_q;
+	input wire [NPower - 1:0] z_0;
+	input wire [NPower - 1:0] z_1;
+	output wire [NPower - 1:0] a_q;
+	output wire [NPower - 1:0] b_q;
+	output wire [(2 * NPower) - 1:0] prd_o;
+
+	reg [NPower - 1:0] a_yz0_q, b_yz0_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			a_yz0_q <= {NPower{1'b0}};
+			b_yz0_q <= {NPower{1'b0}};
+		end else if (we_i) begin
+			a_yz0_q <= a_y ^ z_0;
+			b_yz0_q <= b_y ^ z_0;
+		end
+	end
+
+	function automatic [1:0] aes_mul_gf2p2;
+		input reg [1:0] g;
+		input reg [1:0] d;
+		reg [1:0] f;
+		begin
+			f[1] = (g[1] & d[0]) ^ (g[0] & d[1]) ^ (g[1] & d[1]);
+			f[0] = (g[1] & d[1]) ^ (g[0] & d[0]);
+			aes_mul_gf2p2 = f;
+		end
+	endfunction
+
+	function automatic [1:0] aes_scale_omega2_gf2p2;
+		input reg [1:0] g;
+		reg [1:0] d;
+		begin
+			d[1] = g[0];
+			d[0] = g[1] ^ g[0];
+			aes_scale_omega2_gf2p2 = d;
+		end
+	endfunction
+
+	function automatic [3:0] aes_mul_gf2p4;
+		input reg [3:0] gamma;
+		input reg [3:0] delta;
+		reg [3:0] theta;
+		reg [1:0] a, b, c;
+		begin
+			a = aes_mul_gf2p2(gamma[3:2], delta[3:2]);
+			b = aes_mul_gf2p2(gamma[3:2] ^ gamma[1:0], delta[3:2] ^ delta[1:0]);
+			c = aes_mul_gf2p2(gamma[1:0], delta[1:0]);
+			theta[3:2] = a ^ aes_scale_omega2_gf2p2(b);
+			theta[1:0] = c ^ aes_scale_omega2_gf2p2(b);
+			aes_mul_gf2p4 = theta;
+		end
+	endfunction
+
+	wire [NPower - 1:0] mul_ax_z0, mul_bx_z0;
+	generate
+		if (NPower == 4) begin : gen_corr_mul_gf2p4
+			assign mul_ax_z0 = aes_mul_gf2p4(a_x, z_0);
+			assign mul_bx_z0 = aes_mul_gf2p4(b_x, z_0);
+		end else begin : gen_corr_mul_gf2p2
+			assign mul_ax_z0 = aes_mul_gf2p2(a_x, z_0);
+			assign mul_bx_z0 = aes_mul_gf2p2(b_x, z_0);
+		end
+	endgenerate
+
+	reg [NPower - 1:0] axz0_z1_q, bxz0_z1_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			axz0_z1_q <= {NPower{1'b0}};
+			bxz0_z1_q <= {NPower{1'b0}};
+		end else if (we_i) begin
+			axz0_z1_q <= mul_ax_z0 ^ z_1;
+			bxz0_z1_q <= mul_bx_z0 ^ z_1;
+		end
+	end
+
+	assign prd_o = {b_yz0_q, bxz0_z1_q};
+
+	wire [NPower - 1:0] a_x_calc = (Pipeline && !PreDomIndep) ? a_x_q : a_x;
+	wire [NPower - 1:0] b_x_calc = (Pipeline && !PreDomIndep) ? b_x_q : b_x;
+	wire [NPower - 1:0] a_y_calc = (Pipeline && !PreDomIndep) ? a_y_q : a_y;
+	wire [NPower - 1:0] b_y_calc = (Pipeline && !PreDomIndep) ? b_y_q : b_y;
+
+	generate
+		if (PreDomIndep == 1'b1) begin : gen_pre_dom_indep
+			reg [NPower - 1:0] mul_ax_ay_q, mul_bx_by_q;
+			wire [NPower - 1:0] mul_ax_ay_d, mul_bx_by_d;
+			if (NPower == 4) begin : gen_inner_mul_gf2p4
+				assign mul_ax_ay_d = aes_mul_gf2p4(a_x_calc, a_y_calc);
+				assign mul_bx_by_d = aes_mul_gf2p4(b_x_calc, b_y_calc);
+			end else begin : gen_inner_mul_gf2p2
+				assign mul_ax_ay_d = aes_mul_gf2p2(a_x_calc, a_y_calc);
+				assign mul_bx_by_d = aes_mul_gf2p2(b_x_calc, b_y_calc);
+			end
+			always @(posedge clk_i or negedge rst_ni) begin
+				if (!rst_ni) begin
+					mul_ax_ay_q <= {NPower{1'b0}};
+					mul_bx_by_q <= {NPower{1'b0}};
+				end else if (we_i) begin
+					mul_ax_ay_q <= mul_ax_ay_d;
+					mul_bx_by_q <= mul_bx_by_d;
+				end
+			end
+			wire [NPower - 1:0] mul_ax_byz0, mul_bx_ayz0;
+			if (NPower == 4) begin : gen_cross_mul_gf2p4
+				assign mul_ax_byz0 = aes_mul_gf2p4(a_x_q, b_yz0_q);
+				assign mul_bx_ayz0 = aes_mul_gf2p4(b_x_q, a_yz0_q);
+			end else begin : gen_cross_mul_gf2p2
+				assign mul_ax_byz0 = aes_mul_gf2p2(a_x_q, b_yz0_q);
+				assign mul_bx_ayz0 = aes_mul_gf2p2(b_x_q, a_yz0_q);
+			end
+			assign a_q = (axz0_z1_q ^ mul_ax_ay_q) ^ mul_ax_byz0;
+			assign b_q = (bxz0_z1_q ^ mul_bx_by_q) ^ mul_bx_ayz0;
+		end else begin : gen_not_pre_dom_indep
+			wire [NPower - 1:0] a_mul_ax_b, b_mul_bx_b;
+			if (NPower == 4) begin : gen_mul_gf2p4
+				assign a_mul_ax_b = aes_mul_gf2p4(a_x_calc, a_y_calc ^ b_yz0_q);
+				assign b_mul_bx_b = aes_mul_gf2p4(b_x_calc, b_y_calc ^ a_yz0_q);
+			end else begin : gen_mul_gf2p2
+				assign a_mul_ax_b = aes_mul_gf2p2(a_x_calc, a_y_calc ^ b_yz0_q);
+				assign b_mul_bx_b = aes_mul_gf2p2(b_x_calc, b_y_calc ^ a_yz0_q);
+			end
+			assign a_q = axz0_z1_q ^ a_mul_ax_b;
+			assign b_q = bxz0_z1_q ^ b_mul_bx_b;
+		end
+	endgenerate
+endmodule
+
+module aes_dom_inverse_gf2p4 (
+	clk_i,
+	rst_ni,
+	we_i,
+	a_gamma,
+	b_gamma,
+	prd_2_i,
+	prd_3_i,
+	a_gamma_inv,
+	b_gamma_inv,
+	prd_2_o,
+	prd_3_o
+);
+	parameter [0:0] PipelineMul = 1'b1;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire [1:0] we_i;
+	input wire [3:0] a_gamma;
+	input wire [3:0] b_gamma;
+	input wire [3:0] prd_2_i;
+	input wire [7:0] prd_3_i;
+	output wire [3:0] a_gamma_inv;
+	output wire [3:0] b_gamma_inv;
+	output wire [7:0] prd_2_o;
+	output wire [7:0] prd_3_o;
+
+	function automatic [1:0] aes_scale_omega2_gf2p2;
+		input reg [1:0] g;
+		reg [1:0] d;
+		begin
+			d[1] = g[0];
+			d[0] = g[1] ^ g[0];
+			aes_scale_omega2_gf2p2 = d;
+		end
+	endfunction
+
+	function automatic [1:0] aes_square_gf2p2;
+		input reg [1:0] g;
+		reg [1:0] d;
+		begin
+			d[1] = g[0];
+			d[0] = g[1];
+			aes_square_gf2p2 = d;
+		end
+	endfunction
+
+	reg [1:0] a_gamma_ss_q, b_gamma_ss_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			a_gamma_ss_q <= 2'b0;
+			b_gamma_ss_q <= 2'b0;
+		end else if (we_i[0]) begin
+			a_gamma_ss_q <= aes_scale_omega2_gf2p2(aes_square_gf2p2(a_gamma[3:2] ^ a_gamma[1:0]));
+			b_gamma_ss_q <= aes_scale_omega2_gf2p2(aes_square_gf2p2(b_gamma[3:2] ^ b_gamma[1:0]));
+		end
+	end
+
+	reg [1:0] a_gamma1_q, a_gamma0_q, b_gamma1_q, b_gamma0_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			{a_gamma1_q, a_gamma0_q, b_gamma1_q, b_gamma0_q} <= 8'b0;
+		end else if (we_i[0]) begin
+			{a_gamma1_q, a_gamma0_q, b_gamma1_q, b_gamma0_q} <= {a_gamma[3:2], a_gamma[1:0], b_gamma[3:2], b_gamma[1:0]};
+		end
+	end
+
+	wire [1:0] a_gamma1_gamma0, b_gamma1_gamma0;
+	wire [3:0] b_gamma10_prd2;
+	aes_dom_dep_mul_gf2pn #(.NPower(2), .Pipeline(PipelineMul)) u_aes_dom_mul_gamma1_gamma0 (
+		.clk_i(clk_i), .rst_ni(rst_ni), .we_i(we_i[0]),
+		.a_x(a_gamma[3:2]), .a_y(a_gamma[1:0]), .b_x(b_gamma[3:2]), .b_y(b_gamma[1:0]),
+		.a_x_q(a_gamma1_q), .a_y_q(a_gamma0_q), .b_x_q(b_gamma1_q), .b_y_q(b_gamma0_q),
+		.z_0(prd_2_i[1:0]), .z_1(prd_2_i[3:2]), .a_q(a_gamma1_gamma0), .b_q(b_gamma1_gamma0), .prd_o(b_gamma10_prd2)
+	);
+	assign prd_2_o = {b_gamma1_q, b_gamma10_prd2[3:2], b_gamma0_q, b_gamma10_prd2[1:0]};
+
+	wire [1:0] a_omega = aes_square_gf2p2(a_gamma1_gamma0 ^ a_gamma_ss_q);
+	wire [1:0] b_omega = aes_square_gf2p2(b_gamma1_gamma0 ^ b_gamma_ss_q);
+
+	reg [1:0] a_gamma1_qq, a_gamma0_qq, b_gamma1_qq, b_gamma0_qq, a_omega_q, b_omega_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			{a_gamma1_qq, a_gamma0_qq, b_gamma1_qq, b_gamma0_qq, a_omega_q, b_omega_q} <= 12'b0;
+		end else if (we_i[1]) begin
+			{a_gamma1_qq, a_gamma0_qq, b_gamma1_qq, b_gamma0_qq, a_omega_q, b_omega_q} <= {a_gamma1_q, a_gamma0_q, b_gamma1_q, b_gamma0_q, a_omega, b_omega};
+		end
+	end
+
+	wire [3:0] b_gamma1_omega_prd3, b_gamma0_omega_prd3;
+	aes_dom_dep_mul_gf2pn #(.NPower(2), .Pipeline(PipelineMul)) u_aes_dom_mul_omega_gamma1 (
+		.clk_i(clk_i), .rst_ni(rst_ni), .we_i(we_i[1]),
+		.a_x(a_gamma1_q), .a_y(a_omega), .b_x(b_gamma1_q), .b_y(b_omega),
+		.a_x_q(a_gamma1_qq), .a_y_q(a_omega_q), .b_x_q(b_gamma1_qq), .b_y_q(b_omega_q),
+		.z_0(prd_3_i[5:4]), .z_1(prd_3_i[7:6]), .a_q(a_gamma_inv[1:0]), .b_q(b_gamma_inv[1:0]), .prd_o(b_gamma1_omega_prd3)
+	);
+	aes_dom_dep_mul_gf2pn #(.NPower(2), .Pipeline(PipelineMul)) u_aes_dom_mul_omega_gamma0 (
+		.clk_i(clk_i), .rst_ni(rst_ni), .we_i(we_i[1]),
+		.a_x(a_omega), .a_y(a_gamma0_q), .b_x(b_omega), .b_y(b_gamma0_q),
+		.a_x_q(a_omega_q), .a_y_q(a_gamma0_qq), .b_x_q(b_omega_q), .b_y_q(b_gamma0_qq),
+		.z_0(prd_3_i[1:0]), .z_1(prd_3_i[3:2]), .a_q(a_gamma_inv[3:2]), .b_q(b_gamma_inv[3:2]), .prd_o(b_gamma0_omega_prd3)
+	);
+	assign prd_3_o = {b_gamma1_omega_prd3, b_gamma0_omega_prd3};
+endmodule
+
+module aes_dom_inverse_gf2p8 (
+	clk_i,
+	rst_ni,
+	we_i,
+	a_y,
+	b_y,
+	prd_i,
+	a_y_inv,
+	b_y_inv,
+	prd_o
+);
+	parameter [0:0] PipelineMul = 1'b1;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire [3:0] we_i;
+	input wire [7:0] a_y;
+	input wire [7:0] b_y;
+	input wire [27:0] prd_i;
+	output wire [7:0] a_y_inv;
+	output wire [7:0] b_y_inv;
+	output wire [19:0] prd_o;
+
+	function automatic [1:0] aes_scale_omega_gf2p2;
+		input reg [1:0] g;
+		reg [1:0] d;
+		begin
+			d[1] = g[1] ^ g[0];
+			d[0] = g[1];
+			aes_scale_omega_gf2p2 = d;
+		end
+	endfunction
+
+	function automatic [1:0] aes_square_gf2p2;
+		input reg [1:0] g;
+		reg [1:0] d;
+		begin
+			d[1] = g[0];
+			d[0] = g[1];
+			aes_square_gf2p2 = d;
+		end
+	endfunction
+
+	function automatic [3:0] aes_square_scale_gf2p4_gf2p2;
+		input reg [3:0] gamma;
+		reg [3:0] delta;
+		begin
+			delta[3:2] = aes_square_gf2p2(gamma[3:2] ^ gamma[1:0]);
+			delta[1:0] = aes_scale_omega_gf2p2(aes_square_gf2p2(gamma[1:0]));
+			aes_square_scale_gf2p4_gf2p2 = delta;
+		end
+	endfunction
+
+	reg [3:0] a_y_ss_q, b_y_ss_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			a_y_ss_q <= 4'b0;
+			b_y_ss_q <= 4'b0;
+		end else if (we_i[0]) begin
+			a_y_ss_q <= aes_square_scale_gf2p4_gf2p2(a_y[7:4] ^ a_y[3:0]);
+			b_y_ss_q <= aes_square_scale_gf2p4_gf2p2(b_y[7:4] ^ b_y[3:0]);
+		end
+	end
+
+	reg [3:0] a_y1_q, a_y0_q, b_y1_q, b_y0_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			{a_y1_q, a_y0_q, b_y1_q, b_y0_q} <= 16'b0;
+		end else if (we_i[0]) begin
+			{a_y1_q, a_y0_q, b_y1_q, b_y0_q} <= {a_y[7:4], a_y[3:0], b_y[7:4], b_y[3:0]};
+		end
+	end
+
+	wire [3:0] a_y1_y0, b_y1_y0;
+	wire [7:0] b_y10_prd1;
+	aes_dom_dep_mul_gf2pn #(.NPower(4), .Pipeline(PipelineMul)) u_aes_dom_mul_y1_y0 (
+		.clk_i(clk_i), .rst_ni(rst_ni), .we_i(we_i[0]),
+		.a_x(a_y[7:4]), .a_y(a_y[3:0]), .b_x(b_y[7:4]), .b_y(b_y[3:0]),
+		.a_x_q(a_y1_q), .a_y_q(a_y0_q), .b_x_q(b_y1_q), .b_y_q(b_y0_q),
+		.z_0(prd_i[23:20]), .z_1(prd_i[27:24]), .a_q(a_y1_y0), .b_q(b_y1_y0), .prd_o(b_y10_prd1)
+	);
+
+	wire [3:0] a_gamma = a_y_ss_q ^ a_y1_y0;
+	wire [3:0] b_gamma = b_y_ss_q ^ b_y1_y0;
+	wire [3:0] a_theta, b_theta;
+	aes_dom_inverse_gf2p4 #(.PipelineMul(PipelineMul)) u_aes_dom_inverse_gf2p4 (
+		.clk_i(clk_i), .rst_ni(rst_ni), .we_i(we_i[2:1]),
+		.a_gamma(a_gamma), .b_gamma(b_gamma), .prd_2_i(prd_i[19:16]), .prd_3_i(prd_i[15:8]),
+		.a_gamma_inv(a_theta), .b_gamma_inv(b_theta), .prd_2_o(prd_o[15:8]), .prd_3_o(prd_o[7:0])
+	);
+	assign prd_o[19:16] = b_y10_prd1[3:0];
+
+	reg [3:0] a_y1_qqq, a_y0_qqq, b_y1_qqq, b_y0_qqq;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			{a_y1_qqq, a_y0_qqq, b_y1_qqq, b_y0_qqq} <= 16'b0;
+		end else if (we_i[2]) begin
+			{a_y1_qqq, a_y0_qqq, b_y1_qqq, b_y0_qqq} <= {a_y[7:4], a_y[3:0], b_y[7:4], b_y[3:0]};
+		end
+	end
+
+	aes_dom_indep_mul_gf2pn #(.NPower(4), .Pipeline(PipelineMul)) u_aes_dom_mul_theta_y1 (
+		.clk_i(clk_i), .rst_ni(rst_ni), .we_i(we_i[3]),
+		.a_x(a_y1_qqq), .a_y(a_theta), .b_x(b_y1_qqq), .b_y(b_theta),
+		.z_0(prd_i[7:4]), .a_q(a_y_inv[3:0]), .b_q(b_y_inv[3:0])
+	);
+	aes_dom_indep_mul_gf2pn #(.NPower(4), .Pipeline(PipelineMul)) u_aes_dom_mul_theta_y0 (
+		.clk_i(clk_i), .rst_ni(rst_ni), .we_i(we_i[3]),
+		.a_x(a_theta), .a_y(a_y0_qqq), .b_x(b_theta), .b_y(b_y0_qqq),
+		.z_0(prd_i[3:0]), .a_q(a_y_inv[7:4]), .b_q(b_y_inv[7:4])
+	);
+endmodule
+
+module aes_sbox_dom (
+	clk_i,
+	rst_ni,
+	en_i,
+	out_req_o,
+	out_ack_i,
+	op_i,
+	data_i,
+	mask_i,
+	prd_i,
+	data_o,
+	mask_o,
+	prd_o
+);
+	parameter [0:0] PipelineMul = 1'b1;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire en_i;
+	output wire out_req_o;
+	input wire out_ack_i;
+	input wire [1:0] op_i;
+	input wire [7:0] data_i;
+	input wire [7:0] mask_i;
+	input wire [27:0] prd_i;
+	output wire [7:0] data_o;
+	output wire [7:0] mask_o;
+	output wire [19:0] prd_o;
+
+	function automatic [7:0] aes_mvm;
+		input reg [7:0] vec_b;
+		input reg [63:0] mat_a;
+		reg [7:0] vec_c;
+		integer i, j;
+		begin
+			vec_c = 8'b0;
+			for (i = 0; i < 8; i = i + 1)
+				for (j = 0; j < 8; j = j + 1)
+					vec_c[i] = vec_c[i] ^ (mat_a[((7 - j) * 8) + i] & vec_b[7 - j]);
+			aes_mvm = vec_c;
+		end
+	endfunction
+
+	localparam [63:0] A2X = 64'h98f3f2480981a9ff;
+	localparam [63:0] S2X = 64'h8c7905eb12045153;
+	localparam [63:0] X2A = 64'h64786e8c6829de60;
+	localparam [63:0] X2S = 64'h582d9e0bdc040324;
+
+	wire [7:0] in_data_basis_x = (op_i == 2'b01) ? aes_mvm(data_i, A2X) : (op_i == 2'b10) ? aes_mvm(data_i ^ 8'h63, S2X) : aes_mvm(data_i, A2X);
+	wire [7:0] in_mask_basis_x = (op_i == 2'b01) ? aes_mvm(mask_i, A2X) : (op_i == 2'b10) ? aes_mvm(mask_i, S2X) : aes_mvm(mask_i, A2X);
+
+	wire [7:0] out_data_basis_x, out_mask_basis_x;
+	wire [19:0] out_prd;
+	wire [3:0] we;
+	aes_dom_inverse_gf2p8 #(.PipelineMul(PipelineMul)) u_aes_dom_inverse_gf2p8 (
+		.clk_i(clk_i), .rst_ni(rst_ni), .we_i(we),
+		.a_y(in_data_basis_x), .b_y(in_mask_basis_x), .prd_i({prd_i[7:0], prd_i[11:8], prd_i[19:12], prd_i[27:20]}),
+		.a_y_inv(out_data_basis_x), .b_y_inv(out_mask_basis_x), .prd_o(out_prd)
+	);
+
+	assign data_o = (op_i == 2'b10) ? aes_mvm(out_data_basis_x, X2A) : aes_mvm(out_data_basis_x, X2S) ^ 8'h63;
+	assign mask_o = (op_i == 2'b10) ? aes_mvm(out_mask_basis_x, X2A) : aes_mvm(out_mask_basis_x, X2S);
+
+	reg [4:0] count_q;
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) count_q <= 5'b00001;
+		else if (en_i) begin
+			if (count_q[4]) begin
+				if (out_ack_i) count_q <= 5'b00001;
+			end else count_q <= {count_q[3:0], 1'b0};
+		end
+	end
+
+	assign out_req_o = en_i & count_q[4];
+	assign we = {4{en_i}} & count_q[3:0];
+	assign prd_o = {out_prd[7:0], out_prd[15:8], out_prd[19:16]};
+endmodule

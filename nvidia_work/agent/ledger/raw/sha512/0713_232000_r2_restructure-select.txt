@@ -1,0 +1,185 @@
+// FILE: sha512_w_mem.v
+//======================================================================
+//
+// sha512_w_mem.v
+// -------------------
+// The W memory for the SHA-512 core. This version uses 16
+// 64-bit registers as a sliding window to generate the 80 words.
+//
+// Optimized using Carry-Save Adder (CSA) reduction for the message
+// schedule update logic to minimize carry-propagate depth.
+//
+// Author: Joachim Strombergson
+// Copyright (c) 2014 Secworks Sweden AB
+// All rights reserved.
+//
+//======================================================================
+
+`default_nettype none
+
+module sha512_w_mem(
+                    input wire            clk,
+                    input wire            reset_n,
+
+                    input wire [1023 : 0] block,
+
+                    input wire            init,
+                    input wire            next,
+                    output wire [63 : 0]  w
+                   );
+
+
+  //----------------------------------------------------------------
+  // Registers including update variables and write enable.
+  //----------------------------------------------------------------
+  reg [63 : 0] w_mem [0 : 15];
+  reg [63 : 0] w_mem_new [0 : 15];
+  reg          w_mem_we;
+
+  reg [6 : 0] w_ctr_reg;
+  reg [6 : 0] w_ctr_new;
+  reg         w_ctr_we;
+
+
+  //----------------------------------------------------------------
+  // Wires.
+  //----------------------------------------------------------------
+  reg [63 : 0]  w_tmp;
+  wire [63 : 0] w_new;
+
+  // Intermediate wires for w_new calculation [rtlscout-cutpoints]
+  wire [63 : 0] w_0  = w_mem[0];
+  wire [63 : 0] w_1  = w_mem[1];
+  wire [63 : 0] w_9  = w_mem[9];
+  wire [63 : 0] w_14 = w_mem[14];
+
+  // Sigma0 and Sigma1 functions
+  wire [63 : 0] d0 = {w_1[0],     w_1[63 : 1]} ^ // ROTR1
+                     {w_1[7 : 0], w_1[63 : 8]} ^ // ROTR8
+                     {7'b0000000, w_1[63 : 7]};  // SHR7
+
+  wire [63 : 0] d1 = {w_14[18 : 0], w_14[63 : 19]} ^ // ROTR19
+                     {w_14[60 : 0], w_14[63 : 61]} ^ // ROTR61
+                     {6'b000000,    w_14[63 : 6]};   // SHR6
+
+  // CSA reduction for w_new = w_0 + d0 + w_9 + d1 [R-prefix-adder]
+  // Stage 1: Reduce (w_0, d0, w_9) -> (s1, c1)
+  wire [63 : 0] s1 = w_0 ^ d0 ^ w_9;
+  wire [63 : 0] c1 = (w_0 & d0) | (d0 & w_9) | (w_0 & w_9);
+
+  // Stage 2: Reduce (s1, c1<<1, d1) -> (s2, c2)
+  wire [63 : 0] s2 = s1 ^ {c1[62 : 0], 1'b0} ^ d1;
+  wire [63 : 0] c2 = (s1 & {c1[62 : 0], 1'b0}) | ({c1[62 : 0], 1'b0} & d1) | (s1 & d1);
+
+  // Final Carry-Propagate Addition
+  assign w_new = s2 + {c2[62 : 0], 1'b0};
+
+
+  //----------------------------------------------------------------
+  // Concurrent connectivity for ports etc.
+  //----------------------------------------------------------------
+  assign w = w_tmp;
+
+
+  //----------------------------------------------------------------
+  // reg_update
+  //----------------------------------------------------------------
+  always @ (posedge clk or negedge reset_n)
+    begin : reg_update
+      integer i;
+
+      if (!reset_n)
+        begin
+          for (i = 0; i < 16; i = i + 1)
+            w_mem[i] <= 64'h0;
+
+          w_ctr_reg <= 7'h0;
+        end
+      else
+        begin
+          if (w_mem_we)
+            begin
+              for (i = 0; i < 16; i = i + 1)
+                w_mem[i] <= w_mem_new[i];
+            end
+
+          if (w_ctr_we)
+              w_ctr_reg <= w_ctr_new;
+        end
+    end // reg_update
+
+
+  //----------------------------------------------------------------
+  // select_w
+  //----------------------------------------------------------------
+  always @*
+    begin : select_w
+      if (w_ctr_reg < 16)
+        w_tmp = w_mem[w_ctr_reg[3 : 0]];
+      else
+        w_tmp = w_new;
+    end // select_w
+
+
+  //----------------------------------------------------------------
+  // w_mem_update_logic
+  //----------------------------------------------------------------
+  always @*
+    begin : w_mem_update_logic
+      integer i;
+      for (i = 0; i < 16; i = i + 1)
+        w_mem_new[i] = 64'h0;
+      w_mem_we = 1'b0;
+
+      if (init)
+        begin
+          w_mem_new[00] = block[1023 : 960];
+          w_mem_new[01] = block[959  : 896];
+          w_mem_new[02] = block[895  : 832];
+          w_mem_new[03] = block[831  : 768];
+          w_mem_new[04] = block[767  : 704];
+          w_mem_new[05] = block[703  : 640];
+          w_mem_new[06] = block[639  : 576];
+          w_mem_new[07] = block[575  : 512];
+          w_mem_new[08] = block[511  : 448];
+          w_mem_new[09] = block[447  : 384];
+          w_mem_new[10] = block[383  : 320];
+          w_mem_new[11] = block[319  : 256];
+          w_mem_new[12] = block[255  : 192];
+          w_mem_new[13] = block[191  : 128];
+          w_mem_new[14] = block[127  :  64];
+          w_mem_new[15] = block[63   :   0];
+          w_mem_we    = 1'b1;
+        end
+      else if (next && (w_ctr_reg > 15))
+        begin
+          for (i = 0; i < 15; i = i + 1)
+            w_mem_new[i] = w_mem[i+1];
+          w_mem_new[15] = w_new;
+          w_mem_we    = 1'b1;
+        end
+    end // w_mem_update_logic
+
+
+  //----------------------------------------------------------------
+  // w_ctr
+  //----------------------------------------------------------------
+  always @*
+    begin : w_ctr
+      w_ctr_new = 7'h0;
+      w_ctr_we  = 1'h0;
+
+      if (init)
+        begin
+          w_ctr_new = 7'h00;
+          w_ctr_we  = 1'h1;
+        end
+
+      if (next)
+        begin
+          w_ctr_new = w_ctr_reg + 7'h01;
+          w_ctr_we  = 1'h1;
+        end
+    end // w_ctr
+
+endmodule // sha512_w_mem

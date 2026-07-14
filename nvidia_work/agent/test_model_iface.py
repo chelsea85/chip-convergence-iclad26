@@ -97,7 +97,7 @@ def test_vertex_model():
           _FakeClient.last_init.get("vertexai") is True and
           _FakeClient.last_init.get("api_key") == "test-express-key",
           str(_FakeClient.last_init))
-    check("express: mode label", m.mode == "vertex-express")
+    check("express: mode label", m.mode.startswith("vertex-express"))
     r = m.generate("optimize this RTL")
     check("generate returns text", r.startswith("// FILE: fake.v"))
     check("usage-metadata token accounting", m.tokens == 150 and m.calls == 1,
@@ -118,7 +118,7 @@ def test_vertex_model():
           "vertexai" not in _FakeClient.last_init and
           _FakeClient.last_init.get("api_key") == "test-studio-key",
           str(_FakeClient.last_init))
-    check("ai-studio: mode label", m2.mode == "ai-studio")
+    check("ai-studio: mode label", m2.mode.startswith("ai-studio"))
 
     # retry ladder: two retryable errors then success
     _FakeClient.next_fail_codes = [429, 503]

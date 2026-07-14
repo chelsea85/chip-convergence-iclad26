@@ -144,7 +144,7 @@
   ],
   "content": "Arithmetic architecture menu for critical-path * and +: partial products via carry-save/Wallace/Dadda/4:2-compressor tree; final adder Kogge-Stone / Brent-Kung / Sklansky / sparse-KS. Propose ONE alternative per candidate.",
   "helpful": 1,
-  "harmful": 0,
+  "harmful": 1,
   "created": "2026-07-03"
  },
  {
@@ -188,7 +188,7 @@
    "avoid"
   ],
   "content": "AVOID re-balancing logic ABC already optimizes well (absorbed by synthesis, adds churn/risk for ~0 gain) \u2014 e.g. simple 2-3 operand expressions (Dr. RTL AVOID).",
-  "helpful": 1,
+  "helpful": 14,
   "harmful": 0,
   "created": "2026-07-03"
  },
@@ -233,7 +233,7 @@
    "arith-carry-chain"
   ],
   "content": "P2 applicability (MEASURED, exp3): source-level balancing of a PURE N-operand sum (e.g. w_new = a+b+c+d) is a no-op \u2014 ABC's delay-aware mapping already rebalances clean sums (identical netlist). P2 pays when serial adds are ENTANGLED with nonlinear logic between terms (Ch/Maj/sigma in exp2: +332ps). Target entangled chains only.",
-  "helpful": 1,
+  "helpful": 11,
   "harmful": 0,
   "created": "2026-07-03"
  },
@@ -333,5 +333,805 @@
   "helpful": 1,
   "harmful": 0,
   "created": "2026-07-12"
+ },
+ {
+  "id": "p24-fifo-grayshare-tradeoff",
+  "section": "timing",
+  "tags": [
+   "async_fifo",
+   "cdc",
+   "gray-code"
+  ],
+  "content": "P24 (MEASURED, async_fifo exp5, LEC-PROVEN): mux-of-gray formulation (share gray(bin+1) across full/almost-full paths, reuse registered gray pointer for the hold case) trades area for slack: +7.2ps setup, +3.7% cells, +3.7% power. REJECT when timing already MET (area regression); APPLY when an async-FIFO pointer/flag path is timing-critical.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "p25-kmac-trivium-unroll-noop",
+  "section": "avoid",
+  "tags": [
+   "kmac",
+   "trivium",
+   "prng",
+   "unroll"
+  ],
+  "content": "P25 (MEASURED, kmac exp7): flattening the Bivium/Trivium 800-step serial key-stream unroll into generation-chunked data-parallel stages (algorithmically equivalent \u2014 proven in a Python golden model over random states) did NOT improve timing: setup -1115.75->-1119.68ps, cells +0.7%. Synthesis/ABC already retimes the serial composition. AVOID manual PRNG-unroll restructuring; the kmac critical path is not helped by it. (Note: kmac generated RTL fails iverilog elaboration on a pre-existing sv2v artifact -> use LEC/dualsim gating, differential compile.)",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-31-82314",
+  "section": "avoid",
+  "tags": [
+   "micro-opt-interference",
+   "prim"
+  ],
+  "content": "(prim, agent) AVOID manual logic restructuring in simple primitives as it can interfere with synthesis heuristics and degrade timing.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-32-82492",
+  "section": "pitfall",
+  "tags": [
+   "synth-fail",
+   "prim"
+  ],
+  "content": "(prim, agent) Ensure manual micro-optimizations like intermediate wire insertion maintain strict bit-width consistency to avoid synthesis elaboration failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-33-82931",
+  "section": "avoid",
+  "tags": [
+   "micro-opt-redundancy",
+   "prim"
+  ],
+  "content": "(prim, agent) Avoid micro-optimizations on logic structures that synthesis tools already optimize to their limit, as they result in zero PPA change.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "R-prefix-adder",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain",
+   "adder"
+  ],
+  "content": "Wide carry-propagate add on the critical path -> parallel-prefix adder (Kogge-Stone / Brent-Kung / Sklansky): O(log n) carry depth vs O(n) ripple. Equivalence-safe (same sum). Trade area (KS) vs wires (BK).",
+  "helpful": 4,
+  "harmful": 1,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-booth",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain",
+   "mult"
+  ],
+  "content": "Multiplier on critical path -> radix-4 Booth encoding halves partial-product rows, then Wallace/Dadda reduce + one final prefix add. Equivalence-safe.",
+  "helpful": 0,
+  "harmful": 1,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-strength-reduce",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain",
+   "mult"
+  ],
+  "content": "Multiply/divide by a COMPILE-TIME CONSTANT -> shift-and-add / shift-and-mask (x*9 = (x<<3)+x; x/2^k = x>>k; x%2^k = x&(2^k-1)). Removes the multiplier.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-algebraic-factor",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain",
+   "control-boolean-network"
+  ],
+  "content": "Repeated subexpressions across the cone -> algebraic factoring / distributivity (a*b + a*c -> a*(b+c); Horner form for polynomials). e-graph-verified rewrites (ROVER/ASPEN); shortens depth AND shares logic.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-const-fold",
+  "section": "area",
+  "tags": [
+   "control-boolean-network"
+  ],
+  "content": "Constant-driven operators -> fold and propagate (identity: x&1'b1, x|1'b0, x^1'b0; dead branches on tied selects). Yosys opt does some, but explicit RTL folding exposes more and shrinks the cone the model reasons over.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-bitwidth-narrow",
+  "section": "area",
+  "tags": [
+   "adder",
+   "arith-carry-chain"
+  ],
+  "content": "Internal datapath wider than needed -> narrow provably-unused MSBs (range analysis on accumulators/counters). Fewer cells + shorter carry.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-operand-isolation",
+  "section": "power",
+  "tags": [
+   "mux-select"
+  ],
+  "content": "Datapath whose result is muxed away when idle -> operand isolation: AND the datapath inputs with a valid/enable so they don't toggle when unused. Cuts dynamic power; equivalence-safe (output already ignored).",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-clock-gate",
+  "section": "power",
+  "tags": [],
+  "content": "Register bank with an update-enable expressed as a feedback mux (q <= en ? d : q) -> let synthesis infer a clock gate (or code an ICG). Cuts clock + register dynamic power on wide, infrequently-updated regs.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-compare-restructure",
+  "section": "timing",
+  "tags": [
+   "wide-gate-decode",
+   "compare"
+  ],
+  "content": "Wide equality/magnitude compare on the path -> XOR-reduce tree for ==, parallel-prefix for < / >, and early-out on constant bits. Log depth.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-onehot-mux",
+  "section": "timing",
+  "tags": [
+   "mux-select"
+  ],
+  "content": "Priority if/else or casez chain feeding a datapath when the conditions are mutually exclusive -> parallel one-hot select (AND-OR), removing the serial priority ladder. Verify mutual exclusion holds.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "R-retime-note",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain",
+   "mux-select"
+  ],
+  "content": "LATENCY-GATED: if (and only if) the TB tolerates latency changes, balance unequal pipeline stages by retiming registers across combinational logic (move a register from a short stage into a long one). Otherwise DO NOT - our equivalence gate rejects cycle-latency changes.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-13",
+  "seeded": true
+ },
+ {
+  "id": "learned-45-98037",
+  "section": "pitfall",
+  "tags": [
+   "gate-fail-arith",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Structural arithmetic rewrites like carry-save or tree balancing in SHA-512 can trigger synthesis tool crashes or netlist generation errors.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-46-98361",
+  "section": "pitfall",
+  "tags": [
+   "manual-arithmetic-rewrite",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual rewrites of multi-operand additions into carry-save or balanced trees are highly prone to syntax errors and toolchain failures in complex 64-bit crypto modules.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-47-98484",
+  "section": "pitfall",
+  "tags": [
+   "manual-arithmetic-tree",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual implementation of Carry-Save Adder or balanced trees in wide-word crypto logic frequently causes synthesis-stage gate-level failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-48-99457",
+  "section": "timing",
+  "tags": [
+   "carry-save-adder",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Carry-save reduction for multi-operand addition in SHA-512 provides significant setup time and area improvements over standard carry-propagate chains.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-49-99457",
+  "section": "pitfall",
+  "tags": [
+   "gate-fail-risk",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual restructuring of arithmetic trees and selection logic in SHA-512 frequently results in gate-level simulation failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-50-508",
+  "section": "timing",
+  "tags": [
+   "carry-save-adder",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Use Carry-Save Adders (CSA) to compress multi-operand additions into a redundant form to significantly reduce critical path delay in arithmetic-heavy designs.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-51-508",
+  "section": "pitfall",
+  "tags": [
+   "logic-restructuring",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual restructuring of complex datapath or selection logic often causes functional equivalence failures during gate-level verification.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-52-741",
+  "section": "pitfall",
+  "tags": [
+   "sec-failure",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual restructuring of logic trees and selection paths in SHA512 frequently triggers formal equivalence failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-53-741",
+  "section": "timing",
+  "tags": [
+   "micro-opt-risk",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Localized micro-optimizations in high-performance blocks can cause massive setup time regressions and area bloat.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-54-741",
+  "section": "pitfall",
+  "tags": [
+   "dualsim-mismatch",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Micro-optimizations in cryptographic cores are prone to functional mismatches between RTL and gate-level simulations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-55-2560",
+  "section": "pitfall",
+  "tags": [
+   "sha512-arithmetic-transform",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual arithmetic restructuring like tree balancing or carry-save in SHA-512 is high-risk and prone to gate-level simulation failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-56-2560",
+  "section": "timing",
+  "tags": [
+   "sha512-select-restructure",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Restructuring mux-heavy selection logic in the SHA-512 round function can improve setup slack at a minor area penalty.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-57-5197",
+  "section": "pitfall",
+  "tags": [
+   "sha512-gate-stability",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Structural transformations in SHA-512 like carry-save or resource sharing frequently cause gate-level verification failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-58-5197",
+  "section": "timing",
+  "tags": [
+   "sha512-arith-regression",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual arithmetic optimizations in SHA-512 may yield minor area gains at the cost of significant timing degradation.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-59-9899",
+  "section": "timing",
+  "tags": [
+   "arith-arch-64bit",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Advanced arithmetic architectures like parallel-prefix adders provide significant timing recovery for 64-bit SHA512 data paths.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-60-9899",
+  "section": "pitfall",
+  "tags": [
+   "structural-gate-fail",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual structural rewrites like carry-save or tree balancing in SHA512 are prone to gate-level synthesis failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-61-9899",
+  "section": "area",
+  "tags": [
+   "micro-opt-tradeoff",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Micro-optimizations in SHA512 can reduce area slightly but may degrade timing slack.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-62-10058",
+  "section": "pitfall",
+  "tags": [
+   "manual-select-restructure",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual restructuring of selection logic (muxes) can cause severe timing regressions by disrupting synthesis tool logic-depth optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-63-10058",
+  "section": "timing",
+  "tags": [
+   "sha512-arith-arch",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Architectural arithmetic optimizations like parallel-prefix adders provide significant timing improvements in SHA-512 compression logic.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-64-10252",
+  "section": "timing",
+  "tags": [
+   "balanced-tree-sha512",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual tree balancing of multi-operand 64-bit additions in SHA-512 provides significant timing slack gains over default synthesis.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-65-10252",
+  "section": "pitfall",
+  "tags": [
+   "arithmetic-restructuring-risk",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Complex manual arithmetic transformations like carry-save or restructure-select are highly prone to gate-level simulation failures in wide-datapath designs.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-66-10447",
+  "section": "avoid",
+  "tags": [
+   "manual-tree-balancing",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual balancing of arithmetic trees in SHA-512 can degrade timing by interfering with synthesis tool's native logic restructuring.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-67-10447",
+  "section": "timing",
+  "tags": [
+   "sha512-restructure",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Restructuring selection or arithmetic logic in SHA-512 often results in significant timing regressions compared to baseline synthesis optimization.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-13"
+ },
+ {
+  "id": "learned-68-14033",
+  "section": "timing",
+  "tags": [
+   "arith-arch",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Explicit arithmetic architecture selection like parallel-prefix adders is highly effective for closing timing on SHA512 64-bit addition paths.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-69-14033",
+  "section": "avoid",
+  "tags": [
+   "share-resources",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Avoid resource sharing in SHA512 logic as it degrades timing slack for negligible area reduction.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-70-14033",
+  "section": "pitfall",
+  "tags": [
+   "balanced-tree",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual balancing of multi-operand addition trees in SHA512 can significantly worsen timing compared to synthesis tool defaults.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-71-14440",
+  "section": "timing",
+  "tags": [
+   "sha512-arithmetic",
+   "sha512"
+  ],
+  "content": "(sha512, agent) SHA512 timing is dominated by 64-bit addition chains where architectural overrides provide significant slack gains.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-72-14440",
+  "section": "avoid",
+  "tags": [
+   "manual-sum-balancing",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual balancing of N-operand sums in SHA512 can degrade PPA by disrupting synthesis-level tree optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-73-17627",
+  "section": "pitfall",
+  "tags": [
+   "arith-restructure",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual arithmetic architecture overrides in AES logic can degrade timing and increase area compared to synthesis defaults.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-74-17627",
+  "section": "area",
+  "tags": [
+   "select-restructure",
+   "aes"
+  ],
+  "content": "(aes, agent) Restructuring selection logic can yield area savings at the cost of increased critical path delay.",
+  "helpful": 2,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-75-18955",
+  "section": "timing",
+  "tags": [
+   "aes-logic-restructure",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual restructuring of XOR/arithmetic trees in AES logic consistently degrades timing compared to synthesis tool defaults.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-76-18955",
+  "section": "avoid",
+  "tags": [
+   "aes-manual-arith",
+   "aes"
+  ],
+  "content": "(aes, agent) Avoid manual carry-save or tree-balancing in AES modules as it interferes with tool-level logic optimization and worsens slack.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-77-20321",
+  "section": "timing",
+  "tags": [
+   "carry-save",
+   "aes"
+  ],
+  "content": "(aes, agent) Carry-save logic significantly improves timing and area in arithmetic-heavy designs like AES compared to standard synthesis.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-78-20321",
+  "section": "avoid",
+  "tags": [
+   "arith-arch",
+   "aes"
+  ],
+  "content": "(aes, agent) Avoid generic arithmetic architecture swaps like prefix adders if they increase logic depth or complexity without clear path-specific benefits.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-79-20321",
+  "section": "area",
+  "tags": [
+   "carry-save",
+   "aes"
+  ],
+  "content": "(aes, agent) Carry-save reduction can lead to massive area savings compared to standard arithmetic architectures in complex logic.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-80-26255",
+  "section": "pitfall",
+  "tags": [
+   "[restructure-select]",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual restructuring of selection logic is high-risk for functional divergence and dual-simulation failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-81-26255",
+  "section": "timing",
+  "tags": [
+   "[carry-save-interference]",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual carry-save transformations can degrade slack by interfering with the synthesizer's internal arithmetic optimization heuristics.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-82-27576",
+  "section": "timing",
+  "tags": [
+   "tree-balancing",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual re-balancing of logic trees in AES can degrade timing by interfering with synthesis tool logic-depth optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-83-27576",
+  "section": "area",
+  "tags": [
+   "carry-save",
+   "aes"
+  ],
+  "content": "(aes, agent) Carry-save architectures for arithmetic in AES provide marginal timing gains while increasing total cell area.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-84-46879",
+  "section": "pitfall",
+  "tags": [
+   "aes-arith-restructure",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual arithmetic transformations like carry-save or tree balancing in AES logic can significantly degrade timing slack.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-85-46879",
+  "section": "avoid",
+  "tags": [
+   "aes-sum-balancing",
+   "aes"
+  ],
+  "content": "(aes, agent) Avoid manual re-balancing of multi-operand sums in AES as synthesis tools already provide superior timing-driven mapping.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-86-48307",
+  "section": "timing",
+  "tags": [
+   "aes-restructure",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual arithmetic restructuring like carry-save or tree-balancing in AES logic can significantly degrade timing slack compared to tool-native optimization.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-87-48307",
+  "section": "avoid",
+  "tags": [
+   "manual-arith-aes",
+   "aes"
+  ],
+  "content": "(aes, agent) Avoid manual carry-save or tree-balancing on AES arithmetic paths as it often breaks synthesis timing optimizations and increases slack.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-88-53360",
+  "section": "pitfall",
+  "tags": [
+   "manual-tree-balancing",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual balancing of arithmetic or logic trees in AES can severely degrade timing by disrupting synthesis tool optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-89-54639",
+  "section": "timing",
+  "tags": [
+   "arith-arch",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual arithmetic architecture selection provides marginal timing improvements in AES-like logic at the cost of increased area.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-90-54639",
+  "section": "avoid",
+  "tags": [
+   "duplicate-transforms",
+   "aes"
+  ],
+  "content": "(aes, agent) Structural transforms like tree balancing and select restructuring often yield duplicate results, suggesting synthesis tools already optimize these patterns.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-91-55984",
+  "section": "timing",
+  "tags": [
+   "balanced-tree",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual tree balancing in complex logic like AES yields marginal timing gains at the cost of increased area.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-92-55985",
+  "section": "area",
+  "tags": [
+   "arith-arch",
+   "aes"
+  ],
+  "content": "(aes, agent) Arithmetic architecture optimizations can reduce area but may cause significant timing regressions in high-speed designs.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-93-57326",
+  "section": "pitfall",
+  "tags": [
+   "manual-rebalance-timing",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual restructuring of arithmetic trees in AES often degrades timing slack by interfering with synthesis-level logic depth optimization.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
+ },
+ {
+  "id": "learned-94-57326",
+  "section": "area",
+  "tags": [
+   "arith-arch-tradeoff",
+   "aes"
+  ],
+  "content": "(aes, agent) Architectural arithmetic changes can yield minor area gains but often cause significant timing regressions in high-speed datapath components.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-14"
  }
 ]

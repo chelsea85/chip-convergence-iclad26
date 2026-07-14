@@ -1,0 +1,70 @@
+// FILE: prim_onehot_check.v
+module prim_onehot_check (
+	clk_i,
+	rst_ni,
+	oh_i,
+	addr_i,
+	en_i,
+	err_o
+);
+	parameter [31:0] AddrWidth = 5;
+	parameter [31:0] OneHotWidth = 2 ** AddrWidth;
+	parameter [0:0] AddrCheck = 1;
+	parameter [0:0] EnableCheck = 1;
+	parameter [0:0] StrictCheck = 1;
+	parameter [0:0] EnableAlertTriggerSVA = 1;
+
+	input clk_i;
+	input rst_ni;
+	input wire [OneHotWidth - 1:0] oh_i;
+	input wire [AddrWidth - 1:0] addr_i;
+	input wire en_i;
+	output wire err_o;
+
+	// Optimization Strategy: Carry-Save / Arithmetic Reduction
+	// A one-hot check (popcount > 1) can be efficiently implemented using the property 
+	// that for any integer x, (x & (x-1)) is zero if and only if x has at most one bit set.
+	// This replaces the deep logical tree with an arithmetic subtraction and a bitwise AND,
+	// which synthesis tools can optimize using fast carry-propagate or prefix-adder structures.
+
+	// 1. One-hot violation check: popcount(oh_i) > 1
+	// [R-prefix-adder] The subtraction oh_i - 1 is implemented as oh_i + (~0), 
+	// which the tool maps to a high-performance carry-chain or prefix-adder.
+	wire [OneHotWidth-1:0] oh_minus_1 = oh_i - 1'b1;
+	wire [OneHotWidth-1:0] oh_and_mask = oh_i & oh_minus_1;
+	wire oh0_err = |oh_and_mask;
+
+	// 2. Any-bit-set check: popcount(oh_i) >= 1
+	// This is a simple OR-reduction of the input vector.
+	wire any_set = |oh_i;
+
+	// 3. Bit-at-address check: oh_i[addr_i]
+	// Instead of a manual MUX tree, we use direct indexing to allow the tool 
+	// to infer the most efficient MUX structure (e.g., using 4-to-1 MUX cells).
+	wire bit_at_addr = oh_i[addr_i];
+
+	// 4. Consistency checks
+	// We simplify the error logic to reduce gate depth and improve timing.
+	wire enable_err;
+	wire addr_err;
+
+	// Enable check logic:
+	// If StrictCheck is enabled, the 'any_set' signal must exactly match 'en_i'.
+	// If not strict, we only error if a bit is set while 'en_i' is low.
+	assign enable_err = EnableCheck ? (StrictCheck ? (any_set ^ en_i) : (any_set & ~en_i)) : 1'b0;
+
+	// Address check logic:
+	// If AddrCheck is enabled, then if any bit is set, it MUST be the one at 'addr_i'.
+	// This is equivalent to (any_set XOR bit_at_addr).
+	assign addr_err = AddrCheck ? (any_set ^ bit_at_addr) : 1'b0;
+
+	// Final error output:
+	// Combine the one-hot violation, enable inconsistency, and address mismatch.
+	// [rtlscout-cutpoints] Named intermediate wires help the tool partition the logic.
+	assign err_o = oh0_err | enable_err | addr_err;
+
+	// Unused inputs to satisfy lint/tooling
+	wire _unused_clk = clk_i;
+	wire _unused_rst = rst_ni;
+
+endmodule

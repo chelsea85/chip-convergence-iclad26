@@ -1,0 +1,82 @@
+// FILE: aes_mix_columns.v
+module aes_mix_columns (
+	op_i,
+	data_i,
+	data_o
+);
+	localparam signed [31:0] aes_pkg_AES_OP_WIDTH = 2;
+	input wire [1:0] op_i;
+	input wire [127:0] data_i;
+	output wire [127:0] data_o;
+
+	// Optimized MixColumns implementation using the linearity of the mul2 operator
+	// and re-using the forward MixColumns logic for the inverse transformation.
+	// This reduces the number of conditional XORs and balances the logic tree.
+
+	function automatic [7:0] mul2;
+		input [7:0] x;
+		mul2 = {x[6:0], 1'b0} ^ (x[7] ? 8'h1b : 8'h00);
+	endfunction
+
+	function automatic [127:0] aes_transpose;
+		input [127:0] in;
+		integer i, j;
+		begin
+			aes_transpose = 128'b0;
+			for (i = 0; i < 4; i = i + 1)
+				for (j = 0; j < 4; j = j + 1)
+					aes_transpose[((i * 4) + j) * 8+:8] = in[((j * 4) + i) * 8+:8];
+		end
+	endfunction
+
+	wire [127:0] d_i_trans = aes_transpose(data_i);
+	wire [127:0] d_o_trans;
+
+	genvar i;
+	generate
+		for (i = 0; i < 4; i = i + 1) begin : gen_mix_column
+			// Extract column bytes
+			wire [7:0] a = d_i_trans[8*(i*4+0)+:8];
+			wire [7:0] b = d_i_trans[8*(i*4+1)+:8];
+			wire [7:0] c = d_i_trans[8*(i*4+2)+:8];
+			wire [7:0] d = d_i_trans[8*(i*4+3)+:8];
+
+			// Intermediate XOR sums (balanced trees)
+			wire [7:0] ab = a ^ b;
+			wire [7:0] bc = b ^ c;
+			wire [7:0] cd = c ^ d;
+			wire [7:0] da = d ^ a;
+			wire [7:0] ac = a ^ c;
+			wire [7:0] bd = b ^ d;
+			wire [7:0] t  = ab ^ cd; // a ^ b ^ c ^ d
+
+			// Forward MixColumns: s'0 = 2a ^ 3b ^ c ^ d = 2(a^b) ^ b ^ c ^ d
+			// Using t helps share the (b^c^d) part as (t^a)
+			wire [7:0] a_fwd = mul2(ab) ^ (t ^ a);
+			wire [7:0] b_fwd = mul2(bc) ^ (t ^ b);
+			wire [7:0] c_fwd = mul2(cd) ^ (t ^ c);
+			wire [7:0] d_fwd = mul2(da) ^ (t ^ d);
+
+			// Inverse MixColumns: s''0 = 14a ^ 11b ^ 13c ^ 9d
+			// Optimized relation: s_dec = s_fwd ^ 8(a^b^c^d) ^ 4(a^c) [for s0, s2]
+			// Optimized relation: s_dec = s_fwd ^ 8(a^b^c^d) ^ 4(b^d) [for s1, s3]
+			wire [7:0] t8    = mul2(mul2(mul2(t)));
+			wire [7:0] t4ac  = mul2(mul2(ac));
+			wire [7:0] t4bd  = mul2(mul2(bd));
+
+			wire [7:0] a_dec = a_fwd ^ (t8 ^ t4ac);
+			wire [7:0] b_dec = b_fwd ^ (t8 ^ t4bd);
+			wire [7:0] c_dec = c_fwd ^ (t8 ^ t4ac);
+			wire [7:0] d_dec = d_fwd ^ (t8 ^ t4bd);
+
+			// Output selection (op_i == 2'b10 is DEC/Inverse)
+			assign d_o_trans[8*(i*4+0)+:8] = (op_i == 2'b10) ? a_dec : a_fwd;
+			assign d_o_trans[8*(i*4+1)+:8] = (op_i == 2'b10) ? b_dec : b_fwd;
+			assign d_o_trans[8*(i*4+2)+:8] = (op_i == 2'b10) ? c_dec : c_fwd;
+			assign d_o_trans[8*(i*4+3)+:8] = (op_i == 2'b10) ? d_dec : d_fwd;
+		end
+	endgenerate
+
+	assign data_o = aes_transpose(d_o_trans);
+
+endmodule

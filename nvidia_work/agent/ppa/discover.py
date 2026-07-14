@@ -29,11 +29,13 @@ _SIM_PERIODS = (10.0, 14.0, 7.0, 11.0)   # distinct sim periods per clock
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 def _parse_env_sh(text: str) -> dict[str, str]:
-    """export VAR=val and export VAR=${VAR:-val} forms."""
+    """export VAR=val and export VAR=${VAR:-val} forms, quoted or not
+    (prim's env.sh uses export DESIGN_NAME="${DESIGN_NAME:-prim_crc32}")."""
     out = {}
     for m in re.finditer(
-            r"^\s*export\s+(\w+)=(?:\$\{\1:-)?([^}\n]*?)\}?\s*$", text, re.M):
-        val = m.group(2).strip().strip('"').strip("'")
+            r"^\s*export\s+(\w+)=[\"']?(?:\$\{\1:-)?([^}\n\"']*?)\}?[\"']?\s*$",
+            text, re.M):
+        val = m.group(2).strip()
         if val and not val.startswith("$"):
             out[m.group(1)] = val
     return out
@@ -220,10 +222,12 @@ def get_spec(name_or_path: str) -> IPSpec:
             (d for d in find_syn_dirs() if str(d).startswith(str(p))), None)
         assert syn, f"no yosys_syn/run_syn.sh found under {name_or_path}"
         return discover(Path(syn))
-    for syn in find_syn_dirs():                    # lookup by design name
+    for syn in find_syn_dirs():        # lookup by location key or DESIGN_NAME
         env = _parse_env_sh((syn / "env.sh").read_text()
                             if (syn / "env.sh").exists() else "")
-        if (env.get("DESIGN_NAME") or syn.parent.name) == name_or_path:
+        root = syn.parent.parent if syn.parent.name == "syn" else syn.parent
+        if name_or_path in (root.name, env.get("DESIGN_NAME"),
+                            syn.parent.name):
             return discover(syn)
     raise AssertionError(f"no IP named or at '{name_or_path}' found")
 

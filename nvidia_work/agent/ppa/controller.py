@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -32,8 +33,9 @@ from . import sta_feedback as S
 from .objective import Objective, ParetoFrontier
 from .pool import DesignPool
 from .proposer import (Model, PromptContext, build_prompt, build_reflect_prompt,
-                       build_repair_prompt, make_model, parse_reflection,
-                       parse_response, pick_strategies, LADDER)
+                       build_repair_prompt, build_gatefail_repair_prompt,
+                       make_model, parse_reflection, parse_response,
+                       pick_strategies, fence_violation, LADDER)
 
 _TAG_TO_RUNGS = {
     "arith-carry-chain": ["balanced-tree", "carry-save", "arith-arch"],
@@ -45,6 +47,25 @@ _TAG_TO_RUNGS = {
 
 _SDC_PERIODS = {"sha512": 1500.0, "async_fifo": 300.0,
                 "ascon": 100.0}   # setup-critical clock (ascon: 10GHz, unmeetable)
+
+
+def _sdc_period(ip: str) -> float | None:
+    """Clock period (ps) from the IP's own SDC (`set clk_period N` /
+    `set <name>_period N`). Without it, slack can't convert to delay and
+    ADP is unreportable (2026-07-14: prim's real ADP was 0.60 but printed
+    as 1.0 because the hand map lacked prim). Hand map = fallback."""
+    spec = IPS[ip]
+    syn = REPO / spec.syn_dir
+    cands = (sorted(syn.glob(f"*{spec.top}*constraint*.sdc"))
+             or sorted(syn.glob("constraint.sdc")) or sorted(syn.glob("*.sdc")))
+    for f in cands:
+        try:
+            m = re.search(r"set\s+\w*_?period\s+(\d+(?:\.\d+)?)", f.read_text())
+        except OSError:
+            continue
+        if m:
+            return float(m.group(1))
+    return _SDC_PERIODS.get(ip)
 
 
 def _dossier(ip: str) -> str:
@@ -64,11 +85,85 @@ def _dossier(ip: str) -> str:
     return "\n".join(lines)
 
 
+# ── diagnosis-driven staged context (large IPs) ────────────────────────────────
+_DIAG_MIN_FILES = 15        # below this, full context is already cheap
+_RO_CAP = 6                 # max read-only grounding files sent alongside the
+                            # editable batch (bounds tokens on huge IPs)
+
+
+def _is_stub(model) -> bool:
+    return type(model).__name__ == "StubModel"
+
+
+def _stage_batch_files(diag, cursor: int, batch: int) -> list[str]:
+    """Coordinate-descent scope: stage 1 = worst file only; every later stage =
+    `batch` files. Returns repo-relative source paths for [cursor:cursor+n]."""
+    n = 1 if cursor == 0 else batch
+    return list(diag.critical_files[cursor:cursor + n])
+
+
+def _scope_files(batch_paths: list, parent_files: dict) -> dict:
+    """{rel: content} for just this stage's files (their full source, so the
+    model rewrites complete files). Falls back to full context if none map."""
+    sub = {rel: parent_files[rel] for rel in batch_paths if rel in parent_files}
+    return sub or parent_files
+
+
+def _extract_header(src: str) -> str:
+    """Port header of a Verilog module — `module ...;` (ANSI: full port list)
+    plus any following non-ANSI input/output/parameter declaration lines.
+    Pure text extraction, zero model tokens."""
+    m = re.search(r"\bmodule\b.*?;", src, re.S)
+    if not m:
+        return ""
+    decls = []
+    for line in src[m.end():].splitlines():
+        ls = line.strip()
+        if not ls or ls.startswith("//"):
+            continue
+        if re.match(r"(input|output|inout|parameter|localparam)\b", ls):
+            decls.append(line.rstrip())
+        elif re.match(r"(reg|wire|integer)\b", ls):
+            continue        # internal decls interleave with ports; keep scanning
+        else:
+            break           # body starts — ports are done
+    return (m.group(0) + ("\n" + "\n".join(decls) if decls else "")
+            + "\n// ... body omitted (interface stub) ...\nendmodule")
+
+
+def _iface_stubs(ip: str, batch_paths: list, parent_files: dict,
+                 cap: int = _RO_CAP) -> dict:
+    """Config C grounding: for each module INSTANTIATED by the batch file(s),
+    extract just its port header from its source. Gives the model the
+    interface contracts it needs (widths, directions, params) at a tiny
+    fraction of full-file tokens — and nothing tempting to edit.
+    Pure regex over already-loaded text, zero model tokens."""
+    stems = {Path(s).stem: s for s in IPS[ip].sources}
+    deps: list[str] = []
+    for bp in batch_paths:
+        text = parent_files.get(bp, "")
+        for stem, rel in stems.items():
+            if rel in batch_paths or rel in deps:
+                continue
+            # instantiation: module name, optional #(params), instance name (
+            if re.search(rf"\b{re.escape(stem)}\s+(?:#|\w+\s*\()", text):
+                deps.append(rel)
+    stubs = {}
+    for rel in deps[:cap]:
+        stub = _extract_header(parent_files.get(rel, ""))
+        if stub:
+            stubs[rel] = stub
+    return stubs
+
+
 def _budget_line(model: Model, max_calls: int, max_tokens: int) -> tuple[str, float]:
-    frac = 1.0 - max(model.calls / max_calls if max_calls else 0,
+    # max_calls bounds PROPOSAL calls only (candidate file-edit attempts) —
+    # reflector/repair overhead does not consume the turn budget, so
+    # "N turns = N file-edit attempts" holds regardless of overhead.
+    frac = 1.0 - max(model.proposal_calls / max_calls if max_calls else 0,
                      model.tokens / max_tokens if max_tokens else 0)
-    line = (f"<budget>LLM calls used {model.calls}/{max_calls}; tokens used "
-            f"~{model.tokens}/{max_tokens}. Make the best use of the "
+    line = (f"<budget>proposal turns used {model.proposal_calls}/{max_calls}; "
+            f"tokens ~{model.tokens}/{max_tokens}. Make the best use of the "
             f"available resources.</budget>")
     return line, frac
 
@@ -87,11 +182,53 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
         mode: str = "pareto", workers: int = 4,
         max_calls: int = 40, max_tokens: int = 2_000_000,
         plateau_rounds: int = 3, plateau_delta: float = 0.02,
-        emit_best: str | None = None) -> dict:
+        emit_best: str | None = None, diagnose: str = "auto",
+        stage_batch: int = 1, fresh_pool: bool = False,
+        k_first: int = 6, grounding: str = "on",
+        fence: bool = False, focus: list | None = None) -> dict:
     spec = IPS[ip]
-    obj = Objective(mode=mode, clk_period_ps=_SDC_PERIODS.get(ip))
-    pool = DesignPool(ip)
+    obj = Objective(mode=mode, clk_period_ps=_sdc_period(ip))
+    pool = DesignPool(ip, fresh=fresh_pool)
     frontier = ParetoFrontier()
+
+    # ── diagnosis-driven context selection (large IPs) ───────────────────────
+    # Run the PPA tools FIRST (zero model tokens); scope each candidate to the
+    # critical-path files instead of dumping the whole tree. Auto-on for large
+    # IPs under a real model; off for stub (keeps the proven replay path) and
+    # small IPs (full context is already cheap). See NVIDIA_DAILY_RUN_LOG
+    # 2026-07-13.
+    diag = None
+    _large = len(spec.sources) > _DIAG_MIN_FILES
+    _want = (diagnose == "on" or
+             (diagnose == "auto" and _large and not _is_stub(model)))
+    if _want:
+        from .diagnose import diagnose as _run_diag
+        try:
+            diag = _run_diag(ip)
+            print(f"[{ip}] diagnosis: WNS={diag.wns_ps}ps "
+                  f"structure={diag.structure} "
+                  f"crit_files={[Path(f).name for f in diag.critical_files[:4]]}")
+            if not diag.critical_files:
+                # no attribution (e.g. unparseable reports on a hidden IP):
+                # staging would scope-drop EVERY edit and burn the budget on
+                # nothing — fall back to full context instead.
+                print(f"[{ip}] diagnosis found no critical files — "
+                      f"full-context fallback")
+                diag = None
+        except Exception as e:
+            print(f"[{ip}] diagnosis failed ({e}) — full-context fallback")
+    if diag and focus:
+        # --focus: explicit cursor override (basenames). The campaign walks
+        # THESE files in the given order instead of the diagnosis ranking —
+        # for targeted campaigns (e.g. unfenced aes S-box) and DAC-day triage.
+        by_name = {Path(s).name: s for s in spec.sources}
+        want = [by_name[n] for n in focus if n in by_name]
+        missing = [n for n in focus if n not in by_name]
+        if missing:
+            print(f"[{ip}] --focus: unknown files ignored: {missing}")
+        if want:
+            diag.critical_files = want
+            print(f"[{ip}] focus cursor: {[Path(f).name for f in want]}")
 
     # ── baseline state (measure + reports, cached) ───────────────────────────
     base = E.baseline(ip)
@@ -113,25 +250,48 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
     dossier = _dossier(ip)
     best_adp_history: list[float] = []
     summary = {"rounds": [], "accepted": 0}
+    # staged-context cursor (only used when diag is active)
+    scope_cursor = 0        # index into diag.critical_files
+    n_crit = len(diag.critical_files) if diag else 0
 
     for rnd in range(1, rounds + 1):
         budget_line, frac = _budget_line(model, max_calls, max_tokens)
-        k_now = _k_for_regime(k, frac)
-        if k_now == 0:
-            print(f"[{ip}] budget exhausted — stopping")
+        if diag:
+            # staged mode: FIXED k per stage (k_first on stage 1 = worst file,
+            # k after), walking one file/stage until the turn budget runs out.
+            # Last stage may be partial (whatever budget remains). No regime
+            # tapering — turns are spent covering files, cleanly.
+            k_stage = k_first if scope_cursor == 0 else k
+            k_now = min(k_stage, max_calls - model.proposal_calls)
+        else:
+            k_now = _k_for_regime(k, frac)     # BATS 70/30/10 regime
+        if k_now <= 0:
+            print(f"[{ip}] turn budget exhausted — stopping")
             break
 
-        parent_cid, sel_mode = pool.select_parent()
+        # PARENT SELECTION. Staged mode = coordinate descent: pin the parent to
+        # the best-so-far (frontier best), so each stage provably builds on the
+        # accumulated wins of the earlier stages. Non-staged = Thompson sample.
+        if diag:
+            fb = frontier.best(obj, base_ppa)
+            parent_cid = fb["cid"] if fb else "baseline"
+            sel_mode = "deepen"
+        else:
+            parent_cid, sel_mode = pool.select_parent()
         parent = pool.states[parent_cid]
         parent_files = (pool.files_of(parent_cid) if parent_cid != "baseline"
                         else {rel: pristine_source(ip, rel)
                               for rel in spec.sources})
+        parent_adp = round(obj.adp_ratio(parent.ppa, base_ppa) or 1.0, 4)
 
         rep_dir = E.reports_dir(ip, parent_cid)
         if not (rep_dir / "sta_timing_paths.txt").exists():
             rep_dir = E.reports_dir(ip, "baseline")
         sta_block = S.feedback(rep_dir, top_k=3)
-        tag = S.dominant_tag(rep_dir) or "mixed-comb-depth"
+        # prefer the diagnosis structure tag (per-file critical path) over the
+        # flat STA tag when diagnosis is active
+        tag = (diag.structure if (diag and diag.structure)
+               else S.dominant_tag(rep_dir) or "mixed-comb-depth")
 
         preferred = _TAG_TO_RUNGS.get(tag, [])
         rungs = [r for r in LADDER if r["key"] in preferred][:k_now]
@@ -144,37 +304,143 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
             rungs.sort(key=lambda r: r["key"] != parent.strategy)
 
         bullets = skills.retrieve([tag], sections=None, k=5)
+        diag_block = (diag.bundle_text() + "\n\n" if diag else "") + sta_block
+
+        # STAGED context (large IPs, coordinate descent): this stage targets a
+        # small batch of critical-path files (stage 1 = worst file; later
+        # stages = `stage_batch` files each). All k rungs share this scope and
+        # vary by STRATEGY; the parent is the best-so-far, so each stage builds
+        # on the prior stage's locked-in win rather than re-optimising it. No
+        # retry: the cursor always advances (k is the per-stage diversity).
+        # Small IPs / stub keep full context (proven path).
+        batch_paths = (_stage_batch_files(diag, scope_cursor, stage_batch)
+                       if diag else [])
+        stage_files = (_scope_files(batch_paths, parent_files)
+                       if batch_paths else parent_files)
+        # read-only GROUNDING context: the OTHER critical files (both the
+        # already-locked earlier stages AND the not-yet-reached ones the batch
+        # file interacts with). Sending the target file ALONE starved the model
+        # of the surrounding data flow -> functional bugs + hallucinated edits
+        # (2026-07-13 regression root-cause). Bounded by _RO_CAP for huge IPs.
+        readonly = None
+        iface_block = ""
+        if diag and grounding == "on":
+            ro = [rel for rel in diag.critical_files
+                  if rel not in batch_paths and rel in parent_files][:_RO_CAP]
+            readonly = {rel: parent_files[rel] for rel in ro}
+        elif diag and grounding == "stubs":
+            stubs = _iface_stubs(ip, batch_paths, parent_files)
+            iface_block = "\n\n".join(
+                f"// STUB of {Path(r).name}:\n{t}" for r, t in stubs.items())
+        scope_note = ""
+        if diag:
+            scope_note = (
+                "IMPORTANT: You may edit ONLY the file(s) under FILES TO "
+                "OPTIMISE. Any edit to ANY other file is DISCARDED by the "
+                "harness — your change must be entirely self-contained and "
+                "correct against the other files exactly as they are.")
         ctx = PromptContext(
-            ip=ip, files=parent_files, ppa=parent.ppa, sta_block=sta_block,
+            ip=ip, files=stage_files, ppa=parent.ppa, sta_block=diag_block,
             playbook_block=skills.render(bullets), dossier=dossier,
             weights=obj.weights, budget_line=budget_line,
+            readonly_files=readonly, scope_note=scope_note,
+            iface_block=iface_block, fence=fence,
             ref_note=(f"(baseline for relative scoring: area="
                       f"{base_ppa['area']}, setup={base_ppa['setup']}ps)"))
 
-        print(f"\n[{ip}] round {rnd}: parent={parent_cid[:12]} ({sel_mode}), "
-              f"tag={tag}, k={k_now}, rungs={[r['key'] for r in rungs]}")
+        if diag:
+            locked = [Path(f).name for f in diag.critical_files[:scope_cursor]]
+            print(f"\n[{ip}] ── STAGE @cursor {scope_cursor} ──")
+            print(f"    parent={parent_cid[:8]} ADP={parent_adp} (best-so-far)")
+            print(f"    EDITING: {[Path(f).name for f in batch_paths]}")
+            if grounding == "stubs":
+                stub_names = re.findall(r"// STUB of (\S+):", iface_block)
+                stub_lines = iface_block.count("\n") + 1 if iface_block else 0
+                print(f"    interface stubs ({stub_lines} lines): "
+                      f"{stub_names} (locked: {locked or 'none'})")
+            else:
+                print(f"    read-only grounding: "
+                      f"{[Path(f).name for f in (readonly or {})]}"
+                      f" (locked: {locked or 'none'})")
+            print(f"    strategies (k={k_now}): {[r['key'] for r in rungs]}")
+        else:
+            print(f"\n[{ip}] round {rnd}: parent={parent_cid[:12]} ({sel_mode}), "
+                  f"tag={tag}, k={k_now}, rungs={[r['key'] for r in rungs]}")
 
+        # RESILIENT fan-out: a transient API failure (503/429 after retries, or
+        # any per-call error) drops THAT candidate to None — it must never kill
+        # the whole campaign. With k parallel shots, losing one still leaves the
+        # rest. Critical for DAC-day robustness.
+        def _safe_gen(r):
+            try:
+                return (r, model.generate(build_prompt(ctx, r)))
+            except Exception as e:
+                print(f"  [{r['key']}] model call failed ({type(e).__name__}: "
+                      f"{str(e)[:80]}) — dropped")
+                return (r, None)
         with ThreadPoolExecutor(max_workers=k_now) as ex:
-            resps = list(ex.map(
-                lambda r: (r, model.generate(build_prompt(ctx, r))), rungs))
+            resps = list(ex.map(_safe_gen, rungs))
+        # turn budget = proposals only; an API-dropped call produced no edit
+        # attempt, so it doesn't spend a turn
+        model.proposal_calls += sum(1 for _, resp in resps if resp is not None)
 
         cands = []
         for rung, resp in resps:
+            if resp is None:            # dropped by resilient fan-out
+                continue
             _dump_raw(ip, rnd, rung["key"], resp)
             files = parse_response(ip, resp)
             if not files:
                 print(f"  [{rung['key']}] no usable code blocks — skipped "
                       f"(raw kept in ledger/raw/{ip}/)")
                 continue
+            if diag:
+                # STRICT scope: accept edits ONLY to this stage's batch files.
+                # The model often HALLUCINATES edits to files it can't see (it
+                # knows they exist from the file list) — e.g. a made-up
+                # sha512_w_mem that doesn't match the real one → breaks
+                # functionality. Drop anything outside the batch. (root-cause
+                # of the 2026-07-13 staged-run regression.)
+                allowed = set(batch_paths)
+                extra = [Path(r).name for r in files if r not in allowed]
+                files = {r: t for r, t in files.items() if r in allowed}
+                if extra:
+                    print(f"  [{rung['key']}] dropped out-of-scope/hallucinated "
+                          f"edits: {extra}")
+                if not files:
+                    print(f"  [{rung['key']}] no in-scope edits — skipped")
+                    continue
+            # fence AFTER scoping (2026-07-14, aes finding): an out-of-scope
+            # S-box edit is dropped harmlessly above — the fence must only veto
+            # candidates whose SURVIVING edits touch fenced logic. Fence is
+            # OFF by default (Hari, 2026-07-14): contest scores tests+PPA only.
+            if fence:
+                fv = fence_violation(ip, files)
+                if fv:
+                    print(f"  [{rung['key']}] FENCE-REJECT: {fv}")
+                    continue
+            edited = [Path(r).name for r in files]
             merged = dict(parent_files)
             merged.update(files)
             cands.append(E.Candidate(ip, merged, meta={
-                "strategy": rung["key"], "parent": parent_cid, "round": rnd}))
+                "strategy": rung["key"], "parent": parent_cid, "round": rnd,
+                "edited": edited}))
         if not cands:
             summary["rounds"].append({"round": rnd, "accepted": 0,
                                       "note": "no candidates"})
             best_adp_history.append(best_adp_history[-1] if best_adp_history
                                     else 1.0)
+            # staged mode: a barren stage still advances the cursor (no retry),
+            # so we never loop on one file.
+            if diag and n_crit:
+                batch_n = 1 if scope_cursor == 0 else stage_batch
+                print(f"[{ip}] STAGE @cursor {scope_cursor}: no candidates — "
+                      f"advancing cursor {scope_cursor}→{scope_cursor + batch_n}")
+                scope_cursor += batch_n
+                if scope_cursor >= n_crit:
+                    print(f"[{ip}] all {n_crit} critical files staged")
+                    break
+                continue
             if _plateaued(best_adp_history, plateau_rounds, plateau_delta):
                 print(f"[{ip}] plateau — stopping")
                 break
@@ -189,14 +455,22 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
         for i, (cand, res) in enumerate(zip(cands, results)):
             attempts = 0
             while (res.status in ("compile-fail", "regen-fail")
-                   and attempts < 2 and _budget_line(model, max_calls,
-                                                     max_tokens)[1] > 0.05):
+                   and attempts < 2
+                   and _budget_line(model, 0, max_tokens)[1] > 0.05):  # token-gated
                 attempts += 1
-                resp = model.generate(build_repair_prompt(
-                    {r: t for r, t in cand.files.items()
-                     if r not in parent_files or cand.files[r] != parent_files.get(r)},
-                    res.detail or "unknown error"))
+                try:
+                    resp = model.generate(build_repair_prompt(
+                        {r: t for r, t in cand.files.items()
+                         if r not in parent_files or cand.files[r] != parent_files.get(r)},
+                        res.detail or "unknown error"))
+                except Exception as e:      # API failure must not kill the run
+                    print(f"  [repair] model call failed "
+                          f"({type(e).__name__}: {str(e)[:80]}) — skipped")
+                    break
                 fixed = parse_response(ip, resp)
+                if diag:      # strict scope applies to compile repair too
+                    fixed = {rr: tt for rr, tt in fixed.items()
+                             if rr in set(batch_paths)}
                 if not fixed:
                     break
                 merged = dict(cand.files)
@@ -209,6 +483,17 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
 
         accepted = 0
         for cand, res in zip(cands, results):
+            # netlist-collapse guard (2026-07-14, aes finding): an edit that
+            # breaks hierarchy elaboration can synthesize to a tiny fragment
+            # that "improves" every metric. That is measurement garbage, not
+            # optimization — reject before comparing.
+            if (res.ppa and parent.ppa.get("cells")
+                    and res.ppa.get("cells", 0) < 0.5 * parent.ppa["cells"]):
+                print(f"  reject {cand.cid[:12]} [{cand.meta['strategy']}] "
+                      f"netlist-collapse: {res.ppa['cells']:.0f} cells vs "
+                      f"parent {parent.ppa['cells']:.0f} — elaboration broke")
+                pool.backup(parent_cid, 0.10)
+                continue
             adp = (obj.adp_ratio(res.ppa, parent.ppa)
                    if res.ppa else None)
             reward = pool.reward_from_eval(res.status, adp)
@@ -224,11 +509,102 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
                                {"strategy": cand.meta["strategy"]})
                 accepted += 1
                 summary["accepted"] += 1
+                ed = cand.meta.get("edited", [])
                 print(f"  ACCEPT {cand.cid[:12]} [{cand.meta['strategy']}] "
-                      f"{reason} | ADP vs parent={adp and round(adp, 3)}")
+                      f"edited={ed} {reason} | ADP vs parent="
+                      f"{adp and round(adp, 3)}")
             else:
                 print(f"  reject {cand.cid[:12]} [{cand.meta['strategy']}] "
                       f"{res.status}: {reason}")
+
+        # ── PPA-prioritised gate-fail repair (2026-07-13) ────────────────────
+        # If the stage produced NO win, the gate-failed candidates are often
+        # near-wins (compile+timing-improving, one functional bug). Measure
+        # their real PPA, keep the ones that WOULD improve, repair the top-2
+        # (1 attempt each). Repair calls are OFF the turn budget (proposals
+        # only) — gated by the token budget, not proposal count.
+        if accepted == 0 and _budget_line(model, 0, max_tokens)[1] > 0.05:
+            # "broken but maybe promising" = gate-fail (TB caught it) OR
+            # dualsim-fail (IPs whose TB is skipped — aes — fail at layer 5
+            # instead; 2026-07-14). dualsim-fail candidates were already
+            # measured, so their PPA is free.
+            broken = [(c, r) for c, r in zip(cands, results)
+                      if r.status in ("gate-fail", "dualsim-fail")]
+            # measure the broken candidates' real PPA IN PARALLEL (each is a
+            # full synth+STA in its own workspace; bounded by --workers so we
+            # don't thrash on huge IPs). 4 broken candidates finish in ~1 synth
+            # time, not 4×.
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                measured = list(ex.map(
+                    lambda cr: (cr[0], cr[1],
+                                cr[1].ppa or E.measure_candidate(cr[0])),
+                    broken))
+            scored = []
+            for c, r, ppa in measured:
+                adp = obj.adp_ratio(ppa, parent.ppa) if ppa else None
+                if adp is not None and adp < 0.995:      # would improve if fixed
+                    scored.append((adp, c, r, ppa))
+            scored.sort(key=lambda x: x[0])
+            if scored:
+                print(f"  [gatefail-repair] {len(scored)} broken-but-PPA-"
+                      f"improving candidate(s); repairing top "
+                      f"{min(2, len(scored))}")
+            for adp, c, r, ppa in scored[:2]:
+                changed = {rel: t for rel, t in c.files.items()
+                           if t != parent_files.get(rel)}
+                try:
+                    resp = model.generate(build_gatefail_repair_prompt(
+                        changed, r.detail or "", f"ADP {adp:.3f} vs parent"))
+                except Exception as e:   # API failure must not kill the run
+                    print(f"  [gatefail-repair] model call failed "
+                          f"({type(e).__name__}: {str(e)[:80]}) — skipped")
+                    continue
+                fixed = parse_response(ip, resp)
+                if diag:      # strict: repair may only touch the batch files too
+                    fixed = {rr: tt for rr, tt in fixed.items()
+                             if rr in set(batch_paths)}
+                if not fixed:
+                    print(f"  [gatefail-repair] {c.meta['strategy']}: no fix returned")
+                    continue
+                merged = dict(parent_files); merged.update(fixed)
+                rc = E.Candidate(ip, merged, meta={
+                    **c.meta, "repair": "gatefail"})
+                rr = E.evaluate_one(rc, base_eval, full_verify=True)
+                radp = obj.adp_ratio(rr.ppa, parent.ppa) if rr.ppa else None
+                verdict, reason = (obj.better(rr.ppa, parent.ppa)
+                                   if rr.status == "measured" and rr.ppa
+                                   else (False, rr.status))
+                dsok = rr.verify.get("dualsim", {}).get("status") == "PASS"
+                if verdict and dsok:
+                    pool.add(rc.cid, rr.ppa, rc.files, parent_cid, c.meta["strategy"])
+                    frontier.offer(rc.cid, rr.ppa, {"strategy": c.meta["strategy"]})
+                    accepted += 1; summary["accepted"] += 1
+                    print(f"  ACCEPT (repaired) {rc.cid[:12]} "
+                          f"[{c.meta['strategy']}] {reason} | ADP="
+                          f"{radp and round(radp, 3)}")
+                else:
+                    print(f"  [gatefail-repair] {c.meta['strategy']} -> "
+                          f"{rr.status} (still no win)")
+
+        # staged-context cursor: lock this stage's outcome and advance.
+        if diag and n_crit:
+            # NO retry (2026-07-13): the higher k IS the per-stage diversity —
+            # always advance the cursor to the next file. Accumulated-best is
+            # preserved regardless, so a barren stage costs nothing but its k
+            # calls. Budget goes to COVERING more critical files, not re-trying.
+            batch_n = 1 if scope_cursor == 0 else stage_batch
+            fb = frontier.best(obj, base_ppa)
+            acc_adp = round(obj.adp_ratio(fb["ppa"], base_ppa) or 1.0, 4) if fb else 1.0
+            staged = [Path(f).name for f in batch_paths]
+            mark = "✓ LOCKED" if accepted > 0 else "✗ no win (kept best)"
+            print(f"[{ip}] STAGE {staged} {mark} — accumulated best "
+                  f"ADP={acc_adp}. Advancing cursor {scope_cursor}→"
+                  f"{scope_cursor + batch_n}")
+            scope_cursor += batch_n
+            if scope_cursor >= n_crit:
+                print(f"[{ip}] all {n_crit} critical files staged — final "
+                      f"accumulated ADP={acc_adp}")
+                break
 
         # reflector: distill round outcomes into playbook votes/lessons
         # (deterministic curator applies them; stub output parses to nothing)
@@ -350,6 +726,10 @@ def main(argv=None):
                     help="model id for vertex/endpoint")
     ap.add_argument("--endpoint", default="http://127.0.0.1:8080",
                     help="model service URL for --model endpoint")
+    ap.add_argument("--key-env",
+                    help="env var holding the API key (multi-account "
+                         "parallelism); mode follows the name "
+                         "(*EXPRESS*=vertex, else ai-studio)")
     ap.add_argument("--temperature", type=float, default=0.2)
     ap.add_argument("--top-p", type=float, default=0.6)
     ap.add_argument("--mode", default="pareto",
@@ -362,6 +742,29 @@ def main(argv=None):
     ap.add_argument("--emit-best", metavar="DIR",
                     help="write the winning candidate's files (repo-relative "
                          "layout, drop-in) + manifest.json to DIR")
+    ap.add_argument("--diagnose", default="auto", choices=["auto", "on", "off"],
+                    help="staged diagnosis-driven context (large IPs): auto "
+                         "(on for >15-file IPs under a real model), on, off")
+    ap.add_argument("--fresh-pool", action="store_true",
+                    help="ignore prior banked wins — clean demo")
+    ap.add_argument("--stage-batch", type=int, default=1,
+                    help="new files per stage after the first "
+                         "(default 1 = one file/stage, most reliable)")
+    ap.add_argument("--k-first", type=int, default=6,
+                    help="parallel candidates on stage 1 (worst file, "
+                         "most important); k for later stages")
+    ap.add_argument("--focus", default=None,
+                    help="comma-separated file basenames: explicit staged "
+                         "cursor override (targeted campaigns / DAC triage)")
+    ap.add_argument("--fence", choices=["on", "off"], default="off",
+                    help="scope fence (aes S-box). OFF by default — the "
+                         "contest scores tests-pass + PPA only; keep 'on' "
+                         "available as a security-conscious option")
+    ap.add_argument("--grounding", choices=["on", "off", "stubs"], default="on",
+                    help="staged-mode context: full critical files read-only "
+                         "(on), batch file strictly alone (off), or interface "
+                         "stubs of instantiated submodules (stubs, config C) "
+                         "— A/B/C 2026-07-14")
     a = ap.parse_args(argv)
 
     if a.ip not in IPS:
@@ -377,13 +780,16 @@ def main(argv=None):
         kw["replay_dirs"] = [Path(d) for d in a.stub_replay]
     elif a.model == "vertex":
         kw = dict(model_name=a.model_name, temperature=a.temperature,
-                  top_p=a.top_p)
+                  top_p=a.top_p, key_env=a.key_env)
     elif a.model == "endpoint":
         kw = dict(endpoint=a.endpoint, model_name=a.model_name)
     model = make_model(a.model, **kw)
     run(a.ip, a.rounds, a.k, model, mode=a.mode, workers=a.workers,
         max_calls=a.max_calls, max_tokens=a.max_tokens,
-        emit_best=a.emit_best)
+        emit_best=a.emit_best, diagnose=a.diagnose, stage_batch=a.stage_batch,
+        fresh_pool=a.fresh_pool, k_first=a.k_first,
+        grounding=a.grounding, fence=a.fence == "on",
+        focus=[s.strip() for s in a.focus.split(",")] if a.focus else None)
     return 0
 
 

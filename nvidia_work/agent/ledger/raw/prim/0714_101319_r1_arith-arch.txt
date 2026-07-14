@@ -1,0 +1,75 @@
+// FILE: prim_crc32.v
+module prim_crc32 (
+	clk_i,
+	rst_ni,
+	set_crc_i,
+	crc_in_i,
+	data_valid_i,
+	data_i,
+	crc_out_o
+);
+	parameter [31:0] BytesPerWord = 4;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire set_crc_i;
+	input wire [31:0] crc_in_i;
+	input wire data_valid_i;
+	input wire [(BytesPerWord * 8) - 1:0] data_i;
+	output wire [31:0] crc_out_o;
+
+	/**
+	 * Optimization: arith-arch
+	 * Swapped the architecture of the CRC byte calculation from a 256-entry LUT (case statement)
+	 * to a parallel XOR tree based on the linear properties of CRC in GF(2).
+	 *
+	 * CRC(b) = XOR_{j=0..7} (b[j] ? T[1<<j] : 0)
+	 * This reduces the logic depth from a 256-to-1 multiplexer to a 3-level XOR tree,
+	 * significantly improving timing (WNS) and reducing area.
+	 */
+	function automatic [31:0] crc32_byte_calc;
+		input [7:0] b;
+		begin
+			crc32_byte_calc = (b[0] ? 32'h77073096 : 32'h0) ^
+			                  (b[1] ? 32'hee0e612c : 32'h0) ^
+			                  (b[2] ? 32'h076dc419 : 32'h0) ^
+			                  (b[3] ? 32'h0edb8832 : 32'h0) ^
+			                  (b[4] ? 32'h1db71064 : 32'h0) ^
+			                  (b[5] ? 32'h3b6e20c8 : 32'h0) ^
+			                  (b[6] ? 32'h76dc4190 : 32'h0) ^
+			                  (b[7] ? 32'hedb88320 : 32'h0);
+		end
+	endfunction
+
+	reg [31:0] crc_d;
+	reg [31:0] crc_q;
+	wire crc_en;
+	wire [31:0] crc_stages [0:BytesPerWord];
+
+	assign crc_en = set_crc_i | data_valid_i;
+	assign crc_stages[0] = crc_q;
+
+	genvar _gv_i_1;
+	generate
+		for (_gv_i_1 = 0; _gv_i_1 < BytesPerWord; _gv_i_1 = _gv_i_1 + 1) begin : g_crc_stages
+			localparam i = _gv_i_1;
+			assign crc_stages[i + 1] = {8'h00, crc_stages[i][31:8]} ^ crc32_byte_calc(crc_stages[i][7:0] ^ data_i[i * 8+:8]);
+		end
+	endgenerate
+
+	always @(*) begin
+		if (set_crc_i)
+			crc_d = ~crc_in_i;
+		else
+			crc_d = crc_stages[BytesPerWord];
+	end
+
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni)
+			crc_q <= 32'hffffffff;
+		else if (crc_en)
+			crc_q <= crc_d;
+	end
+
+	assign crc_out_o = ~crc_q;
+
+endmodule

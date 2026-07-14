@@ -1,0 +1,105 @@
+// FILE: prim_onehot_check.v
+module prim_onehot_check (
+	clk_i,
+	rst_ni,
+	oh_i,
+	addr_i,
+	en_i,
+	err_o
+);
+	parameter [31:0] AddrWidth = 5;
+	parameter [31:0] OneHotWidth = 2 ** AddrWidth;
+	parameter [0:0] AddrCheck = 1;
+	parameter [0:0] EnableCheck = 1;
+	parameter [0:0] StrictCheck = 1;
+	parameter [0:0] EnableAlertTriggerSVA = 1;
+
+	input clk_i;
+	input rst_ni;
+	input wire [OneHotWidth - 1:0] oh_i;
+	input wire [AddrWidth - 1:0] addr_i;
+	input wire en_i;
+	output wire err_o;
+
+	// Optimization Strategy: arith-arch
+	// Replace the recursive boolean tree with an arithmetic-based one-hot check.
+	// A value is one-hot if (oh_i != 0) AND (oh_i & (oh_i - 1) == 0).
+	// To optimize the decrementer (oh_i - 1), we use a Kogge-Stone Parallel Prefix AND tree.
+
+	// 1. Any bit set (OR reduction)
+	wire any_set = |oh_i;
+
+	// 2. More than one bit set (using Kogge-Stone decrementer architecture)
+	// oh_i - 1 is equivalent to oh_i ^ Borrow, where Borrow[i] = & (~oh_i[i-1:0])
+	wire [OneHotWidth-1:0] p = ~oh_i;
+	wire [OneHotWidth-1:0] s [0:AddrWidth]; // Prefix stages: log2(OneHotWidth) = AddrWidth
+
+	assign s[0] = p;
+	genvar l, i;
+	generate
+		for (l = 1; l <= AddrWidth; l = l + 1) begin : gen_stages
+			localparam integer dist = 2**(l-1);
+			for (i = 0; i < OneHotWidth; i = i + 1) begin : gen_nodes
+				if (i < dist) begin
+					assign s[l][i] = s[l-1][i];
+				end else begin
+					assign s[l][i] = s[l-1][i] & s[l-1][i-dist];
+				end
+			end
+		end
+	endgenerate
+
+	wire [OneHotWidth-1:0] borrow;
+	assign borrow[0] = 1'b1; // Initial borrow for decrement
+	generate
+		for (i = 1; i < OneHotWidth; i = i + 1) begin : gen_borrow
+			assign borrow[i] = s[AddrWidth][i-1];
+		end
+	endgenerate
+
+	wire [OneHotWidth-1:0] oh_minus_1;
+	generate
+		for (i = 0; i < OneHotWidth; i = i + 1) begin : gen_minus_1
+			assign oh_minus_1[i] = oh_i[i] ^ borrow[i];
+		end
+	endgenerate
+
+	// oh0_err is true if more than one bit is set.
+	// (oh_i & (oh_i - 1)) is non-zero if >1 bit is set.
+	wire oh0_err = |(oh_i & oh_minus_1);
+
+	// 3. Address check: if any bit is set, it must be the one at addr_i.
+	// This is equivalent to oh_i[addr_i] being the only bit set.
+	wire bit_at_addr_set = oh_i[addr_i];
+
+	wire enable_err;
+	wire addr_err;
+
+	generate
+		if (EnableCheck) begin : gen_enable_check
+			if (StrictCheck) begin : gen_strict
+				assign enable_err = any_set ^ en_i;
+			end
+			else begin : gen_not_strict
+				assign enable_err = !en_i && any_set;
+			end
+		end
+		else begin : gen_no_enable_check
+			assign enable_err = 1'b0;
+		end
+
+		if (AddrCheck) begin : gen_addr_check
+			assign addr_err = any_set ^ bit_at_addr_set;
+		end
+		else begin : gen_no_addr_check
+			assign addr_err = 1'b0;
+		end
+	endgenerate
+
+	assign err_o = oh0_err || enable_err || addr_err;
+
+	// Tie off unused clock/reset to avoid lint warnings
+	wire _unused_clk = clk_i;
+	wire _unused_rst = rst_ni;
+
+endmodule

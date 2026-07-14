@@ -77,7 +77,57 @@ _HARD_RULES = """HARD CONSTRAINTS (violations are auto-rejected by tooling):
 - Do NOT change any module's port list, name, or parameters.
 - Do NOT add or remove pipeline stages / change cycle-level latency{latency_note}.
 - Synthesizable Verilog-2001/2005 only; no initial blocks, no latches.
-- Return COMPLETE file contents for every file you modify (and only those)."""
+- Return COMPLETE file contents for every file you modify (and only those).{fence}"""
+
+# Per-IP scope fences (prompt text + tooling-enforced forbidden substrings in
+# any changed file). aes: keep the security S-box as-is — a masked->unmasked
+# swap would "win" PPA by DELETING a side-channel countermeasure, which is not
+# an RTL optimization. Optimize the datapath instead.
+FENCE = {
+    "aes": {
+        "prompt": ("\n- SCOPE FENCE (aes): Do NOT change the S-box security "
+                   "implementation. Do NOT modify SecSBoxImpl, the "
+                   "SBoxImpl/masking selection, or any aes_sbox_*.v file. "
+                   "Optimize the cipher datapath, key expansion, MixColumns, "
+                   "and GF(2^8) arithmetic ONLY."),
+        "forbid_files": ("aes_sbox_canright", "aes_sbox_lut", "aes_sbox_dom",
+                         "aes_sbox_canright_masked"),
+        "forbid_substr": ("SecSBoxImpl =", "SecSBoxImpl=", "SecSBoxImpl  ="),
+    },
+}
+
+
+def fence_violation(ip: str, files: dict) -> str | None:
+    """Return a reason string if a candidate breaches the IP's scope fence,
+    else None. Tooling enforcement of the prompt fence above.
+
+    PRESENCE of a fenced token is not a breach: pristine files legitimately
+    carry pass-through lines (aes_core.v declares/forwards SecSBoxImpl), and
+    candidates return COMPLETE files. Flag only if the token-bearing lines
+    actually DIFFER from pristine (2026-07-14: presence-check falsely wiped
+    an entire aes_core stage)."""
+    f = FENCE.get(ip)
+    if not f:
+        return None
+    for rel, text in files.items():
+        stem = rel.rsplit("/", 1)[-1]
+        if any(bad in stem for bad in f.get("forbid_files", ())):
+            return f"fence: modified S-box impl file {stem}"
+        for sub in f.get("forbid_substr", ()):
+            if sub not in text:
+                continue
+            token = sub.strip().rstrip("=").strip()
+            try:
+                from .workspace import pristine_source
+                pris = pristine_source(ip, rel)
+            except Exception:
+                return f"fence: changed {token}"   # can't verify → conservative
+            norm = lambda t: sorted(" ".join(l.split()) for l in t.splitlines()
+                                    if token in l)
+            if norm(text) != norm(pris):
+                return f"fence: changed {token}"
+            break   # token lines identical to pristine — pass-through, fine
+    return None
 
 _TEMPLATE = """You are an expert RTL engineer optimizing Verilog PPA on the ASAP7 7nm library
 (Yosys synthesis + OpenSTA timing). Optimization goal weights: {weights}.
@@ -121,6 +171,17 @@ class PromptContext:
     weights: dict
     budget_line: str
     ref_note: str = ""
+    readonly_files: dict = None       # {rel: content} shown but NOT editable
+                                      # (already-locked / dependency files)
+    scope_note: str = ""              # staged mode: warns that out-of-scope
+                                      # edits are discarded
+    iface_block: str = ""             # config C: interface stubs of the
+                                      # modules the batch file instantiates
+    fence: bool = False               # scope fence (e.g. aes S-box). Default
+                                      # OFF (2026-07-14, Hari): the contest
+                                      # scores tests-pass + PPA only — no
+                                      # self-imposed restrictions. "on" kept
+                                      # as a DAC-day option.
 
 
 def build_prompt(ctx: PromptContext, strategy: dict) -> str:
@@ -130,12 +191,33 @@ def build_prompt(ctx: PromptContext, strategy: dict) -> str:
                     if spec.compare_mode == "transaction" else "")
     rtl = "\n\n".join(f"// FILE: {Path(rel).name}\n{text}"
                       for rel, text in sorted(ctx.files.items()))
+    # read-only context: already-optimised/dependency files the model must
+    # understand but NOT edit (coordinate descent — locked wins carried forward)
+    if ctx.readonly_files:
+        ro = "\n\n".join(f"// READ-ONLY (do not edit): {Path(rel).name}\n{text}"
+                         for rel, text in sorted(ctx.readonly_files.items()))
+        rtl = ("// ── READ-ONLY CONTEXT (already optimised / dependencies — "
+               "understand these, do NOT return them) ──\n" + ro +
+               "\n\n// ── FILES TO OPTIMISE (return complete, only these) ──\n"
+               + rtl)
+    if ctx.iface_block:
+        rtl = ("// ── SUBMODULE INTERFACES (read-only reference: port "
+               "contracts of modules instantiated by the file(s) below; "
+               "bodies omitted, do NOT return these) ──\n" + ctx.iface_block +
+               "\n\n// ── FILES TO OPTIMISE (return complete, only these) ──\n"
+               + rtl)
+    if ctx.scope_note:
+        rtl = ctx.scope_note + "\n\n" + rtl
     period = ""
     m = re.search(r"period=([\d.]+)ps", ctx.sta_block)
     if m:
         period = m.group(1)
     return _TEMPLATE.format(
-        weights=ctx.weights, hard_rules=_HARD_RULES.format(latency_note=latency_note),
+        weights=ctx.weights,
+        hard_rules=_HARD_RULES.format(
+            latency_note=latency_note,
+            fence=(FENCE.get(ctx.ip, {}).get("prompt", "")
+                   if ctx.fence else "")),
         dossier=ctx.dossier, playbook=ctx.playbook_block, ip=ctx.ip,
         area=ctx.ppa.get("area"), cells=ctx.ppa.get("cells"),
         setup=ctx.ppa.get("setup"), period=period or "?",
@@ -192,6 +274,37 @@ def build_repair_prompt(files: dict[str, str], errors: str) -> str:
     return _REPAIR_TMPL.format(errors=errors[:3000], rtl=rtl)
 
 
+_GATEFAIL_REPAIR_TMPL = """Your Verilog rewrite is CLOSE: it compiles and — good news — synthesis
+shows it IMPROVES timing/PPA ({ppa_note}). But it is FUNCTIONALLY INCORRECT:
+functional verification fails (testbench cases and/or differential simulation
+mismatches vs the original design), so it cannot be accepted yet.
+
+{errors}
+
+Your transformation is on the right track. Find the FUNCTIONAL BUG (a wrong
+index/bit-width, a mis-ordered operand, an off-by-one in a tree/pipeline, a
+sign issue) WITHOUT undoing the optimization — keep the PPA gain, just make it
+produce identical outputs to the original. Preserve all interface contracts
+(ports, parameters, cycle latency). Synthesizable Verilog-2001/2005.
+
+## The files you produced (functionally broken but PPA-improving)
+{rtl}
+
+Return every corrected file as:
+// FILE: <basename>.v
+<complete file content>
+"""
+
+
+def build_gatefail_repair_prompt(files: dict[str, str], tb_detail: str,
+                                 ppa_note: str) -> str:
+    rtl = "\n\n".join(f"// FILE: {Path(rel).name}\n{text}"
+                      for rel, text in sorted(files.items()))
+    return _GATEFAIL_REPAIR_TMPL.format(
+        errors=(tb_detail or "the functional testbench reported mismatches")[:2000],
+        ppa_note=ppa_note, rtl=rtl)
+
+
 _REFLECT_TMPL = """You are the reflector for an RTL PPA-optimization agent. Below are this
 round's candidate outcomes on `{ip}` and the playbook bullets that were in
 context. Extract durable lessons.
@@ -230,7 +343,8 @@ def parse_reflection(text: str) -> tuple[list[tuple[str, bool]], list[tuple[str,
 
 # ── models ────────────────────────────────────────────────────────────────────
 class Model:
-    calls = 0
+    calls = 0            # ALL model calls (proposals + reflector + repair)
+    proposal_calls = 0   # candidate proposals only — the turn budget
     tokens = 0
 
     def generate(self, prompt: str) -> str:
@@ -269,24 +383,38 @@ class VertexModel(Model):
 
     def __init__(self, model_name: str = "gemini-3-flash-preview",
                  temperature: float = 0.2, top_p: float = 0.6,
-                 thinking_budget: int = 8192):
+                 thinking_budget: int = 8192, key_env: str | None = None):
         try:
             from google import genai
         except ImportError as e:
             raise SystemExit(
                 "google-genai is not installed — run `pip install "
                 "google-genai` (AgentSetup.md step 1)") from e
-        if os.environ.get("EXPRESS_MODE_KEY"):
-            self.client = genai.Client(
-                vertexai=True, api_key=os.environ["EXPRESS_MODE_KEY"])
-            self.mode = "vertex-express"
-        elif os.environ.get("GEMINI_API_KEY"):
-            self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-            self.mode = "ai-studio"
-        else:
+        # key_env pins a specific env var (multi-account parallelism); else
+        # auto-detect. Express keys use the Vertex client; AI-Studio keys the
+        # plain client. Express keys carry an 'AQ.'-style prefix but so can
+        # some AI-Studio keys, so mode follows the ENV NAME, not the value:
+        # *EXPRESS* -> vertex, anything else -> ai-studio.
+        candidates = ([key_env] if key_env else
+                      ["EXPRESS_MODE_KEY", "GEMINI_API_KEY", "GEMINI_API_KEY_2"])
+        name = next((n for n in candidates if os.environ.get(n)), None)
+        if not name:
             raise SystemExit(
-                "no API key: set EXPRESS_MODE_KEY (Vertex Express Mode, "
-                "AgentSetup.md) or GEMINI_API_KEY (AI Studio)")
+                f"no API key in env {candidates}: set EXPRESS_MODE_KEY "
+                f"(Vertex Express) or GEMINI_API_KEY* (AI Studio)")
+        key = os.environ[name]
+        # HTTP timeout (ms): without it a hung socket stalls a campaign
+        # FOREVER inside generate() — no exception, nothing for the retry
+        # ladder or the resilient fan-out to catch (2026-07-14: aes stage 5
+        # hung 47 min). 5 min/attempt >> any real response incl. thinking.
+        _http = {"timeout": 300_000}
+        if "EXPRESS" in name.upper():
+            self.client = genai.Client(vertexai=True, api_key=key,
+                                       http_options=_http)
+            self.mode = f"vertex-express[{name}]"
+        else:
+            self.client = genai.Client(api_key=key, http_options=_http)
+            self.mode = f"ai-studio[{name}]"
         self.model_name = model_name
         # LIVE FINDING 2026-07-12: gemini-3-flash-preview is a thinking
         # model; with default config it burned 63k thought tokens into the

@@ -1,0 +1,34 @@
+[
+ {
+  "cid": "baseline",
+  "ppa": {
+   "area": 70.17354,
+   "cells": 436.0,
+   "ff": 32.0,
+   "setup": -208.95,
+   "hold": 56.4,
+   "timing_met": false,
+   "power": 0.0165
+  },
+  "parent": null,
+  "strategy": "baseline",
+  "wins": 2.4,
+  "losses": 3.6000000000000005
+ },
+ {
+  "cid": "e5d027749ade",
+  "ppa": {
+   "area": 65.93076,
+   "cells": 409.0,
+   "ff": 32.0,
+   "setup": -27.46,
+   "hold": 56.4,
+   "timing_met": false,
+   "power": 0.00538
+  },
+  "parent": "baseline",
+  "strategy": "restructure-select",
+  "wins": 0.0,
+  "losses": 0.0
+ }
+]

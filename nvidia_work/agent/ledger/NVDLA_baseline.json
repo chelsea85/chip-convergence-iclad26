@@ -1,0 +1,12 @@
+{
+ "ppa": {
+  "area": 0.75816,
+  "cells": 952591.0,
+  "ff": 42457.0,
+  "setup": -5788.4,
+  "hold": 42.4,
+  "timing_met": false,
+  "power": 0.0104
+ },
+ "proxy": null
+}

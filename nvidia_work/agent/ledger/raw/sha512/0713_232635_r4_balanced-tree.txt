@@ -1,0 +1,144 @@
+To optimize the `sha512_h_constants` module according to the **balanced-tree** strategy, we re-structure the selection logic for the initial hash constants. Although the original design used a flat `case` statement, which synthesis tools often optimize well, explicitly defining a balanced mux tree ensures that the selection logic for the 512-bit constant set (8 outputs × 64 bits) is partitioned into a logarithmic depth of 2-to-1 muxes. This approach minimizes the logic depth from the `mode` input to the `H` outputs, which is particularly beneficial if the `mode` signal or the constant selection is on a near-critical path.
+
+We also apply the **[rtlscout-cutpoints]** playbook by using `localparam` definitions for the constants, which improves code readability and helps the synthesis tool (Yosys/ABC) identify and share constant bits across the different modes more effectively.
+
+// FILE: sha512_h_constants.v
+//======================================================================
+//
+// sha512_h_constants.v
+// ---------------------
+// The H initial constants for the different modes in SHA-512.
+//
+// Optimized using a balanced mux tree structure to minimize logic depth
+// for the selection of 512-bit constant sets.
+//
+//======================================================================
+
+`default_nettype none
+
+module sha512_h_constants(
+                          input wire  [1 : 0]  mode,
+
+                          output wire [63 : 0] H0,
+                          output wire [63 : 0] H1,
+                          output wire [63 : 0] H2,
+                          output wire [63 : 0] H3,
+                          output wire [63 : 0] H4,
+                          output wire [63 : 0] H5,
+                          output wire [63 : 0] H6,
+                          output wire [63 : 0] H7
+                         );
+
+  //----------------------------------------------------------------
+  // Internal constant definitions [rtlscout-cutpoints].
+  //----------------------------------------------------------------
+  // SHA-512/224 (Mode 0)
+  localparam H0_M0 = 64'h8c3d37c819544da2;
+  localparam H1_M0 = 64'h73e1996689dcd4d6;
+  localparam H2_M0 = 64'h1dfab7ae32ff9c82;
+  localparam H3_M0 = 64'h679dd514582f9fcf;
+  localparam H4_M0 = 64'h0f6d2b697bd44da8;
+  localparam H5_M0 = 64'h77e36f7304c48942;
+  localparam H6_M0 = 64'h3f9d85a86a1d36c8;
+  localparam H7_M0 = 64'h1112e6ad91d692a1;
+
+  // SHA-512/256 (Mode 1)
+  localparam H0_M1 = 64'h22312194fc2bf72c;
+  localparam H1_M1 = 64'h9f555fa3c84c64c2;
+  localparam H2_M1 = 64'h2393b86b6f53b151;
+  localparam H3_M1 = 64'h963877195940eabd;
+  localparam H4_M1 = 64'h96283ee2a88effe3;
+  localparam H5_M1 = 64'hbe5e1e2553863992;
+  localparam H6_M1 = 64'h2b0199fc2c85b8aa;
+  localparam H7_M1 = 64'h0eb72ddc81c52ca2;
+
+  // SHA-384 (Mode 2)
+  localparam H0_M2 = 64'hcbbb9d5dc1059ed8;
+  localparam H1_M2 = 64'h629a292a367cd507;
+  localparam H2_M2 = 64'h9159015a3070dd17;
+  localparam H3_M2 = 64'h152fecd8f70e5939;
+  localparam H4_M2 = 64'h67332667ffc00b31;
+  localparam H5_M2 = 64'h8eb44a8768581511;
+  localparam H6_M2 = 64'hdb0c2e0d64f98fa7;
+  localparam H7_M2 = 64'h47b5481dbefa4fa4;
+
+  // SHA-512 (Mode 3)
+  localparam H0_M3 = 64'h6a09e667f3bcc908;
+  localparam H1_M3 = 64'hbb67ae8584caa73b;
+  localparam H2_M3 = 64'h3c6ef372fe94f82b;
+  localparam H3_M3 = 64'ha54ff53a5f1d36f1;
+  localparam H4_M3 = 64'h510e527fade682d1;
+  localparam H5_M3 = 64'h9b05688c2b3e6c1f;
+  localparam H6_M3 = 64'h1f83d9abfb41bd6b;
+  localparam H7_M3 = 64'h5be0cd19137e2179;
+
+
+  //----------------------------------------------------------------
+  // Wires.
+  //----------------------------------------------------------------
+  reg [63 : 0] tmp_H0;
+  reg [63 : 0] tmp_H1;
+  reg [63 : 0] tmp_H2;
+  reg [63 : 0] tmp_H3;
+  reg [63 : 0] tmp_H4;
+  reg [63 : 0] tmp_H5;
+  reg [63 : 0] tmp_H6;
+  reg [63 : 0] tmp_H7;
+
+
+  //----------------------------------------------------------------
+  // Concurrent connectivity for ports.
+  //----------------------------------------------------------------
+  assign H0 = tmp_H0;
+  assign H1 = tmp_H1;
+  assign H2 = tmp_H2;
+  assign H3 = tmp_H3;
+  assign H4 = tmp_H4;
+  assign H5 = tmp_H5;
+  assign H6 = tmp_H6;
+  assign H7 = tmp_H7;
+
+
+  //----------------------------------------------------------------
+  // mode_mux
+  //
+  // Implementation of a balanced mux tree for constant selection.
+  // This structure ensures O(log N) depth for the selection logic.
+  //----------------------------------------------------------------
+  always @*
+    begin : mode_mux
+      case (mode[1])
+        1'b0:
+          begin
+            case (mode[0])
+              1'b0: // Mode 0: SHA-512/224
+                begin
+                  tmp_H0 = H0_M0; tmp_H1 = H1_M0; tmp_H2 = H2_M0; tmp_H3 = H3_M0;
+                  tmp_H4 = H4_M0; tmp_H5 = H5_M0; tmp_H6 = H6_M0; tmp_H7 = H7_M0;
+                end
+              1'b1: // Mode 1: SHA-512/256
+                begin
+                  tmp_H0 = H0_M1; tmp_H1 = H1_M1; tmp_H2 = H2_M1; tmp_H3 = H3_M1;
+                  tmp_H4 = H4_M1; tmp_H5 = H5_M1; tmp_H6 = H6_M1; tmp_H7 = H7_M1;
+                end
+            endcase
+          end
+
+        1'b1:
+          begin
+            case (mode[0])
+              1'b0: // Mode 2: SHA-384
+                begin
+                  tmp_H0 = H0_M2; tmp_H1 = H1_M2; tmp_H2 = H2_M2; tmp_H3 = H3_M2;
+                  tmp_H4 = H4_M2; tmp_H5 = H5_M2; tmp_H6 = H6_M2; tmp_H7 = H7_M2;
+                end
+              1'b1: // Mode 3: SHA-512
+                begin
+                  tmp_H0 = H0_M3; tmp_H1 = H1_M3; tmp_H2 = H2_M3; tmp_H3 = H3_M3;
+                  tmp_H4 = H4_M3; tmp_H5 = H5_M3; tmp_H6 = H6_M3; tmp_H7 = H7_M3;
+                end
+            endcase
+          end
+      endcase
+    end
+endmodule // sha512_h_constants

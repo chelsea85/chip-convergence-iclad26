@@ -1,0 +1,382 @@
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+
+	wire [42:0] cmd;
+	// Extracting fields for command integrity check
+	assign cmd[38:7]  = tl_i[91:60];   // a_address
+	assign cmd[6:4]   = tl_i[107:105]; // a_opcode
+	assign cmd[3:0]   = tl_i[59:56];   // a_mask
+	assign cmd[42:39] = tl_i[18:15];   // a_user.instr_type
+
+	wire [1:0] err;
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i({tl_i[14:8], 14'b0, cmd}),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+
+	wire data_err;
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i({tl_i[7:1], tl_i[55:24]}),
+		.data_err_o(data_err)
+	);
+
+	// a_valid & (cmd_err | data_err)
+	assign err_o = tl_i[108] & (|err | data_err);
+
+	wire unused_tl;
+	assign unused_tl = |tl_i;
+endmodule
+
+// FILE: aes_cipher_control_fsm.v
+module aes_cipher_control_fsm (
+	clk_i,
+	rst_ni,
+	in_valid_i,
+	in_ready_o,
+	out_valid_o,
+	out_ready_i,
+	cfg_valid_i,
+	op_i,
+	key_len_i,
+	crypt_i,
+	dec_key_gen_i,
+	prng_reseed_i,
+	key_clear_i,
+	data_out_clear_i,
+	mux_sel_err_i,
+	sp_enc_err_i,
+	rnd_ctr_err_i,
+	op_err_i,
+	alert_fatal_i,
+	alert_o,
+	prng_update_o,
+	prng_reseed_req_o,
+	input wire prng_reseed_ack_i,
+	output reg [4:0] state_sel_o,
+	output reg state_we_o,
+	output reg sub_bytes_en_o,
+	input wire sub_bytes_out_req_i,
+	output reg sub_bytes_out_ack_o,
+	output reg [4:0] add_rk_sel_o,
+	output reg [4:0] key_full_sel_o,
+	output reg key_full_we_o,
+	output reg [2:0] key_dec_sel_o,
+	output reg key_dec_we_o,
+	output reg key_expand_en_o,
+	input wire key_expand_out_req_i,
+	output reg key_expand_out_ack_o,
+	output reg key_expand_clear_o,
+	output wire [3:0] rnd_ctr_o,
+	output reg [4:0] key_words_sel_o,
+	output reg [2:0] round_key_sel_o,
+	input wire crypt_q_i,
+	output reg crypt_d_o,
+	input wire dec_key_gen_q_i,
+	output reg dec_key_gen_d_o,
+	input wire prng_reseed_q_i,
+	output reg prng_reseed_d_o,
+	input wire key_clear_q_i,
+	output reg key_clear_d_o,
+	input wire data_out_clear_q_i,
+	output reg data_out_clear_d_o
+);
+	reg _sv2v_0;
+	parameter [0:0] SecMasking = 0;
+	parameter integer SecSBoxImpl = 32'sd4;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire in_valid_i;
+	output reg in_ready_o;
+	output reg out_valid_o;
+	input wire out_ready_i;
+	input wire cfg_valid_i;
+	input wire [1:0] op_i;
+	input wire [2:0] key_len_i;
+	input wire crypt_i;
+	input wire dec_key_gen_i;
+	input wire prng_reseed_i;
+	input wire key_clear_i;
+	input wire data_out_clear_i;
+	input wire mux_sel_err_i;
+	input wire sp_enc_err_i;
+	input wire rnd_ctr_err_i;
+	input wire op_err_i;
+	input wire alert_fatal_i;
+	output reg alert_o;
+	output reg prng_update_o;
+	output reg prng_reseed_req_o;
+
+	wire unused_cfg_valid;
+	assign unused_cfg_valid = cfg_valid_i;
+	generate
+		if (!SecMasking) begin : gen_unused_prng_reseed
+			wire unused_prng_reseed;
+			assign unused_prng_reseed = prng_reseed_i;
+		end
+	endgenerate
+
+	reg [5:0] aes_cipher_ctrl_ns;
+	wire [5:0] aes_cipher_ctrl_cs;
+	reg advance;
+	reg [2:0] cyc_ctr_d;
+	reg [2:0] cyc_ctr_q;
+	wire cyc_ctr_expr;
+	reg prng_reseed_done_d;
+	reg prng_reseed_done_q;
+	reg [3:0] rnd_ctr_d;
+	reg [3:0] rnd_ctr_q;
+	reg [3:0] num_rounds_d;
+	reg [3:0] num_rounds_q;
+	wire [3:0] num_rounds_regular;
+	assign num_rounds_regular = num_rounds_q - 4'd1;
+
+	// Common subexpression logic for key_words_sel_o
+	reg [4:0] key_words_sel_init;
+	reg [4:0] key_words_sel_round;
+	always @(*) begin
+		if (dec_key_gen_q_i) key_words_sel_init = 5'b10111;
+		else if (key_len_i == 3'b001) key_words_sel_init = 5'b01110;
+		else if (key_len_i == 3'b010) key_words_sel_init = (op_i == 2'b01) ? 5'b01110 : 5'b11000;
+		else if (key_len_i == 3'b100) key_words_sel_init = (op_i == 2'b01) ? 5'b01110 : 5'b00001;
+		else key_words_sel_init = 5'b10111;
+
+		if (dec_key_gen_q_i) key_words_sel_round = 5'b10111;
+		else if (key_len_i == 3'b001) key_words_sel_round = 5'b01110;
+		else if (key_len_i == 3'b010) key_words_sel_round = (op_i == 2'b01) ? 5'b11000 : 5'b01110;
+		else if (key_len_i == 3'b100) key_words_sel_round = (op_i == 2'b01) ? 5'b00001 : 5'b01110;
+		else key_words_sel_round = 5'b10111;
+	end
+
+	always @(*) begin : aes_cipher_ctrl_fsm
+		in_ready_o = 1'b0;
+		out_valid_o = 1'b0;
+		prng_update_o = 1'b0;
+		prng_reseed_req_o = 1'b0;
+		state_sel_o = 5'b11000;
+		state_we_o = 1'b0;
+		add_rk_sel_o = 5'b11000;
+		sub_bytes_en_o = 1'b0;
+		sub_bytes_out_ack_o = 1'b0;
+		key_full_sel_o = 5'b00001;
+		key_full_we_o = 1'b0;
+		key_dec_sel_o = 3'b011;
+		key_dec_we_o = 1'b0;
+		key_expand_en_o = 1'b0;
+		key_expand_out_ack_o = 1'b0;
+		key_expand_clear_o = 1'b0;
+		key_words_sel_o = 5'b10111;
+		round_key_sel_o = 3'b011;
+		aes_cipher_ctrl_ns = aes_cipher_ctrl_cs;
+		num_rounds_d = num_rounds_q;
+		rnd_ctr_d = rnd_ctr_q;
+		crypt_d_o = crypt_q_i;
+		dec_key_gen_d_o = dec_key_gen_q_i;
+		prng_reseed_d_o = prng_reseed_q_i;
+		key_clear_d_o = key_clear_q_i;
+		data_out_clear_d_o = data_out_clear_q_i;
+		prng_reseed_done_d = prng_reseed_done_q | prng_reseed_ack_i;
+		advance = 1'b0;
+		cyc_ctr_d = (SecSBoxImpl == 32'sd4 ? cyc_ctr_q + 3'd1 : 3'd0);
+		alert_o = 1'b0;
+
+		case (aes_cipher_ctrl_cs)
+			6'b001001: begin // IDLE
+				cyc_ctr_d = 3'd0;
+				in_ready_o = 1'b1;
+				if (in_valid_i) begin
+					if (SecMasking && prng_reseed_i && !dec_key_gen_i && !crypt_i) begin
+						prng_reseed_d_o = 1'b1;
+						prng_reseed_done_d = 1'b0;
+						aes_cipher_ctrl_ns = 6'b100100;
+					end else if (key_clear_i || data_out_clear_i) begin
+						key_clear_d_o = key_clear_i;
+						data_out_clear_d_o = data_out_clear_i;
+						aes_cipher_ctrl_ns = (data_out_clear_i ? 6'b111010 : 6'b001110);
+					end else if (dec_key_gen_i || crypt_i) begin
+						crypt_d_o = ~dec_key_gen_i & crypt_i;
+						dec_key_gen_d_o = dec_key_gen_i;
+						prng_reseed_d_o = SecMasking & prng_reseed_i;
+						state_sel_o = (dec_key_gen_i ? 5'b00001 : 5'b01110);
+						state_we_o = 1'b1;
+						prng_update_o = SecMasking;
+						key_expand_clear_o = 1'b1;
+						key_full_sel_o = (dec_key_gen_i || op_i == 2'b01) ? 5'b01110 : (op_i == 2'b10 ? 5'b11000 : 5'b01110);
+						key_full_we_o = 1'b1;
+						num_rounds_d = (key_len_i == 3'b001 ? 4'd10 : (key_len_i == 3'b010 ? 4'd12 : 4'd14));
+						rnd_ctr_d = 4'd0;
+						aes_cipher_ctrl_ns = 6'b100011;
+					end else aes_cipher_ctrl_ns = 6'b010111;
+				end
+			end
+			6'b100011: begin // INIT
+				add_rk_sel_o = 5'b01110;
+				key_words_sel_o = key_words_sel_init;
+				prng_reseed_done_d = 1'b0;
+				if (key_len_i != 3'b100) begin
+					advance = key_expand_out_req_i & cyc_ctr_expr;
+					prng_update_o = SecMasking;
+					key_expand_en_o = 1'b1;
+					if (advance) begin
+						key_expand_out_ack_o = 1'b1;
+						state_we_o = ~dec_key_gen_q_i;
+						key_full_we_o = 1'b1;
+						rnd_ctr_d = rnd_ctr_q + 4'b0001;
+						cyc_ctr_d = 3'd0;
+						aes_cipher_ctrl_ns = 6'b111101;
+					end
+				end else begin
+					prng_update_o = SecMasking;
+					state_we_o = ~dec_key_gen_q_i;
+					rnd_ctr_d = rnd_ctr_q + 4'b0001;
+					cyc_ctr_d = 3'd0;
+					aes_cipher_ctrl_ns = 6'b111101;
+				end
+			end
+			6'b111101: begin // ROUND
+				key_words_sel_o = key_words_sel_round;
+				prng_reseed_req_o = (SecMasking & prng_reseed_q_i) & ~prng_reseed_done_q;
+				round_key_sel_o = (op_i == 2'b10) ? 3'b100 : 3'b011;
+				advance = (key_expand_out_req_i & cyc_ctr_expr) & (dec_key_gen_q_i | sub_bytes_out_req_i);
+				prng_update_o = SecMasking;
+				sub_bytes_en_o = ~dec_key_gen_q_i;
+				key_expand_en_o = 1'b1;
+				if (advance) begin
+					sub_bytes_out_ack_o = ~dec_key_gen_q_i;
+					key_expand_out_ack_o = 1'b1;
+					state_we_o = ~dec_key_gen_q_i;
+					key_full_we_o = 1'b1;
+					rnd_ctr_d = rnd_ctr_q + 4'b0001;
+					cyc_ctr_d = 3'd0;
+					if (rnd_ctr_q >= num_rounds_regular) begin
+						aes_cipher_ctrl_ns = 6'b010000;
+						if (dec_key_gen_q_i) begin
+							key_dec_we_o = 1'b1;
+							out_valid_o = (SecMasking ? (prng_reseed_q_i ? prng_reseed_done_q : 1'b1) : 1'b1);
+							if (out_valid_o && out_ready_i) begin
+								dec_key_gen_d_o = 1'b0;
+								prng_reseed_d_o = 1'b0;
+								aes_cipher_ctrl_ns = 6'b001001;
+							end
+						end
+					end
+				end
+			end
+			6'b010000: begin // LAST
+				key_words_sel_o = key_words_sel_round;
+				add_rk_sel_o = 5'b00001;
+				prng_reseed_req_o = (SecMasking & prng_reseed_q_i) & ~prng_reseed_done_q;
+				state_sel_o = 5'b00001;
+				advance = (sub_bytes_out_req_i & cyc_ctr_expr) | dec_key_gen_q_i;
+				sub_bytes_en_o = ~dec_key_gen_q_i;
+				out_valid_o = ((mux_sel_err_i || sp_enc_err_i) || op_err_i ? 1'b0 : (SecMasking ? (prng_reseed_q_i ? prng_reseed_done_q & advance : advance) : advance));
+				cyc_ctr_d = (SecSBoxImpl == 32'sd4 ? (!advance ? cyc_ctr_q + 3'd1 : cyc_ctr_q) : 3'd0);
+				prng_update_o = (SecSBoxImpl == 32'sd4 ? !advance : 1'b0) | (out_valid_o & out_ready_i);
+				if (out_valid_o && out_ready_i) begin
+					sub_bytes_out_ack_o = ~dec_key_gen_q_i;
+					state_we_o = 1'b1;
+					crypt_d_o = 1'b0;
+					cyc_ctr_d = 3'd0;
+					dec_key_gen_d_o = 1'b0;
+					prng_reseed_d_o = 1'b0;
+					aes_cipher_ctrl_ns = 6'b001001;
+				end
+			end
+			6'b100100: begin // PRNG_RESEED
+				prng_reseed_req_o = prng_reseed_q_i & ~prng_reseed_done_q;
+				cyc_ctr_d = 3'd0;
+				out_valid_o = prng_reseed_done_q;
+				if (out_valid_o && out_ready_i) begin
+					prng_reseed_d_o = 1'b0;
+					aes_cipher_ctrl_ns = 6'b001001;
+				end
+			end
+			6'b111010: begin // CLEAR_STATE
+				state_we_o = 1'b1;
+				state_sel_o = 5'b00001;
+				aes_cipher_ctrl_ns = 6'b001110;
+			end
+			6'b001110: begin // CLEAR_KEY
+				if (key_clear_q_i) begin
+					key_full_sel_o = 5'b10111;
+					key_full_we_o = 1'b1;
+					key_dec_sel_o = 3'b100;
+					key_dec_we_o = 1'b1;
+				end
+				if (data_out_clear_q_i) begin
+					add_rk_sel_o = 5'b01110;
+					key_words_sel_o = 5'b10111;
+					round_key_sel_o = 3'b011;
+				end
+				out_valid_o = 1'b1;
+				if (out_ready_i) begin
+					key_clear_d_o = 1'b0;
+					data_out_clear_d_o = 1'b0;
+					aes_cipher_ctrl_ns = 6'b001001;
+				end
+			end
+			default: begin
+				aes_cipher_ctrl_ns = 6'b010111;
+				alert_o = 1'b1;
+			end
+		endcase
+		if (mux_sel_err_i || sp_enc_err_i || rnd_ctr_err_i || op_err_i || alert_fatal_i)
+			aes_cipher_ctrl_ns = 6'b010111;
+	end
+
+	prim_sparse_fsm_flop #(
+		.Width(6),
+		.ResetValue(6'b001001),
+		.EnableAlertTriggerSVA(1)
+	) u_state_regs(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.state_i(aes_cipher_ctrl_ns),
+		.state_o(aes_cipher_ctrl_cs)
+	);
+
+	always @(posedge clk_i or negedge rst_ni) begin : reg_fsm
+		if (!rst_ni) begin
+			prng_reseed_done_q <= 1'b0;
+			rnd_ctr_q <= 4'd0;
+			num_rounds_q <= 4'd0;
+		end else begin
+			prng_reseed_done_q <= prng_reseed_done_d;
+			rnd_ctr_q <= rnd_ctr_d;
+			num_rounds_q <= num_rounds_d;
+		end
+	end
+
+	assign rnd_ctr_o = rnd_ctr_q;
+	generate
+		if (SecSBoxImpl == 32'sd4) begin : gen_cyc_ctr
+			always @(posedge clk_i or negedge rst_ni) begin : reg_cyc_ctr
+				if (!rst_ni) cyc_ctr_q <= 3'd0;
+				else cyc_ctr_q <= cyc_ctr_d;
+			end
+			assign cyc_ctr_expr = cyc_ctr_q >= 3'd4;
+		end else begin : gen_no_cyc_ctr
+			always @(*) cyc_ctr_q = cyc_ctr_d;
+			assign cyc_ctr_expr = 1'b1;
+		end
+	endgenerate
+
+	initial _sv2v_0 = 0;
+endmodule

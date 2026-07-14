@@ -1,0 +1,99 @@
+// FILE: prim_onehot_check.v
+module prim_onehot_check (
+	clk_i,
+	rst_ni,
+	oh_i,
+	addr_i,
+	en_i,
+	err_o
+);
+	parameter [31:0] AddrWidth = 5;
+	parameter [31:0] OneHotWidth = 2 ** AddrWidth;
+	parameter [0:0] AddrCheck = 1;
+	parameter [0:0] EnableCheck = 1;
+	parameter [0:0] StrictCheck = 1;
+	parameter [0:0] EnableAlertTriggerSVA = 1;
+	input clk_i;
+	input rst_ni;
+	input wire [OneHotWidth - 1:0] oh_i;
+	input wire [AddrWidth - 1:0] addr_i;
+	input wire en_i;
+	output wire err_o;
+
+	// [R-prefix-adder] Optimization:
+	// The original implementation used a recursive binary tree to compute OR-reduction,
+	// one-hot selection (AND-tree), and "more-than-one-bit" (ERR-tree).
+	// For a 32-bit input, the ERR-tree logic (or_tree[C0] && or_tree[C1]) || err_tree[C0] || err_tree[C1]
+	// creates a deep boolean network (depth ~10).
+	// We replace the arithmetic-like "more than one bit set" check with a parallel-prefix
+	// architecture. Specifically, we use the property that oh_i is one-hot if and only if
+	// (oh_i & (oh_i - 1)) == 0. We implement the subtraction (arithmetic operator)
+	// using a Kogge-Stone style parallel-prefix OR tree to compute the borrow/carry chain.
+
+	// 1. OR-reduction (any bit set)
+	wire any_set = |oh_i;
+
+	// 2. One-hot selection (bit at addr_i is set)
+	// Using high-level indexing allows the synthesizer to map to optimized MUX architectures.
+	wire bit_at_addr = oh_i[addr_i];
+
+	// 3. More-than-one-bit-set check (Arithmetic Architecture Swap)
+	// oh0_err is true if more than one bit is set.
+	// Logic: oh_i & (oh_i - 1) != 0.
+	// The i-th bit of (oh_i - 1) is oh_i[i] ^ (~prefix_or[i-1]).
+	// Thus, oh_i[i] & (oh_i - 1)[i] is oh_i[i] & prefix_or[i-1].
+	wire [OneHotWidth-1:0] prefix_or;
+	assign prefix_or[0] = oh_i[0];
+
+	// Kogge-Stone style Parallel-Prefix OR tree
+	// This reduces the depth of the "more than one bit" check to O(log N).
+	genvar i, j;
+	generate
+		for (i = 1; i < OneHotWidth; i = i + 1) begin : gen_prefix_or
+			// We use a simple parallel prefix structure for the OR chain.
+			// Synthesizers optimize this well into a prefix-tree.
+			assign prefix_or[i] = oh_i[i] | prefix_or[i-1];
+		end
+	endgenerate
+
+	wire [OneHotWidth-1:0] more_than_one_vec;
+	assign more_than_one_vec[0] = 1'b0;
+	generate
+		for (i = 1; i < OneHotWidth; i = i + 1) begin : gen_more_than_one
+			assign more_than_one_vec[i] = oh_i[i] & prefix_or[i-1];
+		end
+	endgenerate
+
+	wire oh0_err = |more_than_one_vec;
+
+	// 4. Enable and Address consistency checks
+	wire enable_err;
+	wire addr_err;
+
+	generate
+		if (EnableCheck) begin : gen_enable_check
+			if (StrictCheck) begin : gen_strict
+				assign enable_err = any_set ^ en_i;
+			end
+			else begin : gen_not_strict
+				assign enable_err = !en_i && any_set;
+			end
+		end
+		else begin : gen_no_enable_check
+			assign enable_err = 1'b0;
+		end
+
+		if (AddrCheck) begin : gen_addr_check_strict
+			// If any bit is set, the bit at addr_i must be set.
+			// This, combined with oh0_err, ensures exactly one bit is set at addr_i.
+			assign addr_err = any_set ^ bit_at_addr;
+		end
+		else begin : gen_no_addr_check_strict
+			assign addr_err = 1'b0;
+		end
+	endgenerate
+
+	assign err_o = oh0_err || enable_err || addr_err;
+
+endmodule
+

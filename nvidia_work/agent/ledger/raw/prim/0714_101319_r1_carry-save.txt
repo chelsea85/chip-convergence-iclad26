@@ -1,0 +1,75 @@
+// FILE: prim_crc32.v
+module prim_crc32 (
+	clk_i,
+	rst_ni,
+	set_crc_i,
+	crc_in_i,
+	data_valid_i,
+	data_i,
+	crc_out_o
+);
+	parameter [31:0] BytesPerWord = 4;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire set_crc_i;
+	input wire [31:0] crc_in_i;
+	input wire data_valid_i;
+	input wire [(BytesPerWord * 8) - 1:0] data_i;
+	output wire [31:0] crc_out_o;
+
+	// Optimization: Replace the 256-entry case statement with an 8-way XOR tree.
+	// In GF(2), CRC calculation is a linear transformation. Each bit of the output
+	// is an XOR sum of a subset of the input bits. This is significantly faster 
+	// and smaller than a large MUX-based lookup table in synthesis.
+	function automatic [31:0] crc32_byte_calc;
+		input [7:0] b;
+		begin
+			crc32_byte_calc = ({32{b[0]}} & 32'h77073096) ^
+			                  ({32{b[1]}} & 32'hee0e612c) ^
+			                  ({32{b[2]}} & 32'h076dc419) ^
+			                  ({32{b[3]}} & 32'h0edb8832) ^
+			                  ({32{b[4]}} & 32'h1db71064) ^
+			                  ({32{b[5]}} & 32'h3b6e20c8) ^
+			                  ({32{b[6]}} & 32'h76dc4190) ^
+			                  ({32{b[7]}} & 32'hedb88320);
+		end
+	endfunction
+
+	reg [31:0] crc_d;
+	reg [31:0] crc_q;
+	wire crc_en;
+	wire [31:0] crc_stages [0:BytesPerWord];
+
+	assign crc_en = set_crc_i | data_valid_i;
+	assign crc_stages[0] = crc_q;
+
+	genvar _gv_i_1;
+	generate
+		for (_gv_i_1 = 0; _gv_i_1 < BytesPerWord; _gv_i_1 = _gv_i_1 + 1) begin : g_crc_stages
+			localparam i = _gv_i_1;
+			// [rtlscout-cutpoints] Declare intermediate wires to help synthesis partitioning.
+			wire [7:0]  stage_index = crc_stages[i][7:0] ^ data_i[i * 8+:8];
+			wire [31:0] stage_lookup = crc32_byte_calc(stage_index);
+			assign crc_stages[i + 1] = {8'h00, crc_stages[i][31:8]} ^ stage_lookup;
+		end
+	endgenerate
+
+	always @(*) begin
+		if (set_crc_i) begin
+			crc_d = ~crc_in_i;
+		end else begin
+			crc_d = crc_stages[BytesPerWord];
+		end
+	end
+
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			crc_q <= 32'hffffffff;
+		end else if (crc_en) begin
+			crc_q <= crc_d;
+		end
+	end
+
+	assign crc_out_o = ~crc_q;
+
+endmodule

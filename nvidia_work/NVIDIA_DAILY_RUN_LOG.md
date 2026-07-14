@@ -526,3 +526,304 @@ restructure-select ON TOP of arith-arch ("improves perf,area, regresses none", A
 0.985 → composed model-generated line ≈0.884 vs baseline).** Banked exp2 (0.787) still global
 best and correctly emitted. Frontier=2. The loop demonstrably composes improvements across
 rounds via parent sampling.
+
+## 2026-07-13 — Offline hand-candidate campaign across all 7 IPs (zero-token, pre-Vertex)
+
+Goal (Hari): run the agent ourselves on every IP before Vertex — author candidates, push through
+the full verify+measure machinery, bank wins / distill AVOID rules.
+
+**All 7 IPs baselined** (was 5/7). NVDLA: 952,591 cells / WNS -5788 ps (full 323-src tree
+synthesizes). prim: multi-design dir (crc32/ascon_duplex/trivium via DESIGN_NAME); prim_crc32
+= 436 cells / -208.95 ps (violated → new small optimization target). Getting these two working
+fixed 3 harness gaps (all hidden-testcase robustness): quoted ${VAR:-def} env parsing;
+per-design report prefixes + DESIGN_NAME→TOP threading in measure.sh; adaptive run_syn.sh CLI
+(prim takes no `all` arg). discover get_spec now matches location key OR DESIGN_NAME.
+
+**Results per IP:**
+- **sha512 — NEW BEST, ADP 0.7433** (was 0.787). exp6 = compose of exp2's balanced-tree core
+  (touches only sha512_core.v) with the live model accepts' DISJOINT edits (w_mem/sha512.v/
+  k_constants). LEC-PROVEN, all 5 layers, WNS -97→+308 ps. Human technique + model discovery
+  composing. Exposed + fixed an acceptance-policy bug: pure Pareto vetoed exp6 for +0.23% area
+  despite ADP 0.787→0.743 → added headline-metric override (strict ADP win accepted,
+  power-guarded). Re-banked; submission manifest = 0.7433; cold-start still 6/6.
+- **async_fifo — probed, rejected (P24).** exp5 gray-share (share gray(bin+1) across full/
+  almost-full, reuse registered gray for hold): LEC-PROVEN tradeoff, +7.2ps slack for +3.7%
+  cells/power. Correctly rejected (timing already MET); banked as a lever for a violated async
+  pointer path.
+- **kmac — measured no-op (P25 AVOID).** STA path analysis pointed at the entropy PRNG
+  (kmac_entropy ltp=50), so exp7 flattened the 800-step serial Bivium/Trivium key-stream unroll
+  into 65-wide data-parallel generation chunks. Python golden model PROVED equivalence over
+  random states; but synth timing did NOT improve (-1115.75→-1119.68 ps, cells +0.7%) — ABC
+  already retimes it. Honest negative. Also surfaced: kmac generated RTL fails iverilog
+  elaboration on a PRE-EXISTING sv2v artifact (hw2reg driven by instance output; legal SV,
+  illegal V2001, yosys-fine) → added **differential gating**: a verify layer that fails
+  IDENTICALLY on pristine can't indict a candidate (compile=PRE-EXISTING → skip TB/dualsim,
+  LEC remains correctness gate). Cached per-IP; cold-start + sha512 regressions green.
+- **aes — lever identified, NOT pursued (scope question for Hari).** SecSBoxImpl=4 = DOM-masked
+  S-box; switching to unmasked LUT/Canright is a big area/timing win but DOWNGRADES a
+  side-channel countermeasure — a security-scope decision, not clean RTL optimization. Flagged,
+  not claimed.
+- **ascon — low practical headroom** (known from survey; not pursued this pass).
+- **NVDLA / prim_crc32 — baselined, large timing headroom, un-campaigned** (expensive/new;
+  candidates deferred to Vertex).
+
+**Net:** 1 verified PPA win banked (sha512 0.743, improving on our prior best), 2 well-founded
+AVOID/lever playbook rules from honest negatives, all 7 baselined, harness hardened 4 ways.
+Playbook now 31 bullets. Ready for the Vertex campaigns across all IPs.
+
+## 2026-07-13 — Vertex campaign #2: prim_crc32 (NULL RESULT, well-documented)
+
+Second real-model campaign (first was sha512 Jul 12). Target: prim, baseline prim_crc32
+436 cells / -208.95 ps (violated). 3 rounds, k=3→1, gemini-3-flash-preview, 10 calls,
+~195k tokens (ledger note: the ~1.95M figure printed is cumulative-across-reruns; this run ≈195k),
+~11 min wall. **Result: no improvement — baseline emitted (manifest-only).**
+
+**Per-candidate outcomes (all 5 gate-passed via differential compile gating):**
+- balanced-tree → targeted prim_ascon_round.v → DUPLICATE (fingerprint dedup; model reproduced
+  a structure already seen).
+- carry-save → prim_sha2.v → no meaningful change (measured, ADP≈1.0).
+- micro-opt r1 → prim_alert_receiver.v → regresses perf,power (setup -208.95→worse).
+- micro-opt r2 → prim_crc32.v → SYNTH-FAIL (bit-width inconsistency in inserted wire).
+- micro-opt r3 → prim_sha2.v → no meaningful change (-208.95 held; +0 cells).
+
+**Analysis (slide-worthy honesty):** (1) The agent explored the RIGHT modules unprompted
+(crc32 itself, plus the other timing-relevant prim designs sha2/ascon_round). (2) It correctly
+found NO win — prim primitives are small, already ABC-optimal; every measured candidate was
+flat or worse. (3) The verification firewall did its job end-to-end on a REAL model: dedup
+caught a repeat, differential compile gating let candidates through the pre-existing sv2v
+elaboration failure (prim, like kmac, fails iverilog on the fileset — WITHOUT differential
+gating all 5 would have been falsely rejected as compile-fail), and honest reject reasons fed
+3 reflector lessons (AVOID restructuring primitives synthesis already optimizes; maintain
+bit-width consistency; don't micro-opt at the tool's limit).
+
+**Bug fixed mid-campaign:** first attempt crashed — `_pristine_layer_fails` (the new
+differential-gating helper) used a fixed workspace tag, so k=3 parallel workers raced on one
+directory (OSError dir-not-empty). Fixed: threading.Lock + pid-tagged pristine workspace; one
+build shared across workers. Verified: cold-start 6/6, parallel k=3 smoke green, then re-ran.
+
+**Takeaway for the deck:** a null result that STRENGTHENS the credibility story — the agent
+picks sensible targets, the gates hold under a real model, dedup+differential-gating+reflector
+all demonstrably fire, and we report "no headroom here" honestly rather than shipping a
+regression. Contrast with sha512 where real headroom → real win (0.743). Different IPs, honest
+outcomes both ways.
+
+## 2026-07-13 — Attribution experiment + STRATEGY SHIFT: diagnose-with-tools before any model call
+
+**Trigger:** the aes campaign's prompt was 174k tokens (all 75 files dumped as context) → slow,
+self-throttling on free-tier TPM, token-wasteful. Context IS spent budget (tokens = the scoring
+tiebreak), so context selection must be a first-class strategy, not plumbing.
+
+**Experiment: which modules actually contribute to worst PPA? (aes, zero model tokens)**
+Compared two attribution methods empirically instead of guessing:
+- **Method A — depth ranking** (per-module standalone yosys `ltp` logic depth): top hits
+  aes_ghash(263), aes_reg_top(241), aes_core(238), aes_key_expand(131) → points at the
+  GHASH GF(2^128) datapath (the survey's "expected" ABC-resistant target).
+- **Method B — real STA, hierarchy preserved** (`FLATTEN=0 ./run_syn.sh` → OpenSTA critical
+  path carries full instance names): the ACTUAL delay-critical clk_i path runs
+  `u_reg/u_chk` (TL-UL command-integrity checker, wide XOR chains) → `u_reg/u_prim_onehot_check`
+  (register write-enable one-hot checker) → `u_aes_core/u_aes_control/u_aes_control_fsm`.
+
+**THE TWO METHODS DISAGREE.** Depth says datapath/GHASH; real STA says register-bus integrity +
+control FSM. Depth ranking flags deep-but-FAST logic and misses the slow path — it would have
+misdirected the entire aes campaign. **Decision: use Method B (hierarchy-preserved OpenSTA
+attribution) — depth≠delay.** Caveat: FLATTEN=0 shifts cross-boundary opt (WNS −2327 vs
+flattened −848), so attribution is approximate for the real flattened design but still a real
+timing analysis on real modules — far better than depth guessing.
+
+**aes-specific consequence:** our datapath fence (cipher/mixcol/GF) points the model AWAY from
+the real bottleneck (control/register logic). The integrity checkers are balanceable XOR trees
+but are OpenTitan security-integrity features (S-box-like scope question); the aes_control_fsm
+is fair game. aes strategy decision pending Hari.
+
+**STRATEGIC SHIFT (applies to BOTH NVIDIA and NXP): tool-diagnosis precedes model calls.**
+We have the diagnostic tools; run them FIRST, extract actionable findings, hand those to the
+model. This (1) slashes tokens (send analysis + targeted files, not the whole tree), (2) improves
+results (model gets actionable direction, not a haystack). New agent shape:
+  DIAGNOSE (tools, 0 tokens) → INDEX+ANALYSIS (small call) → model REQUESTS files → EDIT (call).
+
+**Toolchain inventory (container iclad-dev:v1):** yosys 0.63 (synthesis + area via `stat`),
+OpenSTA 3.1.0 / `sta` (timing + power estimate). **Full OpenROAD (P&R) NOT present — and not
+needed:** the contest scores POST-SYNTHESIS PPA (yosys+STA), not post-place-and-route, so our
+flow matches the scoring flow exactly. abc is built into yosys; verilator+iverilog for sim.
+
+## FUTURE IMPROVEMENTS (post-Jul-15; experiment post-Jul-19 on unlimited GCP) — for slides "future work"
+
+Captured during the Jul-13 staged-optimizer build. All are additive to the shipped agent.
+
+1. **Model selection & mixing (per-task).** Use the strongest reasoning model (e.g. Gemini
+   Pro / gemini-3-pro) for the CREATIVE proposal step where equivalence-safe correctness is
+   hardest, and a cheaper model (Flash) for MECHANICAL steps (gate-fail repair = "find the bug
+   you nearly fixed", reflector distillation). Rationale: our own survey's model-scaling data
+   (Opus 21% / Sonnet 12% / Haiku 3% WNS; SEC-pass 86/73/57%) shows strong models are
+   dramatically better at CORRECT creative RTL rewrites — exactly the "12/16 tests pass"
+   near-miss class we hit on sha512_core. Deliverable: per-step model routing (currently one
+   model/run); benchmark Flash+repair vs Pro on the same stage (success rate, tokens, ADP).
+   Pro is paid-only on the API today (free on the Jul-19 GCP accounts / at DAC where all Gemini
+   models are available). Token tiebreak: Pro costs more/call but may need far fewer attempts,
+   so total tokens for a successful optimization could be comparable or lower — measure it.
+2. **Growing stage-batch curriculum.** Start 1 file/stage (max reliability); once the loop is
+   landing wins consistently, grow the batch (2, 3, …) to cover more files/turn. Experiment
+   with the batch schedule as a hyperparameter.
+3. **Per-round re-diagnosis.** The critical path SHIFTS as earlier files are optimized; re-run
+   the (zero-token) diagnosis each stage so the cursor tracks the CURRENT worst path, not the
+   baseline one. (Currently static from baseline diagnosis.)
+4. **Agentic file request (Phase 3).** Model reads the index+diagnosis and REQUESTS the files
+   it needs (editable + read-only deps) rather than us pre-selecting — handles cross-file
+   dependencies the static heuristic can miss.
+5. **Budget-adaptive context.** Send more context early (explore), tighten as budget depletes.
+
+## 2026-07-13 (late) — ROOT-CAUSE: naive context-trimming regressed reliability; fixed
+
+**Symptom (Hari caught it):** before the staging edits, live sha512 runs reliably produced the
+balanced-tree win (ADP 0.787). After staging (forced --diagnose on), 6/6 candidates gate-failed
+on sha512_core. Investigated the raw responses rather than guessing.
+
+**Root cause — TWO harness bugs (not model weakness; the model correctly chose balanced-tree,
+0 aggressive-transform attempts):**
+1. **Hallucinated out-of-scope edits kept.** Given ONLY sha512_core.v to edit, the model also
+   returned edits to sha512_w_mem.v — a file it could NOT see (scoped out) but knew existed from
+   the file list — inventing its content from training memory. Our filter only dropped
+   `readonly` files (empty on stage 1), so the hallucinated w_mem was MERGED in → broke the hash
+   → gate-fail. (3/6 candidates did this.)
+2. **Scoped context starved grounding.** Even core-only edits gate-failed: without seeing
+   w_mem/top/constants, the model can't follow the data flow into sha512_core, so its edits have
+   functional bugs. Our winning exp2 touched ONLY sha512_core but was authored with FULL context
+   visible.
+
+**IMPORTANT: the SHIPPED sha512 was never regressed** — production uses --diagnose AUTO, which
+keeps staging OFF for small IPs (<15 files) → full context → the proven path. The failure only
+appears when staging is FORCED on for testing. Validates "full context when affordable".
+
+**Fixes:**
+1. **Strict batch-only filtering:** accept edits ONLY to the stage's batch files; drop any
+   hallucinated/out-of-scope file (both proposal and gate-fail-repair paths).
+2. **Dependency read-only grounding:** send the OTHER critical files (locked earlier stages +
+   not-yet-reached dependencies) as READ-ONLY context (bounded by _RO_CAP=6), so the model
+   understands the data flow without being able to edit them. sha512 stage 1 now sends core
+   (editable) + [w_mem, sha512, h/k_constants] (read-only).
+
+**Lesson for large IPs (slide-worthy):** context-trimming must preserve DEPENDENCIES, not just
+send the target file alone — naive trimming trades tokens for correctness. Verified: stub e2e
+coordinate-descent chains 0.787→advance; cold-start 6/6. Real-model re-run pending (next session,
+possibly stronger model per the model-mixing future-work item).
+
+## 2026-07-13 (night) — STAGED COORDINATE DESCENT: FIRST CLEAN END-TO-END WIN (run 1 post-fix)
+
+sha512, fresh pool, Key 1, gemini-3-flash-preview, k=6→4, 1 file/stage, no retry, max 20 turns.
+
+| stage | file | k | outcome |
+|---|---|---|---|
+| 1 | sha512_core.v | 6 | ✓ ACCEPT arith-arch, ADP 0.938 (5/6 candidates had out-of-scope w_mem edits — filter caught all) |
+| 2 | sha512_w_mem.v | 4 | ✗ no win (2 regress, 2 duplicate) — kept best |
+| 3 | sha512.v | 4 | ✓ ACCEPT balanced-tree vs stage-1 winner, 0.981 → accumulated 0.920 |
+| 4 | sha512_h_constants.v | 4 | ✗ no win (constants: no timing headroom, as expected) |
+| — | plateau stop (0.938→0.92 < 0.02 delta over 3 rounds) before stage 5 (k_constants) | | |
+
+**Final: ADP 0.92 vs baseline; timing -97.3ps VIOLATED → +26.32ps MET; area 3984→3973.**
+18/20 proposal turns, 22 calls total, ~650k tokens. Emitted → submission/sha512_staged_clean.
+Both accepts full 5-layer verified (lint/compile/TB/LEC/dualsim). Coordinate descent CHAINED:
+stage-3 win built on stage-1's locked file. Strict scope filter fired 9 times across the run —
+every one would have been a silent gate-fail before the fix. Grounding+filter = the difference
+between 0/6 accepts (previous run) and a clean staged descent.
+
+Note: plateau stop cut stage 5 (saved 2 turns on a zero-headroom constants file) — acceptable;
+consider disabling plateau in staged mode if full file coverage is ever preferred.
+Fable code review same night: compile-repair scope filter added, empty-diagnosis fallback guard,
+API-dropped calls no longer consume turns, stale retry comments removed.
+
+## 2026-07-14 — A/B/C context-grounding experiment (sha512 stage 1, k=6, same strategies)
+
+| config | context for target file | correct | out-of-scope attempts | accept | tokens |
+|---|---|---|---|---|---|
+| A grounded | + other crit files (full, read-only, _RO_CAP=6) | **3/6** | 5/6 | ✓ arith-arch 0.893 | 329k |
+| B alone | target file only | 1/6 | 1/6 | ✓ arith-arch **0.727** (best-ever sha512, LEC-PROVEN, slack +334.6ps) | 232k |
+| C stubs | + port-header stubs of instantiated modules (32 lines, 5% of full) | 0/5* | **0/5** | — | *quota-cut |
+
+*C incomplete: Key 2 free tier = **20 requests/day** (request-count, not tokens!) — killed 1
+proposal + the repair leg. C's gate-fails are genuine though (complete, compiling outputs;
+pass=0 hang signature = behavioral starvation — port widths alone don't convey latency/protocol).
+
+**Findings:** (1) grounding buys per-candidate correctness (3/6 vs 1/6) — the contracts matter;
+(2) visible file bodies invite out-of-scope co-editing (5/6 vs 1/6) — the strict filter is what
+protects either way (B still hallucinated w_mem from training memory!); (3) B's better winner is
+n=1, plausibly sampling luck. **DECISION (Hari): config A (--grounding on) = staged default** —
+2/2 runs with stage-1 accepts (0.938, 0.893), reproducible. C = right token-bounding shape for
+huge IPs but needs richer stubs (+ latency notes) — post-Jul-15 item.
+Robustness fixes from the experiment: repair calls (compile + gatefail) now crash-protected
+against API errors (Key-2 429 killed run C's repair leg mid-flight).
+
+## 2026-07-14 — aes staged campaign #1: 3 harness bugs found by real fire, all fixed
+
+Run: 20-turn staged, config A, S-box fenced, Key 1. Result: no accepted win — but the run was
+compromised by harness bugs it exposed (this is why we run before we trust):
+
+1. **Fence ordering** — fence ran BEFORE scope filter, killing candidates whose S-box edits were
+   out-of-scope anyway (scope would have dropped them harmlessly). Cost: 5 candidates across
+   stages 1–3. Fix: fence now vetoes only SURVIVING (in-scope) edits.
+2. **Fence false positive (the big one)** — fence checked token PRESENCE (`SecSBoxImpl =`), but
+   pristine aes_core.v legitimately carries that parameter pass-through, so EVERY complete
+   aes_core rewrite tripped it. **Wiped all 4 candidates of stage 4 (aes_core, the most promising
+   file) without evaluation.** Fix: flag only if token-bearing lines DIFFER from pristine
+   (whitespace-normalized). Verified: pristine/benign pass, value-change + sbox-file still reject.
+3. **Netlist-collapse hazard** — a prim_onehot_check candidate synthesized to 3,903 cells vs
+   baseline 74,234 (5% of aes: body edit broke elaboration, hierarchy pruned) and "improved"
+   every metric. Saved only by the LAST layer (dualsim ERROR → reject); TB gate is skipped on aes
+   (pre-existing pristine artifact) and LEC was INCONCLUSIVE. Fix: candidates <50% of parent
+   cells now rejected as netlist-collapse BEFORE any PPA comparison.
+
+Positives from run 1: grounded candidates 100% functionally correct at measurement (8/8 full
+verify); honest measured rejections; repair correctly idle; model gravitates to the S-box
+(5 fence hits) = timing headroom concentrated in fenced security logic, so non-S-box wins are
+the realistic target. aes v2 rerun launched with all fixes (fresh pool, same protocol).
+
+## 2026-07-14 — aes v2 (all fixes): first live aes accept; aes_core cleanly answered
+
+20 turns, config A, fresh pool, Key 1, ~1.6M tokens, 22 calls. Stages: intg_chk ✗ ·
+**gcm_reg_shadowed ✓ ACCEPT carry-save (power −4.3%, slack +1.2ps, area +0.26%, dualsim PASS)**
+· onehot_check ✗ · **aes_core ✗ (3/3 candidates functionally CORRECT, all regress perf — first
+fair evaluation of this file; v1's fence bug evaluated 0)** · plateau stop. Final ADP 1.0
+(power win is ADP-neutral). Emitted → submission/aes_staged_v2.
+
+**Conclusion (slide-worthy):** aes timing headroom is concentrated in the FENCED masked S-box
+(model attempted it 5× in v1). With security fenced, legal critical-path rewrites are correct
+but not better — ADP 1.0 is the honest fence-constrained answer. Machinery: 10/10 evaluated
+candidates functionally correct in v2, zero harness interference, no hangs (HTTP timeout in).
+Repair extension added post-v2: dualsim-fail now joins gate-fail as repairable (aes-class IPs
+skip TB, so their broken-but-promising candidates surface at layer 5; PPA already measured).
+
+## 2026-07-14 — prim staged: "no-improvement" IP flipped to our biggest percentage win
+
+12-turn staged (only 6 spent — 1 critical file), fresh pool, Key 1, 167k tokens. Diagnosis
+(after fixing a 4-vs-5 unpack crash in the no-timing-paths branch — hidden-testcase-shaped bug)
+correctly scoped prim to prim_crc32.v alone (265 pre-map cells; the other 146 library files are
+not in the design). Stage 1 k=6: **ACCEPT restructure-select — slack −208.95→−27.46ps (+181.5ps),
+area −6.0%, power −67.4%, cells 436→409. TRUE ADP = 0.6045 (delay ratio 0.643 × area 0.940).**
+Prior submission for prim was "no-improvement, baseline" — replaced by submission/prim_staged.
+
+**ADP-reporting bug found via prim:** _SDC_PERIODS hand map lacked prim/aes → no period → ADP
+printed None/1.0 while the real win was 40%. Fixed: _sdc_period() auto-parses `set clk_period N`
+from each IP's own contest SDC (verified: prim 300 / aes 100 / sha512 1500 / kmac 100 /
+async_fifo 300ps). prim manifest corrected (ADP 0.6045 + note). aes v2 accept re-computed with
+period 100ps: ADP 1.001 — power win (−4.3%) is ADP-neutral, as reported.
+
+Fence removed as default (Hari, 2026-07-14): contest scores tests-pass + PPA only — no
+self-imposed restrictions. --fence on retained as an option; --focus flag added (explicit cursor
+override). aes v3 launched: unfenced, cursor = [sbox_dom, sub_bytes, cipher_core, mix_columns,
+core]. Caveat: aes dualsim is CYCLE-exact — v3 can verify latency-preserving S-box optimizations;
+an impl swap (DOM→LUT) changes latency and is locally unverifiable (organizers' aes TB doesn't
+run in our env). Transaction-mode dualsim → future improvements.
+
+## 2026-07-14 — aes v3 (UNFENCED, S-box-focused): the complete aes answer
+
+21 calls / 1.3M tokens, focus cursor [sbox_dom, sub_bytes, cipher_core, mix_columns, core],
+Key 1 (two stage-3 calls lost to Express 429s — resilient fan-out held, turns not charged).
+**1 accept: arith-arch on aes_sub_bytes — power −6% (0.0656→0.0617), slack +3.5ps, dualsim
+PASS. ADP 1.0001 (neutral).** All other stages: honest measured rejections. Plateau stop.
+Emitted → submission/aes_unfenced.
+
+**The complete aes story:** fenced power −4.3% / unfenced (latency-preserving) power −6% —
+both ADP-neutral. Even with the fence REMOVED, cycle-exact differential sim limits the
+S-box axis to power wins; the delay headroom needs latency-CHANGING rewrites (impl swap),
+locally unverifiable until transaction-mode dualsim (future work, top priority for Jul 19+).
+aes is now fully characterized: not "we failed to improve it" but "we mapped exactly where
+its headroom is and what verification unlock is needed to claim it."

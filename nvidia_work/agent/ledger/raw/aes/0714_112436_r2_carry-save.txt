@@ -1,0 +1,143 @@
+// FILE: aes_sub_bytes.v
+module aes_sub_bytes (
+	clk_i,
+	rst_ni,
+	en_i,
+	out_req_o,
+	out_ack_i,
+	op_i,
+	data_i,
+	mask_i,
+	prd_i,
+	data_o,
+	mask_o,
+	err_o
+);
+	parameter integer SecSBoxImpl = 32'sd4;
+	input wire clk_i;
+	input wire rst_ni;
+	localparam signed [31:0] aes_pkg_Mux2SelWidth = 3;
+	localparam signed [31:0] aes_pkg_Sp2VWidth = aes_pkg_Mux2SelWidth;
+	input wire [2:0] en_i;
+	output wire [2:0] out_req_o;
+	input wire [2:0] out_ack_i;
+	localparam signed [31:0] aes_pkg_AES_OP_WIDTH = 2;
+	input wire [1:0] op_i;
+	input wire [127:0] data_i;
+	input wire [127:0] mask_i;
+	localparam [31:0] aes_pkg_WidthPRDSBox = 8;
+	input wire [127:0] prd_i;
+	output wire [127:0] data_o;
+	output wire [127:0] mask_o;
+	output wire err_o;
+	wire [2:0] en;
+	wire en_err;
+	wire [15:0] out_req;
+	wire [2:0] out_ack;
+	wire out_ack_err;
+	wire [447:0] in_prd;
+	wire [319:0] out_prd;
+	wire [2:0] en_raw;
+	localparam signed [31:0] aes_pkg_Sp2VNum = 2;
+
+	// Security buffer check for enable signal
+	aes_sel_buf_chk #(
+		.Num(aes_pkg_Sp2VNum),
+		.Width(aes_pkg_Sp2VWidth),
+		.EnSecBuf(1'b1)
+	) u_aes_sb_en_buf_chk(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.sel_i(en_i),
+		.sel_o(en_raw),
+		.err_o(en_err)
+	);
+
+	function automatic [2:0] sv2v_cast_39E4E;
+		input reg [2:0] inp;
+		sv2v_cast_39E4E = inp;
+	endfunction
+	assign en = sv2v_cast_39E4E(en_raw);
+
+	// Security buffer check for output acknowledge signal
+	wire [2:0] out_ack_raw;
+	aes_sel_buf_chk #(
+		.Num(aes_pkg_Sp2VNum),
+		.Width(aes_pkg_Sp2VWidth),
+		.EnSecBuf(1'b1)
+	) u_aes_sb_out_ack_buf_chk(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.sel_i(out_ack_i),
+		.sel_o(out_ack_raw),
+		.err_o(out_ack_err)
+	);
+	assign out_ack = sv2v_cast_39E4E(out_ack_raw);
+
+	// Pre-calculate activation signals to reduce logic depth inside the loop
+	function automatic [2:0] sv2v_cast_14B94;
+		input reg [2:0] inp;
+		sv2v_cast_14B94 = inp;
+	endfunction
+	wire en_active      = (en      == sv2v_cast_39E4E(sv2v_cast_14B94(3'b011)));
+	wire out_ack_active = (out_ack == sv2v_cast_39E4E(sv2v_cast_14B94(3'b011)));
+
+	// PRD rotation function
+	function automatic integer aes_pkg_aes_rot_int;
+		input integer in;
+		input integer num;
+		integer out;
+		begin
+			if (in == 0)
+				out = num - 1;
+			else
+				out = in - 1;
+			aes_pkg_aes_rot_int = out;
+		end
+	endfunction
+
+	// Instantiate 16 S-boxes
+	genvar _gv_j_1;
+	generate
+		for (_gv_j_1 = 0; _gv_j_1 < 4; _gv_j_1 = _gv_j_1 + 1) begin : gen_sbox_j
+			localparam j = _gv_j_1;
+			genvar _gv_i_1;
+			for (_gv_i_1 = 0; _gv_i_1 < 4; _gv_i_1 = _gv_i_1 + 1) begin : gen_sbox_i
+				localparam i = _gv_i_1;
+				localparam idx = (i * 4) + j;
+				localparam rot_idx = (i * 4) + aes_pkg_aes_rot_int(j, 4);
+
+				// PRD wiring: take 20 bits from the rotated S-box output and 8 bits from the PRD input
+				assign in_prd[idx * 28+:28] = {out_prd[rot_idx * 20+:20], prd_i[idx * 8+:8]};
+
+				aes_sbox #(.SecSBoxImpl(SecSBoxImpl)) u_aes_sbox_ij(
+					.clk_i(clk_i),
+					.rst_ni(rst_ni),
+					.en_i(en_active),
+					.out_req_o(out_req[idx]),
+					.out_ack_i(out_ack_active),
+					.op_i(op_i),
+					.data_i(data_i[idx * 8+:8]),
+					.mask_i(mask_i[idx * 8+:8]),
+					.prd_i(in_prd[idx * 28+:28]),
+					.data_o(data_o[idx * 8+:8]),
+					.mask_o(mask_o[idx * 8+:8]),
+					.prd_o(out_prd[idx * 20+:20])
+				);
+			end
+		end
+	endgenerate
+
+	// Hierarchical AND reduction for out_req_o to improve timing (rtlscout-cutpoints)
+	wire [3:0] out_req_stage1;
+	assign out_req_stage1[0] = &out_req[3:0];
+	assign out_req_stage1[1] = &out_req[7:4];
+	assign out_req_stage1[2] = &out_req[11:8];
+	assign out_req_stage1[3] = &out_req[15:12];
+	wire all_out_req = &out_req_stage1;
+
+	// Final output request signal based on the reduction
+	assign out_req_o = (all_out_req ? sv2v_cast_39E4E(sv2v_cast_14B94(3'b011)) : sv2v_cast_39E4E(sv2v_cast_14B94(3'b100)));
+	assign err_o = en_err | out_ack_err;
+
+endmodule

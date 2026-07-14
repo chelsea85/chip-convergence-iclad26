@@ -1,0 +1,98 @@
+// FILE: prim_onehot_check.v
+module prim_onehot_check (
+	clk_i,
+	rst_ni,
+	oh_i,
+	addr_i,
+	en_i,
+	err_o
+);
+	parameter [31:0] AddrWidth = 5;
+	parameter [31:0] OneHotWidth = 2 ** AddrWidth;
+	parameter [0:0] AddrCheck = 1;
+	parameter [0:0] EnableCheck = 1;
+	parameter [0:0] StrictCheck = 1;
+	parameter [0:0] EnableAlertTriggerSVA = 1;
+
+	input clk_i;
+	input rst_ni;
+	input wire [OneHotWidth - 1:0] oh_i;
+	input wire [AddrWidth - 1:0] addr_i;
+	input wire en_i;
+	output wire err_o;
+
+	// 1. Any bit set? (Reduction OR)
+	// ABC/Yosys will optimize this into a balanced tree of OR gates.
+	wire any_bit = |oh_i;
+
+	// 2. Bit at addr_i set? (Mux)
+	// Using the index operator allows the synthesis tool to use optimized 
+	// library MUX cells (e.g., MUX4, MUX8 in ASAP7), which are significantly 
+	// faster than a manual tree of AND-OR gates.
+	wire bit_at_addr = oh_i[addr_i];
+
+	// 3. More than one bit set? (One-hot violation)
+	// We implement a balanced binary tree to compute "any" and "more" status.
+	// This is functionally equivalent to the original err_tree but written 
+	// in a way that is easier for the tool to map to AOI/OAI cells.
+	wire [2*OneHotWidth-2:0] any_tree;
+	wire [2*OneHotWidth-2:0] more_tree;
+
+	genvar l, o;
+	generate
+		// Leaves of the tree
+		for (o = 0; o < OneHotWidth; o = o + 1) begin : gen_leaves
+			assign any_tree[OneHotWidth-1+o] = oh_i[o];
+			assign more_tree[OneHotWidth-1+o] = 1'b0;
+		end
+		// Internal nodes of the tree
+		for (l = 0; l < AddrWidth; l = l + 1) begin : gen_levels
+			for (o = 0; o < (2**l); o = o + 1) begin : gen_nodes
+				localparam curr = (2**l) - 1 + o;
+				localparam left = (2**(l+1)) - 1 + 2*o;
+				localparam right = (2**(l+1)) - 1 + 2*o + 1;
+				
+				// At least one bit set in this subtree
+				assign any_tree[curr] = any_tree[left] | any_tree[right];
+				
+				// More than one bit set in this subtree if:
+				// - More than one in left child OR
+				// - More than one in right child OR
+				// - At least one in both children (conflict)
+				// This maps well to AOI211 or AOI22 cells.
+				assign more_tree[curr] = more_tree[left] | more_tree[right] | (any_tree[left] & any_tree[right]);
+			end
+		end
+	endgenerate
+
+	wire oh0_err = more_tree[0];
+
+	// 4. Final Error Logic
+	// enable_err: Checks if the "any bit set" status matches the "en_i" signal.
+	wire enable_err;
+	if (EnableCheck) begin : gen_enable_check
+		if (StrictCheck) begin : gen_strict
+			assign enable_err = any_bit ^ en_i;
+		end else begin : gen_not_strict
+			assign enable_err = any_bit & ~en_i;
+		end
+	end else begin : gen_no_enable_check
+		assign enable_err = 1'b0;
+	end
+
+	// addr_err: Checks if the bit set in oh_i matches the provided addr_i.
+	// If any bit is set, it must be the one at addr_i.
+	wire addr_err;
+	if (AddrCheck) begin : gen_addr_check
+		assign addr_err = any_bit & ~bit_at_addr;
+	end else begin : gen_no_addr_check
+		assign addr_err = 1'b0;
+	end
+
+	// Combine all error sources
+	assign err_o = oh0_err | enable_err | addr_err;
+
+	// Tie off unused signals to prevent lint warnings
+	wire _unused = clk_i | rst_ni;
+
+endmodule

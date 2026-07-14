@@ -1,0 +1,198 @@
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+	wire [1:0] err;
+	wire data_err;
+	
+	// Simplify extraction logic to reduce boolean network depth
+	localparam integer Base = tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width + tlul_pkg_H2DCmdIntgWidth + tlul_pkg_DataIntgWidth;
+	wire [top_pkg_TL_AW-1:0]  a_addr   = tl_i[top_pkg_TL_AW + top_pkg_TL_DBW + top_pkg_TL_DW + Base +: top_pkg_TL_AW];
+	wire [2:0]                a_op_sz  = tl_i[6 + top_pkg_TL_SZW + top_pkg_TL_AIW + top_pkg_TL_AW + top_pkg_TL_DBW + top_pkg_TL_DW + Base -: 3];
+	wire [top_pkg_TL_DBW-1:0] a_mask   = tl_i[top_pkg_TL_DBW + top_pkg_TL_DW + Base -: top_pkg_TL_DBW];
+	wire [3:0]                a_instr  = tl_i[Base - 1 -: 4];
+	
+	wire [(((prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW) + 3) + top_pkg_TL_DBW) - 1:0] cmd;
+	assign cmd = {a_instr, a_addr, a_op_sz, a_mask};
+
+	localparam signed [31:0] tlul_pkg_H2DCmdMaxWidth = 57;
+	function automatic [56:0] sv2v_cast_57;
+		input reg [56:0] inp;
+		sv2v_cast_57 = inp;
+	endfunction
+	
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i({tl_i[Base - 1 - 4 -: 7], sv2v_cast_57(cmd)}),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+	
+	localparam signed [31:0] tlul_pkg_DataMaxWidth = 32;
+	function automatic [31:0] sv2v_cast_32;
+		input reg [31:0] inp;
+		sv2v_cast_32 = inp;
+	endfunction
+	
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i({tl_i[tlul_pkg_DataIntgWidth-1:0], sv2v_cast_32(tl_i[top_pkg_TL_DW + Base - 1 -: 32])}),
+		.data_err_o(data_err)
+	);
+	
+	// a_valid gating
+	assign err_o = tl_i[7 + top_pkg_TL_SZW + top_pkg_TL_AIW + top_pkg_TL_AW + top_pkg_TL_DBW + top_pkg_TL_DW + Base] & (|err | data_err);
+endmodule
+
+// FILE: aes_ctrl_gcm_reg_shadowed.v
+module aes_ctrl_gcm_reg_shadowed (
+	clk_i,
+	rst_ni,
+	rst_shadowed_ni,
+	qe_o,
+	we_i,
+	phase_o,
+	init_done_i,
+	first_block_i,
+	gcm_phase_o,
+	num_valid_bytes_o,
+	err_update_o,
+	err_storage_o,
+	reg2hw_ctrl_gcm_i,
+	hw2reg_ctrl_gcm_o
+);
+	reg _sv2v_0;
+	parameter [0:0] AESGCMEnable = 1;
+	input wire clk_i;
+	input wire rst_ni;
+	input wire rst_shadowed_ni;
+	output wire qe_o;
+	input wire we_i;
+	output wire phase_o;
+	input wire init_done_i;
+	input wire first_block_i;
+	localparam signed [31:0] aes_pkg_AES_GCMPHASE_WIDTH = 6;
+	output wire [5:0] gcm_phase_o;
+	output wire [4:0] num_valid_bytes_o;
+	output wire err_update_o;
+	output wire err_storage_o;
+	input wire [14:0] reg2hw_ctrl_gcm_i;
+	output wire [10:0] hw2reg_ctrl_gcm_o;
+	wire phase_gcm_phase;
+	wire phase_num_valid_bytes;
+	wire err_update_gcm_phase;
+	wire err_update_num_valid_bytes;
+	wire err_storage_gcm_phase;
+	wire err_storage_num_valid_bytes;
+	assign qe_o = reg2hw_ctrl_gcm_i[1] & reg2hw_ctrl_gcm_i[9];
+	localparam [4:0] aes_reg_pkg_AES_CTRL_GCM_SHADOWED_NUM_VALID_BYTES_RESVAL = 5'h10;
+	localparam [5:0] aes_reg_pkg_AES_CTRL_GCM_SHADOWED_PHASE_RESVAL = 6'h01;
+	function automatic [5:0] sv2v_cast_92B33;
+		input reg [5:0] inp;
+		sv2v_cast_92B33 = inp;
+	endfunction
+	generate
+		if (AESGCMEnable) begin : gen_ctrl_gcm_reg_shadowed
+			wire [10:0] ctrl_gcm_wd;
+			wire [5:0] gcm_phase_reg_if;
+			reg [5:0] gcm_phase;
+			wire [4:0] num_valid_bytes;
+			assign gcm_phase_reg_if = sv2v_cast_92B33(reg2hw_ctrl_gcm_i[7-:6]);
+			
+			// Restructured parallel transition logic
+			wire [5:0] phase_in = gcm_phase_reg_if;
+			wire phase_in_valid = (phase_in == 6'b000001) || (phase_in == 6'b000010) || 
+			                      (phase_in == 6'b000100) || (phase_in == 6'b001000) || 
+			                      (phase_in == 6'b010000) || (phase_in == 6'b100000);
+			wire [5:0] phase_next_raw = phase_in_valid ? phase_in : 6'b000001;
+
+			reg [5:0] phase_final;
+			always @(*) begin
+				phase_final = gcm_phase_o;
+				case (gcm_phase_o)
+					6'b000001: if (init_done_i && (phase_next_raw != 6'b010000)) phase_final = phase_next_raw;
+					6'b000010: if (phase_next_raw == 6'b000001 || phase_next_raw == 6'b000100 || phase_next_raw == 6'b001000) phase_final = phase_next_raw;
+					6'b000100: if (phase_next_raw == 6'b000001 || phase_next_raw == 6'b001000 || (phase_next_raw == 6'b010000 && !first_block_i) || phase_next_raw == 6'b100000) phase_final = phase_next_raw;
+					6'b001000: if (phase_next_raw == 6'b000001 || (phase_next_raw == 6'b010000 && !first_block_i) || phase_next_raw == 6'b100000) phase_final = phase_next_raw;
+					6'b010000, 6'b100000: if (phase_next_raw == 6'b000001) phase_final = phase_next_raw;
+					default: phase_final = gcm_phase_o;
+				endcase
+			end
+
+			assign ctrl_gcm_wd[5-:aes_pkg_AES_GCMPHASE_WIDTH] = phase_final;
+			assign num_valid_bytes = reg2hw_ctrl_gcm_i[14-:5];
+			assign ctrl_gcm_wd[10-:5] = ((num_valid_bytes == 5'd0) || (num_valid_bytes > 5'd16) ? 5'd16 : num_valid_bytes);
+			
+			prim_subreg_shadow #(
+				.DW(aes_pkg_AES_GCMPHASE_WIDTH),
+				.SwAccess(3'd2),
+				.RESVAL(aes_reg_pkg_AES_CTRL_GCM_SHADOWED_PHASE_RESVAL)
+			) u_ctrl_gcm_reg_shadowed_phase(
+				.clk_i(clk_i),
+				.rst_ni(rst_ni),
+				.rst_shadowed_ni(rst_shadowed_ni),
+				.re(reg2hw_ctrl_gcm_i[0]),
+				.we(we_i),
+				.wd({ctrl_gcm_wd[5-:aes_pkg_AES_GCMPHASE_WIDTH]}),
+				.de(1'b0),
+				.d(1'sb0),
+				.qe(),
+				.q(hw2reg_ctrl_gcm_o[5-:6]),
+				.qs(),
+				.ds(),
+				.phase(phase_gcm_phase),
+				.err_update(err_update_gcm_phase),
+				.err_storage(err_storage_gcm_phase)
+			);
+			prim_subreg_shadow #(
+				.DW(5),
+				.SwAccess(3'd2),
+				.RESVAL(aes_reg_pkg_AES_CTRL_GCM_SHADOWED_NUM_VALID_BYTES_RESVAL)
+			) u_ctrl_gcm_reg_shadowed_num_valid_bytes(
+				.clk_i(clk_i),
+				.rst_ni(rst_ni),
+				.rst_shadowed_ni(rst_shadowed_ni),
+				.re(reg2hw_ctrl_gcm_i[8]),
+				.we(we_i),
+				.wd({ctrl_gcm_wd[10-:5]}),
+				.de(1'b0),
+				.d(1'sb0),
+				.qe(),
+				.q(hw2reg_ctrl_gcm_o[10-:5]),
+				.qs(),
+				.ds(),
+				.phase(phase_num_valid_bytes),
+				.err_update(err_update_num_valid_bytes),
+				.err_storage(err_storage_num_valid_bytes)
+			);
+		end
+		else begin : gen_no_ctrl_gcm_reg_shadowed
+			assign hw2reg_ctrl_gcm_o[5-:6] = {sv2v_cast_92B33(6'b000001)};
+			assign hw2reg_ctrl_gcm_o[10-:5] = 5'd16;
+			assign phase_gcm_phase = 1'b1;
+			assign phase_num_valid_bytes = 1'b1;
+			assign err_update_gcm_phase = 1'b0;
+			assign err_update_num_valid_bytes = 1'b0;
+			assign err_storage_gcm_phase = 1'b0;
+			assign err_storage_num_valid_bytes = 1'b0;
+		end
+	endgenerate
+	assign phase_o = phase_gcm_phase | phase_num_valid_bytes;
+	assign err_update_o = err_update_gcm_phase | err_update_num_valid_bytes;
+	assign err_storage_o = err_storage_gcm_phase | err_storage_num_valid_bytes;
+	assign gcm_phase_o = sv2v_cast_92B33(hw2reg_ctrl_gcm_o[5-:6]);
+	assign num_valid_bytes_o = hw2reg_ctrl_gcm_o[10-:5];
+	initial _sv2v_0 = 0;
+endmodule
