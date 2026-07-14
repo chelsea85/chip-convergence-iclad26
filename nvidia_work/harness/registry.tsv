@@ -1,0 +1,20 @@
+# NVIDIA IP registry — transferable definition of how to run each IP.
+# PREREQ for OpenTitan gates (aes/ascon/kmac): apply the FuseSoC .core fix — delete the empty
+#   `files: []` line in opentitan/hw/ip/tlul/{jtag_dtm,adapter_dmi}.core (FuseSoC 2.4.6 minItems:1).
+#   Without it the Verilator gate fails at dependency resolution. (Applied 2026-06-30; gates 4/4 PASS.)
+# Columns (tab-separated):
+#   ip            short name / key
+#   gate_tool     iverilog | verilator
+#   gate_dir      dir (relative to NVIDIA repo root) where the gate script runs
+#   gate_cmd      command to run the functional gate (must report PASS/FAIL)
+#   syn_path      dir containing run_syn.sh
+#   skip_sv2v     1 if SKIP_SV2V=1 needed (OpenTitan), else 0
+#   baseline_slack  known baseline setup worst slack (ps) — "+" met, "-" violated
+#   notes
+async_fifo	iverilog	async_fifo	./run_iverilog_tb.sh all	async_fifo/yosys_syn	0	+22.22	meets timing; mem=128/170 FF; already lean
+sha512	iverilog	sha512	./run_iverilog_tb.sh all	sha512/yosys_syn	0	-97.30	FAILS timing @1500ps -> prime optimization target
+aes	verilator	opentitan/hw/ip/aes	./run_verilator_tb.sh all	opentitan/hw/ip/aes/yosys_syn	1	-1083.58	76 generated .v; SKIP_SV2V=1
+ascon	verilator	opentitan/hw/ip/ascon/pre_dv	./run_verilator_tb.sh all	opentitan/hw/ip/ascon/yosys_syn	1	-430.14	synth OK, 12295 cells; 38 generated .v
+kmac	verilator	opentitan/hw/ip/kmac/pre_dv	./run_verilator_tb.sh all	opentitan/hw/ip/kmac/yosys_syn	1	-1115.75	65 generated .v
+prim	verilator	opentitan/hw/ip/prim/pre_dv	./run_verilator_tb.sh all	opentitan/hw/ip/prim/yosys_syn	1	TBD	147 generated .v
+nvdla	verilator	NVDLA	./run_varilator_test.sh	NVDLA/syn/yosys_syn	0	TBD	blackbox RAM; large; script name has 'varilator' typo

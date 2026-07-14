@@ -18,6 +18,7 @@ for d in exp1_graycomb exp2_sha512_balanced exp3_sha512_wsched exp4_ascon_muxfol
 done
 cp "$SRC/nvidia_work/AGENT_UPGRADE_SPEC.md" "$SRC/nvidia_work/OPTIMIZATION_CATALOG.md" "$DST/nvidia_work/" 2>/dev/null || true
 cp "$SRC/NVIDIA_DAILY_RUN_LOG.md" "$DST/nvidia_work/"
+cp -R "$SRC/nvidia_work/harness" "$DST/nvidia_work/"   # TB gate + measure scripts (fresh-clone fix 2026-07-14)
 
 # NXP track
 mkdir -p "$DST/nxp_work"
