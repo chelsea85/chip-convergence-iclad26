@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -124,20 +126,57 @@ class VertexModel:
         return r.text or ""
 
 
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
 class EndpointModel:
-    def __init__(self, url: str, model_name="gemini-3-flash-preview"):
+    """Contest benchmark model service (AGENT_GUIDE §Model Endpoint API).
+    Request {model, prompt, max_output_tokens}; retry/backoff is the AGENT's
+    responsibility for HTTP 429/5xx and body {"retryable": true}. generate()
+    NEVER raises — on unrecoverable failure it returns "" so a flaky endpoint
+    can't abort the official run (the keep-best loop then just keeps baseline)."""
+
+    def __init__(self, url: str, model_name="gemini-3-flash-preview",
+                 max_output_tokens=8192, max_retries=5, timeout=300):
         self.url, self.model_name = url.rstrip("/"), model_name
+        self.max_output_tokens = max_output_tokens
+        self.max_retries, self.timeout = max_retries, timeout
         self.usage = {"num_calls": 0, "total_tokens": 0}
 
-    def generate(self, prompt: str) -> str:
-        body = json.dumps({"model": self.model_name, "prompt": prompt}).encode()
+    def _post(self, prompt: str):
+        body = json.dumps({"model": self.model_name, "prompt": prompt,
+                           "max_output_tokens": self.max_output_tokens}).encode()
         req = urllib.request.Request(self.url + "/generate", data=body,
                                      headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            d = json.loads(resp.read().decode())
-        self.usage["num_calls"] += 1
-        self.usage["total_tokens"] += d.get("total_tokens", 0)
-        return d.get("text", "")
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return resp.getcode(), json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            try:
+                d = json.loads(e.read().decode())
+            except Exception:
+                d = {"error": str(e), "retryable": e.code in _RETRYABLE_STATUS}
+            return e.code, d
+        except Exception as e:                       # network / timeout / parse
+            return None, {"error": str(e)[:120], "retryable": True}
+
+    def generate(self, prompt: str) -> str:
+        delay = 2.0
+        for attempt in range(self.max_retries):
+            code, d = self._post(prompt)
+            retryable = (code in _RETRYABLE_STATUS
+                         or bool(d.get("retryable"))
+                         or d.get("provider_status") in _RETRYABLE_STATUS)
+            if code == 200 and "text" in d and not d.get("error"):
+                self.usage["num_calls"] += 1
+                u = d.get("usage") or {}
+                self.usage["total_tokens"] += (u.get("total_tokens")
+                                               or d.get("total_tokens", 0) or 0)
+                return d.get("text", "") or ""
+            if not retryable:
+                return ""                            # non-retryable → give up quietly
+            time.sleep(delay); delay = min(delay * 2, 30.0)
+        return ""                                    # retries exhausted → keep-best baseline
 
 
 def make_model(kind: str, P):

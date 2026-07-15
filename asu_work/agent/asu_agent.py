@@ -131,8 +131,15 @@ def run(P: Paths, model=None, max_calls: int = 6) -> dict:
         calls = 0
         while calls < max_calls:
             calls += 1
-            prompt = build_prompt(digest, orig_nw, best, P)
-            snippet = propose_fix_pass(model, prompt)
+            # model / endpoint failures must NEVER abort the run — on any error
+            # we skip the candidate and keep the eligible baseline (submission
+            # robustness; the official runner always runs us in model mode).
+            try:
+                prompt = build_prompt(digest, orig_nw, best, P)
+                snippet = propose_fix_pass(model, prompt)
+            except Exception as e:
+                _log(f"model call {calls} failed ({type(e).__name__}) — skipped")
+                continue
             if not snippet:
                 _log(f"model call {calls}: no usable/compiling fix pass")
                 continue
@@ -140,9 +147,13 @@ def run(P: Paths, model=None, max_calls: int = 6) -> dict:
             # if it broke rendering, feed the error back once (off the main count)
             if not r.ok and r.error and calls < max_calls:
                 calls += 1
-                fixed = _extract_code(model.generate(
-                    prompt + REPAIR_SUFFIX.format(err=r.error[:800],
-                                                  code=snippet[:2500])))
+                try:
+                    fixed = _extract_code(model.generate(
+                        prompt + REPAIR_SUFFIX.format(err=r.error[:800],
+                                                      code=snippet[:2500])))
+                except Exception as e:
+                    _log(f"repair call {calls} failed ({type(e).__name__})")
+                    fixed = ""
                 if fixed and _compiles(fixed):
                     snippet = fixed
                     r = verify.measure(orig_nw + "\n" + snippet, ctx,
@@ -169,9 +180,17 @@ def run(P: Paths, model=None, max_calls: int = 6) -> dict:
     _log(f"emitted {P.output.name}: fvr={best.final_violation_rate} "
          f"repair_rate={best.repair_rate} eligible={best.eligible}")
 
+    # Usage is recorded by the benchmark MODEL-SERVICE wrapper, not the agent.
+    # The official runner runs the agent container read-only with usage_path
+    # UNMOUNTED — writing it there fails and aborts the whole run (ASU-P-01).
+    # So this is strictly BEST-EFFORT for local dev; never let it crash.
     if model is not None and P.usage:
-        P.usage.parent.mkdir(parents=True, exist_ok=True)
-        P.usage.write_text(json.dumps(getattr(model, "usage", {}), indent=1))
+        try:
+            P.usage.parent.mkdir(parents=True, exist_ok=True)
+            P.usage.write_text(json.dumps(getattr(model, "usage", {}), indent=1))
+        except OSError as e:
+            _log(f"usage write skipped (read-only/unmounted, expected under "
+                 f"official runner): {type(e).__name__}")
     return {"case": P.case, "final_violation_rate": best.final_violation_rate,
             "repair_rate": best.repair_rate, "eligible": best.eligible,
             "total": best.total}
