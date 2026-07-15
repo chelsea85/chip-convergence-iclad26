@@ -98,26 +98,40 @@ def run(P: Paths, model=None, max_calls: int = 6) -> dict:
     _log(f"{P.case}: {digest.total_violations} ref violations, "
          f"{len(digest.findings)} rules")
 
-    # baseline (untouched original) — the guaranteed-eligible floor
+    # baseline (untouched original) — the guaranteed-eligible floor. Compute the
+    # rendered-connectivity signature once as the CREDIBILITY reference.
     best_script = original
-    best = verify.measure(original, ctx, tag="baseline")
+    best = verify.measure(original, ctx, tag="baseline", want_conn_sig=True)
     baseline_fvr = best.final_violation_rate if best.final_violation_rate is not None else 1.0
+    baseline_sig = best.conn_sig
     _log(f"baseline: total={best.total} fvr={best.final_violation_rate} "
          f"eligible={best.eligible} conn={best.connectivity_preserved}")
 
     def consider(script: str, tag: str, note: str):
+        """Accept a candidate only if it is (a) eligible + lexicographically
+        better AND (b) rendered-connectivity CREDIBLE vs baseline (production
+        enforcement of the Option-A gate — guards against geometry-removal
+        exploits that fool the static checker)."""
         nonlocal best, best_script
-        r = verify.measure(script, ctx, tag=tag)
+        r = verify.measure(script, ctx, tag=tag, want_conn_sig=True)
         status = (f"total={r.total} fvr={r.final_violation_rate} "
                   f"eligible={r.eligible} conn={r.connectivity_preserved}")
-        if r.better_than(best):
-            best, best_script = r, script
-            _log(f"KEEP {tag} ({note}): {status}  <-- new best")
-        else:
+        if not r.better_than(best):
             _log(f"drop {tag} ({note}): {status}")
+            return r
+        credible, why = verify.connectivity_credible(baseline_sig, r.conn_sig)
+        if not credible:
+            _log(f"drop {tag} ({note}): {status} — NOT credible ({why})")
+            return r
+        best, best_script = r, script
+        _log(f"KEEP {tag} ({note}): {status}  <-- new best [{why}]")
         return r
 
     # ── deterministic passes (0 tokens) ──────────────────────────────────────
+    # PRIMARY: via-bar (replace flagged multi-cut via arrays with continuous
+    # bars) — FVR 0.68-0.76 on all 5 public blocks.
+    consider(orig_nw + "\n" + repairs.via_bar_pass(), "via-bar",
+             "upper-routing via arrays -> bars")
     grid_layers = sorted({f.layer_hint for f in digest.by_kind("grid")
                           if f.layer_hint in ("M4", "M5", "M6")})
     if grid_layers:

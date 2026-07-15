@@ -233,3 +233,25 @@ via-width class resists even a surgical, connectivity-credible neck because M3 r
 the neck shoulders trip M3.S.4. Remaining plan options (S4 template-mining, S5 isolated-minority) have
 low expected payoff given every class tested cascades; decision point for whether to invest more
 compute vs. ship the (now hardened) submission + sharpened characterization.
+
+## 2026-07-15 — BREAKTHROUGH: via-bar repair — FVR 0.68–0.76 on ALL 5 blocks (real win)
+
+Acting on the ASU_PHASE0_FINDINGS review (which was RIGHT — "don't consolidate"): tested the
+reviewer's V2-bar hypothesis and it WORKS.
+- Grid-multiplicity (P0-F05): FALSIFIED as an artifact — the 72 M4.AUX.1 etc. are UNIQUE geometries
+  (max multiplicity 1), so the +71 gap is real distinct off-grid edges (script-vs-GDS render diff),
+  not duplicated markers. Canonicalization-of-markers won't help.
+- **V2-bar (P0-F03): the win.** The seeded errors split each via-in-wide-metal landing into a
+  multi-cut array (all V.M.AUX.2 counts are multiples of 3); replacing each flagged array with ONE
+  continuous via BAR spanning the metal length (min thickness kept → NO lower-metal widening → no
+  cascade) fixes the whole class cleanly. V2/M3 alone: Block1 315→243 (fvr 0.996). Extending to
+  V4/M5 + V5/M6 (upper routing only): **Block1 315→178 (fvr 0.730)**. V0/M1 EXCLUDED (device layer:
+  bars there explode V0.M1.EN.1→389 + break connectivity).
+- **All 5 blocks (V-bar, 3 upper pairs), verified eligible + rendered-connectivity-credible:**
+  Block1 0.730 · Block2 0.765 · Block3 0.764 · Block6 0.676 · Block7 0.682. All BELOW FVR 1.0.
+- Productionized: `repairs.via_bar_pass()` (primary deterministic pass) + credibility gate ENFORCED
+  in keep-best (P0-F01 fixed — candidates must pass rendered-connectivity, not just the static
+  checker). Full agent end-to-end: Block1 emits fvr 0.730, repair_rate 0.59.
+
+ASU flips from "honest negative result" to a REAL repair beating the reference denominator on the
+whole public set. The reviewer's exact-geometry reasoning was correct; my "consolidate" call was wrong.

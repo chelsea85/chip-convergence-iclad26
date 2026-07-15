@@ -75,6 +75,67 @@ _asu_total = 0
 '''
 
 
+_VIA_BAR_HELPER = '''
+# ===== ASU via-bar repair pass (2026-07-15) =====
+# The seeded errors split each via-in-wide-metal landing into a multi-cut array;
+# every min-via then fails the via-width-match rule (V.M.AUX.2/.3). Replace each
+# flagged array with ONE continuous via BAR spanning the metal's length (keeping
+# the min via thickness → NO lower-metal widening → no enclosure/spacing cascade).
+# Upper routing layers only (V2/M3, V4/M5, V5/M6); V0/M1 is the device layer and
+# must NOT be barred (it explodes enclosure/spacing + breaks connectivity).
+def _asu_bar_pair(layout, via_ln, m_ln):
+    top = layout.top_cell()
+    vli = layout.layer(pya.LayerInfo(via_ln, 0))
+    mli = layout.layer(pya.LayerInfo(m_ln, 0))
+    V = pya.Region(top.begin_shapes_rec(vli))
+    M = pya.Region(top.begin_shapes_rec(mli)); M.merge()
+    top.flatten(-1, True)
+    vsh = top.shapes(vli)
+    landings = {}
+    for v in V.each():
+        vb = v.bbox(); mp = None
+        for p in M.interacting(pya.Region(vb)).each(): mp = p; break
+        if not mp: continue
+        mb = mp.bbox(); horiz = mb.width() >= mb.height()
+        vperp = vb.height() if horiz else vb.width()
+        mperp = mb.height() if horiz else mb.width()
+        if vperp >= mperp: continue                 # already matched (not flagged)
+        landings.setdefault((mb.left, mb.bottom, mb.right, mb.top, horiz), []).append(vb)
+    todel = []
+    for s in vsh.each():
+        b = s.polygon.bbox() if s.is_polygon() else (s.box if s.is_box() else None)
+        if b is None: continue
+        for (ml, mbo, mr, mt, h) in landings:
+            if b.left >= ml and b.right <= mr and b.bottom >= mbo and b.top <= mt:
+                todel.append(s); break
+    for s in todel: s.delete()
+    n = 0
+    for (ml, mbo, mr, mt, h), cuts in landings.items():
+        if h:                                        # M horizontal: bar spans x
+            th = cuts[0].height(); cy = (mbo + mt) // 2
+            vsh.insert(pya.Box(ml, cy - th // 2, mr, cy - th // 2 + th))
+        else:                                        # M vertical: bar spans y
+            tw = cuts[0].width(); cx = (ml + mr) // 2
+            vsh.insert(pya.Box(cx - tw // 2, mbo, cx - tw // 2 + tw, mt))
+        n += 1
+    return n
+'''
+
+# (via_layer, metal_layer) pairs safe to bar — upper routing only, NOT V0/M1
+_BAR_PAIRS = [(25, 30), (45, 50), (55, 60)]   # V2/M3, V4/M5, V5/M6
+
+
+def via_bar_pass(pairs=None) -> str:
+    """Replace flagged multi-cut via arrays with continuous via bars. This is
+    the ASU agent's primary repair (FVR 0.68-0.76 on all 5 public blocks)."""
+    pairs = pairs or _BAR_PAIRS
+    lines = [_VIA_BAR_HELPER, "_asu_bars = 0"]
+    for vln, mln in pairs:
+        lines.append(f"_asu_bars += _asu_bar_pair(layout, {vln}, {mln})")
+    lines.append("print('[asu-repair] via-bars placed:', _asu_bars)")
+    return "\n".join(lines) + "\n"
+
+
 def grid_snap_pass(layers: list[str], mode: str = "nearest") -> str:
     """Snap off-grid edges on the given metal layers to their required grid.
     mode='outward' grows shapes to grid (preserves via enclosure); 'nearest'
