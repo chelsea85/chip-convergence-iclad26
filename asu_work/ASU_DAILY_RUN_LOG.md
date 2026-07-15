@@ -212,3 +212,24 @@ Acting on the external review of ASU_IMPROVEMENT_PLAN.md.
 
 Next: Phase 1 target selection (count x-clear V2/M3 sites; find isolated minority-class sites) →
 Phase 2 two smallest falsifiable experiments (S1 center neck, S5 isolated minority).
+
+## 2026-07-15 — Phase 2 Experiment A (S1 x-clear V2/M3 neck)
+
+Implemented the reviewer's orthogonal neck: neck M3 to the via's y-extent only in an x-window that
+avoids adjacent V3, on the flattened merged M3. Block1 result: **V2.M3.AUX.2 72→48 (fixed 24 x-clear
+sites), connectivity-CREDIBLE (rendered nets unchanged)** — the first move that fixes a chunk of the
+target AND passes the Option-A credibility check. BUT the neck shoulders create **M3.S.4 0→48**
+(parallel-run/spacing collateral with nearby M3), net 315→339. S1 mechanism validated; the collateral
+is the barrier. Trying per-site greedy acceptance next (keep only necks that net-reduce exact DRC).
+
+## 2026-07-15 — S1 FALSIFIED by per-site exact DRC (the decisive experiment)
+
+Per-site neck deltas (Block1): center x-clear site **+1**, left/right partial-overlap **+3** each.
+Root cause (exact): each neck fixes 1 V2.M3.AUX.2 but its TWO shoulders each create an M3.S.4
+(parallel-run-length) violation with the adjacent horizontal M3 track → net +1 even at the most
+feasible site. The neck's own geometry is illegal. **S1 (the review's top pick) is ruled out with
+exact-DRC data — no x-clear V2/M3 neck is a net win.** This sharpens the characterization: the
+via-width class resists even a surgical, connectivity-credible neck because M3 routing neighbors make
+the neck shoulders trip M3.S.4. Remaining plan options (S4 template-mining, S5 isolated-minority) have
+low expected payoff given every class tested cascades; decision point for whether to invest more
+compute vs. ship the (now hardened) submission + sharpened characterization.
