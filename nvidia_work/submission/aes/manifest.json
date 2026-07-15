@@ -1,6 +1,6 @@
 {
  "ip": "aes",
- "result": "optimized",
+ "result": "explored-no-adp-gain",
  "cid": "ef6802dbb301",
  "changed_files": [
   "opentitan/hw/ip/aes/yosys_syn/generated/aes_sub_bytes.v"

@@ -714,10 +714,19 @@ def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(text)
     per_layer = _verify_status(ip, best["cid"]) if best else {}
+    _adp = summary["best"]["adp_vs_baseline"] if best else None
+    # label from the actual ADP outcome, not merely "did any file change" — a
+    # changed candidate that did NOT improve ADP (e.g. a power tradeoff) must not
+    # be called "optimized".
+    if changed and _adp is not None and _adp < 1.0:
+        _result = "optimized"
+    elif changed:
+        _result = "explored-no-adp-gain"
+    else:
+        _result = "no-improvement: baseline is the submission"
     manifest = {
         "ip": ip,
-        "result": ("optimized" if changed else
-                   "no-improvement: baseline is the submission"),
+        "result": _result,
         "cid": best["cid"] if best else None,
         "changed_files": sorted(changed),          # true delta
         "baseline_ppa": base_ppa,

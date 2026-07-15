@@ -1,9 +1,20 @@
 # Chip Convergence — NVIDIA RTL PPA-Optimization Agent
 
 An optimize→verify→measure→learn loop over the contest IPs (and any unseen IP in the same
-repo conventions). Every accepted candidate passes 5-layer verification including yosys
-logic-equivalence checking and dual-instance differential simulation; every acceptance is a
-measured strict improvement under the synthesis flow.
+repo conventions). Every acceptance is a **measured strict improvement** under the synthesis
+flow, gated by verification recorded **per layer** in each manifest. The assurance level is
+whatever the pristine flow actually supports, and is never overstated:
+
+- **full 5-layer** — lint + compile + TB gate + yosys LEC + dual-instance differential sim all
+  PASS (e.g. sha512, async_fifo);
+- **equivalence+differential** — LEC PROVEN + dualsim PASS, when the *pristine* design already
+  fails compile/TB so those layers can't indict the candidate (e.g. prim: compile PRE-EXISTING,
+  gate SKIP-preexisting);
+- **differential-only** — dualsim PASS with LEC INCONCLUSIVE (e.g. aes, an exploratory power
+  tradeoff that did **not** improve ADP — not part of the headline set).
+
+Each `manifest.json` carries `verification_per_layer` + an `assurance` string; prose here and in
+the slides is driven by those fields, not the other way round.
 
 ## Layout
 
@@ -60,12 +71,18 @@ python3 test_cold_start.py         # 6/6 (unseen-IP drill; needs Docker)
 python3 -m ppa.discover --validate # discovery fixtures vs hand registry
 ```
 
-## Results snapshot (2026-07-12)
+## Results snapshot (2026-07-14)
 
-- sha512: **ADP 0.787 vs baseline, WNS −97.30→+235.36 ps (MET), LEC-proven** (emitted in
-  submission/sha512/).
-- Live rounds: model-generated `arith-arch` accepted (ADP 0.898) then `restructure-select`
-  composed on top (≈0.884) — all 5-layer verified; duplicates of known variants are
-  fingerprint-rejected without wasted synthesis.
+- **sha512: ADP 0.7266 vs baseline, WNS −97.30→+334.61 ps (MET), full 5-layer (LEC PROVEN)**
+  — live `arith-arch` rewrite, emitted in `submission/sha512/` (pristine baseline + optimized
+  `sha512_core.v` only; `manifest.json` records `best_ppa` + per-layer verification).
+- **prim: ADP 0.6045** (power −67%), setup −208.95→−27.46 ps (still not met) — assurance is
+  **equivalence+differential** (compile/TB PRE-EXISTING on the pristine design; LEC PROVEN +
+  dualsim PASS), not full 5-layer.
+- **async_fifo: ADP 0.961** (timing already MET at baseline) — full 5-layer, keyless stub-replay
+  reproducible.
+- **aes: ADP 1.0001 (no improvement)** — exploratory power tradeoff, **differential-only**
+  assurance (LEC INCONCLUSIVE); intentionally *not* in the headline set.
+- Duplicates of known variants are fingerprint-rejected without wasted synthesis.
 - Thinking-model note: gemini-3 requires bounded `thinking_budget` (default 8192 here) —
   unbounded, it can spend the entire token cap thinking and return empty text.
