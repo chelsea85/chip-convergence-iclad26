@@ -33,6 +33,8 @@ cp "$SRC/asu_work/agent"/*.py "$SRC/asu_work/agent"/*.json "$SRC/asu_work/agent/
 cp "$SRC/asu_work/docker/Dockerfile" "$DST/asu_work/docker/"
 cp "$SRC/ASU_DAILY_RUN_LOG.md" "$DST/asu_work/"
 
+cp "$SRC/PROJECT_SUMMARY.md" "$DST/" 2>/dev/null || true
+
 # Docs
 mkdir -p "$DST/docs"
 for f in SLIDE_MATERIAL.md SLIDES_OUTLINE.md DAC_DAY_RUNBOOK.md GEMINI_SETUP.md RESEARCH_NOTES.md; do
