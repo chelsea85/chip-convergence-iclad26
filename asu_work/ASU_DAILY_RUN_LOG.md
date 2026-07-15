@@ -187,3 +187,28 @@ The ASU deliverable is therefore: a complete, runner-contract, verification-firs
 env, verify == scorer, keep-best guarantee, exact-rule-grounded rules library) + a rigorous,
 reproducible diagnosis of the exact seeded-perturbation mechanism and its irreducibility. Redirecting
 remaining time to the proven, scored NVIDIA/NXP tracks + submission.
+
+## 2026-07-15 — Phase 0 (from the improvement-plan review): submission-critical hardening + freeze
+
+Acting on the external review of ASU_IMPROVEMENT_PLAN.md.
+1. **P0 fixed (would have zero-scored us):** the official runner runs the agent container read-only
+   with the usage path mounted only into the wrapper; our agent's usage.json write failed → nonzero
+   exit → no scoring. Usage write is now best-effort (try/except). Confirmed vs official_eval/run_official_eval.py.
+2. **EndpointModel hardened:** request {model,prompt,max_output_tokens}; retry/backoff on HTTP 429/5xx
+   and body {"retryable":true}/provider_status; NEVER raises (returns "" on unrecoverable → keep-best
+   ships baseline). best-of-N loop wrapped crash-safe. Verified vs a mock endpoint (success /
+   retry-then-success / total-fail-no-crash) AND a full container model-mode run (host mock endpoint,
+   --model gemini-3.5-flash) → unhelpful passes discarded by keep-best, eligible baseline, EXIT 0.
+   Note: under the official runner --model is ALWAYS a model name → we always run model mode, so this
+   robustness is submission-critical.
+3. **5 exact baselines FROZEN** (asu_work/baselines/baseline_table.json, with rule-deck/evaluator hashes):
+   Block1 315 (fvr 1.291) · Block2 90 (1.324) · Block3 111 (1.247) · Block6 321 (1.300) · Block7 957 (1.251).
+   Exact DRC ≈ 12–22 s/block (faster than the 40s estimate).
+4. **Connectivity-integrity policy = Option A** (credible physical repair). Added a RENDERED-geometry
+   connectivity signature (net/component count + conducting area + per-layer shape counts) and
+   connectivity_credible(): a degenerate candidate that deletes M2 fools the official STATIC checker
+   ("preserved") but our check catches it (nets 25→110). Winning candidates must pass BOTH the official
+   gate and this credibility check.
+
+Next: Phase 1 target selection (count x-clear V2/M3 sites; find isolated minority-class sites) →
+Phase 2 two smallest falsifiable experiments (S1 center neck, S5 isolated minority).
