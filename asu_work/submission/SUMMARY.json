@@ -1,0 +1,37 @@
+[
+ {
+  "block": "Block1",
+  "baseline": 315,
+  "final": 178,
+  "fvr": 0.7295,
+  "credible": true
+ },
+ {
+  "block": "Block2",
+  "baseline": 90,
+  "final": 52,
+  "fvr": 0.7647,
+  "credible": true
+ },
+ {
+  "block": "Block3",
+  "baseline": 111,
+  "final": 68,
+  "fvr": 0.764,
+  "credible": true
+ },
+ {
+  "block": "Block6",
+  "baseline": 321,
+  "final": 167,
+  "fvr": 0.6761,
+  "credible": true
+ },
+ {
+  "block": "Block7",
+  "baseline": 957,
+  "final": 522,
+  "fvr": 0.6824,
+  "credible": true
+ }
+]

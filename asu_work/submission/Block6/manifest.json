@@ -1,0 +1,39 @@
+{
+ "case": "Block6",
+ "result": "repaired",
+ "baseline_total": 321,
+ "final_total": 167,
+ "reference_denominator": 247,
+ "baseline_fvr": 1.2996,
+ "final_violation_rate": 0.6761,
+ "repair_rate": 0.6559,
+ "eligible": true,
+ "official_connectivity": true,
+ "rendered_connectivity_credible": true,
+ "rendered_components_baseline": 20,
+ "rendered_components_final": 20,
+ "per_rule_delta": {
+  "V2.M3.AUX.2": [
+   78,
+   0
+  ],
+  "V4.AUX.1": [
+   0,
+   4
+  ],
+  "V4.M5.AUX.2": [
+   52,
+   0
+  ],
+  "V5.AUX.1": [
+   0,
+   4
+  ],
+  "V5.M6.AUX.2": [
+   32,
+   0
+  ]
+ },
+ "repair": "via-bar (V2/M3,V4/M5,V5/M6 multi-cut arrays -> continuous bars)",
+ "script_sha256_16": "a31d59ad67648010"
+}

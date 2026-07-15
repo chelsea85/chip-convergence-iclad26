@@ -32,6 +32,9 @@ mkdir -p "$DST/asu_work/agent" "$DST/asu_work/docker"
 cp "$SRC/asu_work/agent"/*.py "$SRC/asu_work/agent"/*.json "$SRC/asu_work/agent/README.md" "$DST/asu_work/agent/" 2>/dev/null || true
 cp "$SRC/asu_work/docker/Dockerfile" "$DST/asu_work/docker/"
 cp "$SRC/ASU_DAILY_RUN_LOG.md" "$DST/asu_work/"
+cp -R "$SRC/asu_work/submission" "$DST/asu_work/" 2>/dev/null || true
+cp -R "$SRC/asu_work/baselines" "$DST/asu_work/" 2>/dev/null || true
+cp "$SRC/asu_work/ASU_IMPROVEMENT_PLAN.md" "$SRC/asu_work/ASU_PHASE0_FINDINGS.md" "$DST/asu_work/" 2>/dev/null || true
 
 cp "$SRC/PROJECT_SUMMARY.md" "$DST/" 2>/dev/null || true
 

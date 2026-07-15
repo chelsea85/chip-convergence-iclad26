@@ -1,0 +1,93 @@
+{
+ "generated": "exact rerun in asu-klayout:0.30.1",
+ "klayout": "0.30.1",
+ "rule_deck_sha256_16": "0c70fc4d3d7eead3",
+ "evaluator_sha256_16": "9669c8a5cb1b994a",
+ "blocks": [
+  {
+   "block": "Block1",
+   "script_sha256_16": "402b936c66e30c13",
+   "reference_count": 244,
+   "exact_rerun_total": 315,
+   "baseline_fvr": 1.291,
+   "eligible": true,
+   "connectivity_preserved": true,
+   "wall_s": 13.5,
+   "top_rules": {
+    "V2.M3.AUX.2": 72,
+    "M4.AUX.1": 72,
+    "V4.M5.AUX.2": 48,
+    "V0.M1.AUX.3": 37,
+    "V5.M6.AUX.2": 24
+   }
+  },
+  {
+   "block": "Block2",
+   "script_sha256_16": "3d84d7ba9f39fe6e",
+   "reference_count": 68,
+   "exact_rerun_total": 90,
+   "baseline_fvr": 1.3235,
+   "eligible": true,
+   "connectivity_preserved": true,
+   "wall_s": 11.8,
+   "top_rules": {
+    "V2.M3.AUX.2": 24,
+    "M4.AUX.1": 24,
+    "V4.M5.AUX.2": 16,
+    "V0.M1.AUX.3": 12,
+    "M5.AUX.1": 8
+   }
+  },
+  {
+   "block": "Block3",
+   "script_sha256_16": "596c84934d9673c6",
+   "reference_count": 89,
+   "exact_rerun_total": 111,
+   "baseline_fvr": 1.2472,
+   "eligible": true,
+   "connectivity_preserved": true,
+   "wall_s": 12.3,
+   "top_rules": {
+    "V2.M3.AUX.2": 27,
+    "M4.AUX.1": 24,
+    "V0.M1.AUX.3": 21,
+    "V4.M5.AUX.2": 18,
+    "M5.AUX.1": 8
+   }
+  },
+  {
+   "block": "Block6",
+   "script_sha256_16": "bcd14f9b69e1d5ef",
+   "reference_count": 247,
+   "exact_rerun_total": 321,
+   "baseline_fvr": 1.2996,
+   "eligible": true,
+   "connectivity_preserved": true,
+   "wall_s": 13.4,
+   "top_rules": {
+    "V2.M3.AUX.2": 78,
+    "M4.AUX.1": 72,
+    "V4.M5.AUX.2": 52,
+    "V5.M6.AUX.2": 32,
+    "V0.M1.AUX.3": 21
+   }
+  },
+  {
+   "block": "Block7",
+   "script_sha256_16": "15e5b90df63e82e6",
+   "reference_count": 765,
+   "exact_rerun_total": 957,
+   "baseline_fvr": 1.251,
+   "eligible": true,
+   "connectivity_preserved": true,
+   "wall_s": 22.2,
+   "top_rules": {
+    "V2.M3.AUX.2": 225,
+    "M4.AUX.1": 216,
+    "V4.M5.AUX.2": 150,
+    "V0.M1.AUX.3": 97,
+    "V5.M6.AUX.2": 72
+   }
+  }
+ ]
+}
