@@ -1,11 +1,17 @@
 """Deterministic geometric repair passes, emitted as pya code appended to the
-ORIGINAL layout script (original shapes untouched → connectivity preserved by
-construction; the pass corrects geometry just before write). Zero model tokens.
+ORIGINAL layout script (the source declarations are not edited; the pass mutates
+the built shapes just before write). Zero model tokens.
 
-Each builder returns a Python snippet. The agent appends chosen snippets to the
-script, re-renders + re-DRCs + checks connectivity, and keeps the combination
-that scores best (gated-lexicographic) — so a pass that regresses or breaks
-connectivity is simply discarded.
+NOTE on connectivity: the pass DOES change rendered geometry (e.g. `s.polygon =
+...`), so connectivity is NOT preserved "by construction". It is preserved
+because (a) the agent re-runs the official connectivity checker on every
+candidate and (b) keep-best retains the eligible baseline if a candidate
+regresses or breaks connectivity. Verification — not the append mechanism — is
+the guarantee.
+
+Currently implemented: `grid_snap_pass` (+ modes). The coordinated wide-metal-via
+fixer was evaluated as an experiment (see ASU_DAILY_RUN_LOG) but is NOT retained
+here; it regressed (neighbour spacing) and is not part of the shipped agent.
 """
 from __future__ import annotations
 

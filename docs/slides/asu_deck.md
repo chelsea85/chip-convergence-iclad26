@@ -201,8 +201,9 @@ sources). No metric drift between our loop and the scoring machine.
 **Keep-best** (gated-lexicographic, matching the contest): eligible → min `final_violation_rate` →
 max `repair_rate`, with the untouched baseline as the guaranteed-eligible floor.
 
-**The guarantee this buys:** on every block, the agent **cannot ship worse than the eligible
-baseline** and **cannot break connectivity** — a candidate that does either is discarded. The same
+**The guarantee this buys:** on every block, the agent **does not ship a candidate that regresses
+`final_violation_rate`** and **retains the eligible baseline if a candidate fails the connectivity
+check** — verified, then kept-best. The same
 "always ship eligible" discipline as our NXP agent.
 
 ---
@@ -211,7 +212,8 @@ baseline** and **cannot break connectivity** — a candidate that does either is
 
 **Candidate = the ORIGINAL script + an appended `pya` fix-pass** that runs right before `write`.
 Because the original shapes are untouched, connectivity (checked statically from the script) is
-preserved by construction; only the appended geometry edits change what DRC sees.
+then VERIFIED per candidate (the appended pass mutates rendered geometry; keep-best + the official
+connectivity check are the guarantee, not the append mechanism).
 
 - **Deterministic fixers** (0 tokens) — coordinated wide-metal-via, grid-snap; each derived from
   the exact rule geometry and applied to the flagged locations.
@@ -264,7 +266,7 @@ A **perturbation characterization** (flagged vs correct via stacks, 0 tokens) fo
 systematic: every correct stack is min-via-in-min-metal; every flagged one is a **correct min-via
 in a wide metal** — and that wide metal legitimately encloses a **larger via stacked above it**.
 
-**The irreducible contradiction:** at a flagged site, one M3 must *flush-match* the small via below
+**The local tension:** at a flagged site, one M3 must *flush-match* the small via below
 (V2 = 72) **and** *enclose* the larger via above (V3 = 96) — i.e. be simultaneously 72 **and** ≥106.
 No single-metal edit can satisfy both; only relocating neighbors (global) can.
 
@@ -272,8 +274,8 @@ No single-metal edit can satisfy both; only relocating neighbors (global) can.
 |---|---|---|
 | Block1 / 2 / 3 / 6 / 7 | 244 / 68 / 89 / 247 / 765 | **74% / 76% / 74% / 74% / 71%** |
 
-**~74% of every block** is this proven-irreducible class → local repair *cannot* beat the eligible
-baseline; the win requires **global neighbor relocation** (full legalization, MDPI 2025). Our
+**~74% of every block** is this coupled class → every local transform we evaluated regressed, so a
+sub-baseline result needs **neighbor-aware / global relocation** (full legalization, MDPI 2025). Our
 keep-best loop already *is* the SA acceptance test and verify *is* the exact cost function — the
 open work is a global multi-edit move-generator, a well-scoped (multi-day) extension.
 

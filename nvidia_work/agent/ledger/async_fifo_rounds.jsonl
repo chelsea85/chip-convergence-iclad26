@@ -3,3 +3,4 @@
 {"ts": "2026-07-13T21:34:19", "round": 1, "parent": "baseline", "tag": "control-boolean-network", "rungs": ["micro-opt"], "accepted": 1, "best_adp": 0.9614340221906134, "calls": 2, "tokens": 4600}
 {"ts": "2026-07-13T22:20:26", "round": 1, "parent": "baseline", "tag": "control-boolean-network", "rungs": ["micro-opt"], "accepted": 1, "best_adp": 0.9614340221906134, "calls": 2, "tokens": 4600}
 {"ts": "2026-07-13T23:02:47", "round": 1, "parent": "baseline", "tag": "control-boolean-network", "rungs": ["micro-opt"], "accepted": 1, "best_adp": 0.9614340221906134, "calls": 2, "tokens": 4600}
+{"ts": "2026-07-14T23:49:53", "round": 1, "parent": "baseline", "tag": "control-boolean-network", "rungs": ["micro-opt"], "accepted": 1, "best_adp": 0.9614340221906134, "calls": 2, "tokens": 4600}

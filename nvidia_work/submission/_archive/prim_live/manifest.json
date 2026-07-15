@@ -1,0 +1,46 @@
+{
+ "ip": "prim",
+ "result": "no-improvement: baseline is the submission",
+ "cid": "baseline",
+ "changed_files": [],
+ "baseline_ppa": {
+  "area": 70.17354,
+  "cells": 436.0,
+  "ff": 32.0,
+  "setup": -208.95,
+  "hold": 56.4,
+  "timing_met": false,
+  "power": 0.0165
+ },
+ "best_ppa": {
+  "area": 70.17354,
+  "cells": 436.0,
+  "ff": 32.0,
+  "setup": -208.95,
+  "hold": 56.4,
+  "timing_met": false,
+  "power": 0.0165
+ },
+ "adp_vs_baseline": 1.0,
+ "verification": "baseline (n/a)",
+ "llm_calls": 10,
+ "llm_tokens_approx": 1945722,
+ "rounds": [
+  {
+   "round": 1,
+   "accepted": 0,
+   "best_adp": 1.0
+  },
+  {
+   "round": 2,
+   "accepted": 0,
+   "best_adp": 1.0
+  },
+  {
+   "round": 3,
+   "accepted": 0,
+   "best_adp": 1.0
+  }
+ ],
+ "ts": "2026-07-13T15:48:51"
+}

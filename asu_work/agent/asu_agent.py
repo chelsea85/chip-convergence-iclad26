@@ -47,6 +47,8 @@ class Paths:
     temp: Path
     usage: Path
     eval_dir: Path
+    model_endpoint: str = ""      # info.json model_endpoint (contest runner)
+    model_name: str = "gemini-3-flash-preview"
 
     @classmethod
     def from_info(cls, info_path: Path) -> "Paths":
@@ -64,7 +66,9 @@ class Paths:
             output=Path(d["output_path"]),
             temp=Path(d["temp_dir"]),
             usage=Path(d.get("usage_path", "")),
-            eval_dir=eval_dir)
+            eval_dir=eval_dir,
+            model_endpoint=d.get("model_endpoint", "") or "",
+            model_name=d.get("model") or "gemini-3-flash-preview")
 
 
 def _find_eval_dir(script: Path) -> Path:
@@ -97,6 +101,7 @@ def run(P: Paths, model=None, max_calls: int = 6) -> dict:
     # baseline (untouched original) — the guaranteed-eligible floor
     best_script = original
     best = verify.measure(original, ctx, tag="baseline")
+    baseline_fvr = best.final_violation_rate if best.final_violation_rate is not None else 1.0
     _log(f"baseline: total={best.total} fvr={best.final_violation_rate} "
          f"eligible={best.eligible} conn={best.connectivity_preserved}")
 
@@ -150,9 +155,13 @@ def run(P: Paths, model=None, max_calls: int = 6) -> dict:
                 _log(f"KEEP model-{calls} ({note}): {status}  <-- new best")
             else:
                 _log(f"drop model-{calls} ({note}): {status} err={r.error[:60]}")
-            if best.eligible and best.final_violation_rate is not None \
-                    and best.final_violation_rate <= 1.0:
-                break     # beat the reference denominator — stop spending
+            # stop only once we STRICTLY beat the baseline AND are at/under the
+            # reference denominator (F-12: don't stop on a discarded proposal
+            # when the calibrated baseline is already exactly 1.0)
+            if (best.eligible and best.final_violation_rate is not None
+                    and best.final_violation_rate < baseline_fvr
+                    and best.final_violation_rate <= 1.0):
+                break
 
     # ── emit best eligible ───────────────────────────────────────────────────
     P.output.parent.mkdir(parents=True, exist_ok=True)

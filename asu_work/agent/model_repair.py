@@ -144,10 +144,13 @@ def make_model(kind: str, P):
     if kind == "stub":
         return StubModel()
     if kind == "vertex":
-        return VertexModel()
+        return VertexModel(getattr(P, "model_name", "gemini-3-flash-preview"))
     if kind == "endpoint":
-        info_ep = os.environ.get("ASU_MODEL_ENDPOINT", "")
-        return EndpointModel(info_ep or "http://127.0.0.1:8080")
+        # contest runner contract: ALL model calls go to info.json's
+        # model_endpoint (F-01 fix). Fall back to env/localhost for dev only.
+        ep = (getattr(P, "model_endpoint", "") or
+              os.environ.get("ASU_MODEL_ENDPOINT", "") or "http://127.0.0.1:8080")
+        return EndpointModel(ep, getattr(P, "model_name", "gemini-3-flash-preview"))
     raise SystemExit(f"unknown model kind: {kind}")
 
 

@@ -1,0 +1,39 @@
+{
+ "ip": "prim",
+ "result": "optimized",
+ "cid": "e5d027749ade",
+ "changed_files": [
+  "opentitan/hw/ip/prim/yosys_syn/generated/prim_crc32.v"
+ ],
+ "baseline_ppa": {
+  "area": 70.17354,
+  "cells": 436.0,
+  "ff": 32.0,
+  "setup": -208.95,
+  "hold": 56.4,
+  "timing_met": false,
+  "power": 0.0165
+ },
+ "best_ppa": {
+  "area": 65.93076,
+  "cells": 409.0,
+  "ff": 32.0,
+  "setup": -27.46,
+  "hold": 56.4,
+  "timing_met": false,
+  "power": 0.00538
+ },
+ "adp_vs_baseline": 0.6045,
+ "verification_per_layer": {
+  "lint": "PASS",
+  "compile": "PRE-EXISTING",
+  "gate": "SKIP-preexisting",
+  "lec": "PROVEN",
+  "dualsim": "PASS"
+ },
+ "assurance": "equivalence+differential: LEC PROVEN + dualsim PASS (gate=SKIP-preexisting, compile=PRE-EXISTING)",
+ "llm_calls": 6,
+ "llm_tokens_approx": 166788,
+ "provenance": "live gemini-3-flash-preview campaign; regenerated 2026-07-14 (delta-only, per-layer verification)",
+ "ts": "2026-07-14T23:06:30"
+}

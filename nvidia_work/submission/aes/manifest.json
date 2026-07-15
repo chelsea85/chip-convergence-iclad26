@@ -1,0 +1,39 @@
+{
+ "ip": "aes",
+ "result": "optimized",
+ "cid": "ef6802dbb301",
+ "changed_files": [
+  "opentitan/hw/ip/aes/yosys_syn/generated/aes_sub_bytes.v"
+ ],
+ "baseline_ppa": {
+  "area": 10100.5137,
+  "cells": 74234.0,
+  "ff": 7478.0,
+  "setup": -848.15,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.0656
+ },
+ "best_ppa": {
+  "area": 10139.26734,
+  "cells": 74701.0,
+  "ff": 7478.0,
+  "setup": -844.65,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.0617
+ },
+ "adp_vs_baseline": 1.0001,
+ "verification_per_layer": {
+  "lint": "PASS",
+  "compile": "PRE-EXISTING",
+  "gate": "SKIP-preexisting",
+  "lec": "INCONCLUSIVE",
+  "dualsim": "PASS"
+ },
+ "assurance": "differential-only: dualsim PASS (lec=INCONCLUSIVE, gate=SKIP-preexisting)",
+ "llm_calls": 21,
+ "llm_tokens_approx": 1295145,
+ "provenance": "live gemini-3-flash-preview campaign; regenerated 2026-07-14 (delta-only, per-layer verification)",
+ "ts": "2026-07-14T23:06:30"
+}

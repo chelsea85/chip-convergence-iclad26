@@ -60,7 +60,10 @@ def _parse_filelist(fl_path: Path) -> tuple[list[Path], list[Path]]:
 
 
 def _repo_rel(p: Path) -> str:
-    return str(p.resolve().relative_to(REPO))
+    # resolve BOTH sides: REPO may contain a symlink component (the documented
+    # `ln -s ICLAD-Hackathon-2026` layout), while p.resolve() follows it — an
+    # unresolved REPO then fails relative_to (F-09). Resolve REPO too.
+    return str(p.resolve().relative_to(REPO.resolve()))
 
 
 def _input_ports(text: str) -> list[str]:

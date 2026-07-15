@@ -653,41 +653,87 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
     return summary
 
 
+def _verify_status(ip: str, cid: str) -> dict:
+    """Look up the accepted candidate's actual per-layer verification status
+    from the ledger (lint/compile/gate/lec/dualsim), so the manifest states
+    what was ACHIEVED, not a blanket claim."""
+    led = LEDGER_DIR / f"{ip}.jsonl"
+    if not cid or not led.exists():
+        return {}
+    last = {}
+    for line in led.read_text().splitlines():
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        if d.get("cid") == cid and d.get("verify"):
+            v = d["verify"]
+            last = {k: (v[k].get("status") if isinstance(v.get(k), dict)
+                        else v.get(k))
+                    for k in ("lint", "compile", "gate", "lec", "dualsim")
+                    if v.get(k) is not None}
+    return last
+
+
+def _assurance(v: dict) -> str:
+    """Summarise the assurance level actually reached for this candidate."""
+    if not v:
+        return "unknown (no ledger verify record)"
+    passed = lambda k, *ok: v.get(k) in ok
+    if (passed("lint", "PASS") and passed("compile", "PASS")
+            and passed("gate", "PASS") and passed("lec", "PROVEN")
+            and passed("dualsim", "PASS")):
+        return "full 5-layer: lint+compile+TB gate PASS, yosys LEC PROVEN, dualsim PASS"
+    if passed("lec", "PROVEN") and passed("dualsim", "PASS"):
+        return ("equivalence+differential: LEC PROVEN + dualsim PASS "
+                f"(gate={v.get('gate')}, compile={v.get('compile')})")
+    if passed("dualsim", "PASS"):
+        return (f"differential-only: dualsim PASS "
+                f"(lec={v.get('lec')}, gate={v.get('gate')})")
+    return "measurement-only / see per_layer"
+
+
 def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
                out_dir: Path):
-    """Submission artifact: the winning candidate's files in repo-relative
-    layout (drop-in over the contest repo) + manifest.json. Accepted
-    candidates passed the full 5-layer verification (lint/compile/TB gate/
-    yosys LEC/dual-instance differential sim) at acceptance time."""
+    """Submission artifact: ONLY the files the winning candidate actually
+    changed vs pristine (a drop-in DELTA — does not overwrite unrelated
+    source) + manifest.json with the ACTUAL per-layer verification status."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    files = {}
+    changed = {}
     if best and best["cid"] != "baseline":
-        files = pool.files_of(best["cid"])
-        for rel, text in files.items():
+        cand_files = pool.files_of(best["cid"])
+        for rel, text in cand_files.items():
+            try:
+                pristine = pristine_source(ip, rel)
+            except Exception:
+                pristine = None
+            if pristine is None or text != pristine:   # real delta only
+                changed[rel] = text
+        for rel, text in changed.items():
             dst = out_dir / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(text)
+    per_layer = _verify_status(ip, best["cid"]) if best else {}
     manifest = {
         "ip": ip,
-        "result": ("optimized" if files else
+        "result": ("optimized" if changed else
                    "no-improvement: baseline is the submission"),
         "cid": best["cid"] if best else None,
-        "changed_files": sorted(files),
+        "changed_files": sorted(changed),          # true delta
         "baseline_ppa": base_ppa,
         "best_ppa": best["ppa"] if best else None,
         "adp_vs_baseline": summary["best"]["adp_vs_baseline"]
         if summary.get("best") else None,
-        "verification": ("full 5-layer at acceptance: lint, compile, TB "
-                         "gate, yosys LEC (+async2sync), dual-instance "
-                         "differential sim" if files else "baseline (n/a)"),
+        "verification_per_layer": per_layer,       # actual statuses
+        "assurance": _assurance(per_layer) if changed else "baseline (n/a)",
         "llm_calls": summary["calls"],
         "llm_tokens_approx": summary["tokens"],
         "rounds": summary["rounds"],
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=1))
-    print(f"[{ip}] emitted {'best candidate' if files else 'manifest only'} "
-          f"-> {out_dir} ({len(files)} file(s))")
+    print(f"[{ip}] emitted {len(changed)} changed file(s) -> {out_dir} "
+          f"| assurance: {manifest['assurance']}")
 
 
 def _plateaued(history: list[float], w: int, delta: float) -> bool:

@@ -49,20 +49,23 @@ NVDLA, OpenTitan aes/ascon/kmac/prim).
   gate-fail repair.
 - `ppa/pool.py` / frontier — design pool + Pareto frontier; Thompson-sampling parent selection
   (non-staged) or best-so-far pinning (staged).
-- `playbook.json` — 45 structure-tagged optimization rules (literature + measured + reflector-learned).
+- `playbook.json` — 95 entries (45 curated core rules from literature + measured experiments; the rest reflector-learned live during runs).
 - Harness: `nvidia_work/harness/{run_gate.sh,measure.sh,registry.tsv}` (mounted into Docker for the
   TB gate + synthesis). **Docker is required** for NVIDIA synthesis.
 
-**Verified results (all 5-layer verified, manifests in `nvidia_work/submission/`):**
+**Verified results (assurance level stated PER artifact in each manifest's `verification_per_layer`
++ `assurance` fields; artifacts in `nvidia_work/submission/`):**
 - **sha512: ADP 0.727** — WNS −97.3 → **+334.6 ps (timing MET)**, area 3984→3968; strategy
-  `arith-arch` on `sha512_core`; **LEC-PROVEN + dualsim PASS**; 8 calls / ~232k tokens. This BEAT our
-  best hand-derived rewrite (exp2 balanced-tree, 0.787). Artifact: `submission/sha512_best_0727/`.
-- **prim (`prim_crc32`): ADP 0.605** — slack −208.95 → −27.46 ps (+181.5), area −6%, power −67%;
-  `restructure-select`; 6 calls / 167k tokens. Flipped our one prior "no-improvement" IP.
-- **aes:** fenced power −4.3%, unfenced (S-box `--focus`) power −6%; both **ADP-neutral (~1.0)**.
-  Characterized: aes's timing headroom is in the masked S-box; cycle-exact dualsim bounds the S-box
-  axis to power wins (delay wins need latency-changing rewrites → transaction-mode sim, future work).
-- **async_fifo:** LEC-proven improving variant (ADP 0.961) — the IP where published LLM methods score 0.
+  `arith-arch` on `sha512_core`; **FULL 5-layer: lint+compile+TB gate PASS, LEC PROVEN, dualsim PASS**;
+  8 calls / ~232k tokens. BEAT our best hand-derived rewrite (0.787). Artifact: `submission/sha512/`.
+- **async_fifo: ADP 0.961** — `micro-opt`; **FULL 5-layer (LEC PROVEN + dualsim PASS)**; the IP where
+  published LLM methods score 0.
+- **prim (`prim_crc32`): ADP 0.605** — slack +181.5 ps, area −6%, power −67%; `restructure-select`;
+  6 calls. Assurance = **equivalence+differential** (LEC PROVEN + dualsim PASS; official functional
+  gate SKIPPED because the pristine flow has a pre-existing compile issue — NOT a candidate failure).
+- **aes:** fenced power −4.3%, unfenced power −6%; both **ADP-neutral (~1.0)**. Assurance =
+  **differential-only** (dualsim PASS; LEC INCONCLUSIVE at ~75k cells, gate skipped). Characterized:
+  aes timing headroom is in the masked S-box; cycle-exact dualsim bounds it to power wins.
 - kmac / ascon: offline candidates + baselines (not live-campaigned). NVDLA: baseline only
   (~950k cells; deferred — each synth ~15 min).
 
@@ -132,10 +135,11 @@ connectivity. Scored gated-lexicographic: eligibility (renders + DRC runs AND co
   provenance), grounded in exact `asap7.lydrc` semantics + EDA legalization literature.
 - `verify.py` — render + DRC + connectivity measured with the OFFICIAL evaluator's OWN functions
   (imported) → inner-loop numbers identical to the scoring machine.
-- `repairs.py` — deterministic geometric fix-passes (grid-snap, coordinated wide-metal-via), emitted
-  as pya appended to the ORIGINAL script (original untouched → connectivity preserved by construction).
-- `asu_agent.py` — runner contract + keep-best loop; baseline is the eligible floor (NEVER ships worse,
-  NEVER breaks connectivity).
+- `repairs.py` — deterministic geometric fix-passes (grid-snap; the coordinated wide-metal-via fixer
+  was tested but regressed and is NOT retained in the shipped agent — see the daily log), emitted as pya
+  appended to the ORIGINAL script. Connectivity is VERIFIED per candidate (not preserved "by construction").
+- `asu_agent.py` — runner contract (endpoint mode uses info.json model_endpoint) + keep-best loop; baseline
+  is the eligible floor (never ships a candidate that regresses final_violation_rate or fails the connectivity check).
 - `model_repair.py` — stub/vertex/endpoint models; best-of-N with code-compile validation + render-error
   repair.
 - `docker/Dockerfile` — **version-exact KLayout 0.30.1** (the evaluator hard-rejects other versions);
@@ -144,16 +148,19 @@ connectivity. Scored gated-lexicographic: eligibility (renders + DRC runs AND co
 **Status:** validated **eligible + connectivity-preserved on all 5 blocks**. Environment calibrated
 (11/14 DRC rules match the reference report exactly on the untouched script).
 
-**The rigorous negative result (the ASU intellectual contribution):** a perturbation characterization
-proved the seeding is systematic — every flagged violation is a correct **min-via sitting in a wide
-metal**, and that wide metal legitimately encloses a **larger via stacked above it**. This creates an
-**irreducible local contradiction**: one M3 must simultaneously flush-match the small via below
-(V2=72) and enclose the larger via above (V3=96), i.e. be both 72 and ≥106. **This class is ~74% of
-every one of the 5 blocks.** Every local strategy tried (grow-via, shrink-metal, coordinated via+metal
-patch, neck-down, grid-snap, model best-of-N) REGRESSED and was correctly discarded by keep-best.
-**Conclusion (proven, not asserted): local geometric repair cannot beat the eligible baseline on any
-block; the only winning path is global neighbor relocation = full detailed-routing legalization
-(multi-day incremental-conflict SA engine).** Our keep-best loop already IS the SA acceptance test and
+**The negative result (the ASU intellectual contribution):** a perturbation characterization found the
+seeding is systematic — every flagged violation is a correct **min-via sitting in a wide metal**, and
+that wide metal legitimately encloses a **larger via stacked above it**. This creates a **local
+tension**: to satisfy the width-match rule one M3 would have to flush-match the small via below (V2=72)
+while still enclosing the larger via above (V3=96), i.e. be both 72 and ≥106 — which no single-metal
+edit achieves. **This class is ~74% of every one of the 5 blocks.** Every local strategy we evaluated
+(grow-via, shrink-metal, coordinated via+metal patch, neck-down, grid-snap, model best-of-N) INCREASED
+the exact evaluator's DRC count and was correctly discarded by keep-best. (These are the transforms we
+tried — not an exhaustive enumeration of all possible local moves.)
+**Conclusion (strong empirical evidence, not a formal proof): every retained local transform we evaluated
+(grow-via, shrink-metal, coordinated via+metal patch, neck-down, grid-snap, model best-of-N) INCREASED the
+exact evaluator's DRC count on the public blocks. The dominant class is coupled through the via stack; a
+neighbour-aware multi-shape (global) legalizer is the most promising next step.** Our keep-best loop already IS the SA acceptance test and
 verify IS the exact cost function; the missing piece is a global multi-edit move-generator.
 
 **Full experimental record:** `asu_work/ASU_DAILY_RUN_LOG.md` (and `ASU_DAILY_RUN_LOG.md` at root).
@@ -163,9 +170,9 @@ verify IS the exact cost function; the missing piece is a global multi-edit move
 ## Slide decks (Marp) — in `slides/` and mirrored to `docs/slides/`
 
 Six decks, all built to PDF, same 5-act structure + one-picture SVG flow diagram:
-- `nvidia_deck` (17 slides) + `nvidia_learnings` (companion)
-- `nxp_deck` (15) + `nxp_learnings`
-- `asu_deck` (17) + `asu_learnings`
+- `nvidia_deck` (16 slides) + `nvidia_learnings` (companion)
+- `nxp_deck` (14) + `nxp_learnings`
+- `asu_deck` (16) + `asu_learnings`
 Build: `npx @marp-team/marp-cli@latest <deck>.md -o <deck>.pdf --html --allow-local-files`.
 
 ## How to verify (fresh-clone reproduction)
