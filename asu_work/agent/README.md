@@ -15,11 +15,14 @@ info.json ──▶ DIAGNOSE ──▶ REPAIR (candidates) ──▶ VERIFY ─�
 - `drc_rules.json` — structured DRC-repair rule library (per-rule-class coordinated transform +
   coupling hazards + provenance). Grounded in the exact `asap7.lydrc` semantics + EDA legalization
   literature (MDPI 2025 SA repair; EDN cut-slide/merge; USPTO enclosure; DRC-Coder ISPD'25).
-- `repairs.py` — deterministic geometric fix-passes (grid-snap; the coordinated wide-metal-via
-  fixer was tested but regressed and is NOT retained — see the daily log), emitted as `pya` code
-  appended to the ORIGINAL script (source declarations unedited; shapes mutated before `write`).
-  Connectivity is not preserved "by construction" — it is VERIFIED per candidate and the eligible
-  baseline is retained on any regression.
+- `repairs.py` — deterministic geometric fix-passes, emitted as `pya` code appended to the
+  ORIGINAL script (source declarations unedited; shapes mutated before `write`). PRIMARY is
+  `via_bar_pass`: replaces each flagged multi-cut via array with one continuous via BAR (min via
+  thickness → no metal widening → no enclosure/spacing cascade) — **FVR 0.68-0.76 on all 5 public
+  blocks**. `grid_snap_pass` is secondary. Earlier *metal*-reshaping fixers regressed and were
+  superseded by reshaping the VIA. Connectivity is not preserved "by construction" — it is VERIFIED
+  per candidate (render+DRC+official connectivity + a rendered-geometry credibility proxy) and the
+  eligible baseline is retained on any regression.
 - `verify.py` — render + DRC + connectivity measured with the OFFICIAL evaluator's OWN functions,
   so inner-loop numbers are identical to the scoring machine.
 - `asu_agent.py` — runner contract (info.json → output + usage; endpoint mode uses

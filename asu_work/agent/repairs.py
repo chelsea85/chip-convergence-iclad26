@@ -9,9 +9,15 @@ candidate and (b) keep-best retains the eligible baseline if a candidate
 regresses or breaks connectivity. Verification — not the append mechanism — is
 the guarantee.
 
-Currently implemented: `grid_snap_pass` (+ modes). The coordinated wide-metal-via
-fixer was evaluated as an experiment (see ASU_DAILY_RUN_LOG) but is NOT retained
-here; it regressed (neighbour spacing) and is not part of the shipped agent.
+Currently implemented:
+  * `via_bar_pass` — PRIMARY (2026-07-15). Replaces each flagged multi-cut via
+    array with one continuous via BAR (min via thickness → no metal widening →
+    no enclosure/spacing cascade). FVR 0.68-0.76 on all 5 public blocks; this is
+    the shipped headline repair.
+  * `grid_snap_pass` (+ modes) — secondary off-grid snap.
+Earlier *metal*-reshaping fixers (grow-via-to-metal, shrink-metal-to-via, M3
+neck) were evaluated and regressed (neighbour enclosure/spacing) — superseded by
+via_bar_pass, which reshapes the VIA instead. See ASU_DAILY_RUN_LOG.
 """
 from __future__ import annotations
 

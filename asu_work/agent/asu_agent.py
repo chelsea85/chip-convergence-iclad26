@@ -170,16 +170,13 @@ def run(P: Paths, model=None, max_calls: int = 6) -> dict:
                     fixed = ""
                 if fixed and _compiles(fixed):
                     snippet = fixed
-                    r = verify.measure(orig_nw + "\n" + snippet, ctx,
-                                       tag=f"model-{calls}r")
-            note = f"model fix pass (call {calls})"
-            status = (f"total={r.total} fvr={r.final_violation_rate} "
-                      f"eligible={r.eligible}")
-            if r.better_than(best):
-                best, best_script = r, orig_nw + "\n" + snippet
-                _log(f"KEEP model-{calls} ({note}): {status}  <-- new best")
-            else:
-                _log(f"drop model-{calls} ({note}): {status} err={r.error[:60]}")
+            # SINGLE acceptance path: model candidates go through the SAME
+            # rendered-connectivity credibility gate as deterministic ones
+            # (consider() re-measures with want_conn_sig=True and only mutates
+            # best/best_script if eligible+better AND credible). This closes the
+            # gap where a low-DRC geometry-deletion could bypass the gate.
+            consider(orig_nw + "\n" + snippet, tag=f"model-{calls}",
+                     note=f"model fix pass (call {calls})")
             # stop only once we STRICTLY beat the baseline AND are at/under the
             # reference denominator (F-12: don't stop on a discarded proposal
             # when the calibrated baseline is already exactly 1.0)

@@ -53,12 +53,24 @@ Each `submission/<ip>/manifest.json` records the true `verification_per_layer` +
 
 ## Quickstart — ASU
 
+**Official submission package** (what the organizers run): `asu_work/official_submission/`
+— a self-contained, stdlib-only `agent.py` that needs **no KLayout at agent runtime**
+(the official image is `python:3.10-slim`; the evaluator renders/scores afterward on the
+host). It applies the deterministic via-bar repair; its output is **byte-identical** to the
+independently re-scored `asu_work/submission/Block*_repaired.py` (FVR 0.68–0.76, eligible,
+connectivity-preserved).
+
 ```bash
-docker build --platform linux/amd64 -t asu-klayout:0.30.1 asu_work/docker   # KLayout 0.30.1
-# runner contract (inside the image; klayout on PATH):
+# Official runner (needs Docker + EXPRESS_MODE_KEY for the model-wrapper, though the
+# deterministic agent makes no model call):
+python3 official_eval/run_official_eval.py --run-id r1 \
+    --submission-dir <this_repo>/asu_work/official_submission --agent-entrypoint agent.py
+#   -> emits BlockN_repaired.py; the host evaluator scores FVR ~0.68-0.76
+
+# Dev agent (keep-best loop; needs KLayout 0.30.1 image — for local measurement/ablation):
+docker build --platform linux/amd64 -t asu-klayout:0.30.1 asu_work/docker
 docker run --rm --platform linux/amd64 -v <ASU_repo>:/asu -v $PWD/asu_work/agent:/agent \
     asu-klayout:0.30.1 python3 /agent/asu_agent.py /asu/task/.../BlockN_info.json --model none
-#   -> via-bar repair; emits BlockN_repaired.py (FVR ~0.68-0.76) + manifest to submission/BlockN/
 python3 asu_work/agent/drc_digest.py <BlockN.drc.json>   # zero-token DRC diagnosis
 ```
 
