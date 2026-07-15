@@ -95,40 +95,40 @@ than a day of coding.
 
 ---
 
-# 5 · The coupling is the problem (measured, not asserted)
+# 5 · We reshaped the wrong thing first (and measured our way out)
 
-Every single-layer fix worked on its target rule and broke a neighbour — we have the table:
+Every fix that touched the **metal** broke a neighbour — measured, not asserted:
 
 | fix | fixes | breaks | net |
 |---|---|---|---|
-| grid-snap (whole layer) | grid | via enclosure | 315→510 |
 | grow via → metal width | AUX.2 | lower-metal enclosure | 315→387 |
 | shrink metal → via width | AUX.2 | upper-via enclosure | 315→339 |
-| coordinated via + metal patch | AUX.2 + **enclosure** | neighbour spacing | 315→379 |
+| surgical M3 neck | AUX.2 (x-clear) | `M3.S.4` (neck shoulders) | 315→339 |
 
-The coordinated fixer (derived from the exact rule) was the first to **hold enclosure** — proving
-the recipe was right — but a wide via forces a wide metal that crowds neighbours. The violation is
-conserved; it just moves through the via stack.
+We almost concluded "block repair is global legalization." **The escape was to stop reshaping the
+metal and reshape the *via*:** the seeding had split each landing into a multi-cut min-via array;
+replacing it with one continuous **via bar** (min thickness → no metal widening) fixed the class
+cleanly — **315 → 178, FVR 0.73**, all 5 blocks 0.68–0.76.
 
-**Lesson:** in coupled-constraint repair, "fixed the target rule" is not progress unless the net
-count drops. Measure the net, always.
+**Lesson:** a run of failing transforms is not proof of impossibility. It usually means you're
+moving the wrong object. Exhaust the *object*, not just the *parameters*.
 
 ---
 
-# 6 · Safety-by-construction beats cleverness
+# 6 · The review loop caught our premature give-up
 
-We never needed a "don't break connectivity" heuristic. Two structural choices made regressions
-*impossible to ship*:
+After the metal-neck was falsified, our own recommendation was **"consolidate and ship the honest
+negative result."** An independent review pushed back — the via-bar hypothesis was untested — and it
+was **right**. One experiment turned a negative result into a win on all five blocks.
 
-1. **Repairs are appended passes on the original script** — original shapes untouched, so the
-   statically-checked connectivity is preserved by construction.
-2. **Keep-best over the eligible baseline** — every candidate is verified with the scorer's own
-   code; anything that regresses or breaks eligibility is discarded.
+Two design choices made it safe to keep swinging:
+- **Verify == the scorer** (we import the official evaluator's functions) — no metric drift.
+- **Keep-best + a rendered-connectivity credibility gate** — a candidate that regresses OR only
+  *looks* connected (the static checker is source-based) is discarded. A model that over-corrected
+  315→13,823 never shipped.
 
-Result: across all 5 blocks and every experimental pass (including a model that over-corrected
-315→13,823), the agent always emitted an eligible, connectivity-preserved script.
-
-**Lesson (shared with our NVIDIA/NXP work):** make the bad outcome unrepresentable, then explore
-aggressively. The verification spine is what lets you take risks safely.
+**Lesson:** make the bad outcome unshippable, then let others attack your conclusions. The
+verification spine is what lets a review say "try again" without risk — and what turns a good
+review into a real result.
 
 **Harikrishnan KC · Chip Convergence · greatharikrishnan@gmail.com**
