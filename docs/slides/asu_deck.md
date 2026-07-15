@@ -258,19 +258,24 @@ crowds neighbor tracks.
 
 ---
 
-# 11 · Why that's the *right* finding (not a dead end)
+# 11 · We pinned the exact mechanism — and it's uniform
 
-A complete repair needs the **whole via stack resized to one width** that simultaneously satisfies
-width **+** enclosure **+** containment **+** neighbor spacing. That is precisely **global
-conflict-graph / simulated-annealing legalization** (MDPI 2025): quantify conflict, accept moves
-that reduce *net* conflict.
+A **perturbation characterization** (flagged vs correct via stacks, 0 tokens) found the seeding is
+systematic: every correct stack is min-via-in-min-metal; every flagged one is a **correct min-via
+in a wide metal** — and that wide metal legitimately encloses a **larger via stacked above it**.
 
-**Our architecture already contains the hard half:** the keep-best loop *is* the SA acceptance
-test, and verify *is* the exact cost function. What remains is a **global multi-edit
-move-generator** — a well-scoped extension, not a rebuild.
+**The irreducible contradiction:** at a flagged site, one M3 must *flush-match* the small via below
+(V2 = 72) **and** *enclose* the larger via above (V3 = 96) — i.e. be simultaneously 72 **and** ≥106.
+No single-metal edit can satisfy both; only relocating neighbors (global) can.
 
-This is the same pattern as our other tracks: the verification spine is done; the open work is
-candidate generation.
+| Block | total | **via-width (over-constrained)** |
+|---|---|---|
+| Block1 / 2 / 3 / 6 / 7 | 244 / 68 / 89 / 247 / 765 | **74% / 76% / 74% / 74% / 71%** |
+
+**~74% of every block** is this proven-irreducible class → local repair *cannot* beat the eligible
+baseline; the win requires **global neighbor relocation** (full legalization, MDPI 2025). Our
+keep-best loop already *is* the SA acceptance test and verify *is* the exact cost function — the
+open work is a global multi-edit move-generator, a well-scoped (multi-day) extension.
 
 ---
 

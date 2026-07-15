@@ -140,3 +140,50 @@ DRC diagnosis, exact-rule-grounded structured repair-rules library, verify == of
 keep-best guarantee (never worse than eligible baseline, connectivity always preserved), and a
 rigorous literature-grounded characterization of why block-repair is global legalization. Multimodal
 (DRC-Coder-style) + conflict-graph SA are the identified future-work paths.
+
+## 2026-07-14 — Perturbation characterization: exact seeded mechanism identified
+
+Compared flagged vs correct via stacks (deterministic, 0 tokens). DECISIVE, systematic pattern:
+- CORRECT stacks: min-via in min-metal, matched. V0/M1 (72,72)×749, V2/M3 (72,72)×198,
+  V4/M5 (96,96)×21.
+- FLAGGED stacks: a CORRECT min-via sitting in a WIDE metal — uniform per layer:
+  V2/M3 via72-in-M3=136 (×72), V4/M5 via96-in-M5=480 (×48), V5/M6 via128-in-M6=640 (×24).
+- Full stack at flagged V2/M3: M2(below)=12528×72 thin rail · V2=72×72 · M3=360×136 wide ·
+  V3(above)=72×96. The wide M3 is LEGITIMATELY wide — it correctly encloses the upper via V3(96).
+
+**So it is NOT a simple revert.** The rule-correct fix (via spans M3 -> grow via to 136y) then needs
+the via INSIDE M2 (V2.AUX.1), but M2 is a 72-tall rail whose y-neighbours are one track away ->
+widening M2 to contain a 136-tall via collides with neighbour rails. via-spans-M3 + via-inside-M2 +
+M2-spacing cannot all hold without RELOCATING neighbour rails = global placement change. Confirms
+block-repair (dominant via-width class) needs global legalization; local resize is over-constrained.
+
+NEW idea unlocked by the characterization (testing next): instead of growing the via, NECK the wide
+metal down to via-width at the lower-via landing (keeping it wide at the upper-via landing) — the via
+stays min (M2 containment/enclosure untouched), and V3 unaffected if at a different position. Static
+connectivity check (from original script text) is preserved regardless.
+
+## 2026-07-14 — Cross-block evidence: the over-constraint is uniform (decisive)
+
+Per-block violation-class breakdown (all 5 public blocks, from the DRC reports):
+
+| Block | total | via-width-match | grid | enclosure | spacing |
+|---|---|---|---|---|---|
+| Block1 | 244 | 181 (74%) | 29 | 11 | 21 |
+| Block2 |  68 |  52 (76%) | 10 |  2 |  3 |
+| Block3 |  89 |  66 (74%) | 10 |  6 |  6 |
+| Block6 | 247 | 183 (74%) | 30 | 10 | 20 |
+| Block7 | 765 | 544 (71%) | 72 | 26 | 114 |
+
+**Every block is ~74% the via-width-match class** proven irreducibly over-constrained (a min-via V2
+and a larger via V3 stacked on ONE M3 that cannot be both flush-equal to V2=72 and enclose V3=96,
+i.e. simultaneously 72 and >=106). The neck-down test confirmed V2/V3 share the landing (necking M3
+broke V3.M3.EN.1 +48 / V3.AUX.1 +48). The remaining ~26% (grid/enclosure/spacing) sit on the same
+stacks and regressed in every experiment.
+
+**Final conclusion (proven, not asserted):** local geometric repair CANNOT beat the eligible baseline
+on any of the 5 blocks. The only winning path is global neighbour relocation (full detailed-routing
+legalization) — a multi-day incremental-conflict SA engine, out of scope for the remaining window.
+The ASU deliverable is therefore: a complete, runner-contract, verification-first agent (version-exact
+env, verify == scorer, keep-best guarantee, exact-rule-grounded rules library) + a rigorous,
+reproducible diagnosis of the exact seeded-perturbation mechanism and its irreducibility. Redirecting
+remaining time to the proven, scored NVIDIA/NXP tracks + submission.
