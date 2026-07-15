@@ -123,48 +123,128 @@ already eligible → **never regress, never break connectivity.**
 <text x="842" y="208" text-anchor="middle" class="tiny">5/5 blocks eligible, conn preserved</text>
 </svg>
 
----
-
-# 3 · The two things we got exactly right
-
-**1. Version-exact scoring environment.** The evaluator hard-rejects any KLayout but **0.30.1**.
-macOS ships 0.30.9 → we built an **amd64 Docker image with the pinned 0.30.1** (runs under
-emulation on Apple Silicon). Our DRC == the organizers' DRC: **11/14 rules match the reference
-report exactly** on the untouched script.
-
-**2. Verify == the scorer.** Our inner loop imports the **official evaluator's own** render / DRC /
-count / connectivity functions — so every candidate is measured *identically* to how it will be
-scored. No local/remote metric drift.
-
-On top of these: **keep-best** with the untouched baseline as the eligible floor → the agent can
-never ship worse than baseline and never break connectivity. **Validated on all 5 blocks.**
+<span style="font-size:16px;color:#555">Same verification-first spine as our NVIDIA/NXP agents: diagnose with tools (0 tokens) → propose → verify == scorer → keep-best → emit. Validated eligible on all 5 blocks.</span>
 
 ---
 
-# 4 · The repair-rule library (exact-rule + literature grounded)
+# 3 · Principles
 
-Like our NVIDIA 45-rule playbook — but for DRC. Each rule class → a coordinated transform + the
-coupling hazards, from three sources:
+1. **Tools before tokens** — the DRC report is a ready-made, machine-readable diagnosis
+   (per-rule counts + exact geometry); spend model tokens on the genuinely ambiguous cases, not
+   on re-deriving what the tools already state.
+2. **Measure the scorer, not a proxy** — our inner loop imports the *official evaluator's own*
+   render/DRC/connectivity functions, so every candidate is measured exactly as it will be scored.
+3. **Never regress** — keep-best with the untouched baseline as the eligible floor; a fix that
+   worsens DRC or breaks connectivity is discarded by tooling, not by hope.
+4. **Ground rules in the deck, not descriptions** — the authoritative fix semantics come from
+   `asap7.lydrc` itself, cross-checked against EDA legalization literature.
+5. **Honest characterization** — "eligible baseline + why sub-baseline needs global legalization"
+   is a first-class, reproducible result.
 
-- **Exact deck semantics** (`asap7.lydrc`, the ground truth): e.g. `V2.M3.AUX.2` is satisfied iff
-  the via is *inside* M3 **and has ≥2 edges coincident with M3's edges** — "same width" = the via
-  spans the metal's full width; coupled to `V2.M2.EN.1` (M2 encloses via 5 nm) + `V2.AUX.1`
-  (via inside M2 & M3).
-- **EDA legalization literature**: MDPI 2025 (simulated-annealing standard-cell DRC repair),
-  EDN (cut-slide/merge without creating new errors), USPTO 7,380,227 (asymmetric enclosure),
-  DRC-Coder ISPD'25 (vision+LLM rule interpretation, F1=1.0).
-- **Our own measurements** (next slide).
+---
+
+# 4 · Version-exact environment (the first thing others will trip on)
+
+The evaluator **hard-rejects any KLayout but 0.30.1** (string-equality on `klayout -v`). macOS
+Homebrew ships 0.30.9 (and hits Gatekeeper quarantine) — the wrong path.
+
+**Our fix — Dockerized, version-exact:** an amd64 image with the pinned
+`klayout_0.30.1-1_amd64.deb` + deps. Host is Apple Silicon (arm64) → runs under Docker emulation:
+slower, but **byte-for-byte the organizers' scoring environment.**
+
+**Calibration proof:** on the untouched Block1, our container DRC matches the reference report on
+**11 of 14 rules exactly** (V2.M3.AUX.2=72, V4.M5.AUX.2=48, V0.M1.AUX.3=37, all S-rules…). Our DRC
+*is* the scoring DRC.
+
+---
+
+# 5 · Zero-token DRC diagnosis
+
+`drc_digest.py` turns the DRC report into structured, actionable findings — **no model tokens:**
+
+- **per-rule findings** ranked by count, each with the rule *description* and exact violation
+  geometry (bbox + vertices, DBU)
+- **fix-kind classification** — grid / spacing / enclosure / width-match / area — parsed from the
+  rule text
+- **rule-library match** — each finding linked to its repair transform + coupling hazard
+
+Block1 example: 244 reference violations, 14 rules; the dominant class is **via-width-match
+(AUX.2/AUX.3) = 181 violations (74%)**, then grid, enclosure, spacing. The diagnosis *is* the
+repair plan — before a single token is spent.
+
+---
+
+# 6 · The repair-rule library (exact-deck + literature grounded)
+
+Like our NVIDIA 45-rule playbook, but for DRC. Each rule class → a coordinated transform + its
+coupling hazards, from three provenances:
+
+- **Exact deck semantics** (`asap7.lydrc`): `V2.M3.AUX.2` is satisfied iff the via is *inside* M3
+  **and has ≥2 edges coincident with M3's edges** — "same width" = the via spans the metal's full
+  width; coupled to `V2.M2.EN.1` (M2 encloses via 5 nm) + `V2.AUX.1` (via inside M2 & M3).
+- **EDA legalization literature**: MDPI 2025 (SA standard-cell DRC repair), EDN
+  (cut-slide/merge without new errors), USPTO 7,380,227 (asymmetric enclosure), **DRC-Coder
+  ISPD'25** (vision+LLM rule interpretation, F1=1.0).
+- **Our own measurements** (slide 10).
 
 The library drives the deterministic fixers **and** is injected (structure-matched) into the model
 prompt — the model gets the transform *and* the coupling warning for the rules actually present.
 
 ---
 
-# 5 · The finding: block repair is global legalization
+# 7 · Verification == the scorer, and keep-best
 
-We derived the coordinated **wide-metal-via** fixer straight from the exact rule (via flush to the
-upper metal + patch the lower metal for enclosure/containment) and measured every strategy on
-Block1 (baseline 315 violations):
+**Verify** (`verify.py`): render → GDS → ASAP7 DRC → connectivity, all measured with the official
+evaluator's **own** functions. Reproduces the baseline exactly (total=315, connectivity 824
+sources). No metric drift between our loop and the scoring machine.
+
+**Keep-best** (gated-lexicographic, matching the contest): eligible → min `final_violation_rate` →
+max `repair_rate`, with the untouched baseline as the guaranteed-eligible floor.
+
+**The guarantee this buys:** on every block, the agent **cannot ship worse than the eligible
+baseline** and **cannot break connectivity** — a candidate that does either is discarded. The same
+"always ship eligible" discipline as our NXP agent.
+
+---
+
+# 8 · The repair engine: deterministic + model, verified
+
+**Candidate = the ORIGINAL script + an appended `pya` fix-pass** that runs right before `write`.
+Because the original shapes are untouched, connectivity (checked statically from the script) is
+preserved by construction; only the appended geometry edits change what DRC sees.
+
+- **Deterministic fixers** (0 tokens) — coordinated wide-metal-via, grid-snap; each derived from
+  the exact rule geometry and applied to the flagged locations.
+- **Model fixers** — Gemini writes a `pya` fix-pass with the rules + coupling + (next) the
+  screenshot; **best-of-N**, code-compile validated, with a render-error repair loop, and *off the
+  token budget when a candidate fails*.
+
+Every candidate goes through verify + keep-best — so a bad pass (deterministic or model) is simply
+never kept.
+
+---
+
+# 9 · The breakthrough: decode the rule, don't guess the fix
+
+We stopped reverse-engineering fixes from report *descriptions* and read the **actual KLayout rule
+deck** — the ground truth:
+
+```
+V2.M3.AUX.2  satisfied  ⟺  via INSIDE M3  AND  ≥2 via edges COINCIDENT with M3 edges
+V2.M2.EN.1   M2 must enclose the via by 5 nm on two opposite sides
+V2.AUX.1     the via must be INSIDE both M2 and M3
+```
+
+So the width-match fix is *derived*, not guessed: **make the via's ⟂-to-metal-length edges flush
+with the metal, and patch the lower metal to keep enclosure + containment.** This is the "wide
+metal needs a wide via" idiom from the PDK — now exact.
+
+---
+
+# 10 · The finding: block repair is global legalization
+
+We built the coordinated fixer from that exact geometry and measured every strategy on Block1
+(baseline 315 violations):
 
 | Fix | target rule | but breaks | net |
 |---|---|---|---|
@@ -172,45 +252,74 @@ Block1 (baseline 315 violations):
 | shrink metal → via width | AUX.2 ✓ | upper-via enclosure | 315→339 |
 | **coordinated via + metal patch** | AUX.2 ✓, **enclosure preserved ✓** | neighbor **M2 spacing** | 315→379 |
 
-Every fix **cascades to the next layer of the via stack** (M2-V2-M3-V3-M4…). A complete repair
-needs the *whole stack* resized to one width satisfying width **+** enclosure **+** containment
-**+** neighbor spacing — i.e. **global conflict-graph / simulated-annealing legalization**
-(MDPI 2025). Our keep-best loop already **is** the SA acceptance test; the missing piece is a
-global multi-edit move-generator.
+Every fix **cascades to the next layer of the via stack** (M2-V2-M3-V3-M4…). The coordinated fixer
+is the first to **solve the enclosure coupling** — but a wide via forces a wide lower metal, which
+crowds neighbor tracks.
 
 ---
 
-# 6 · Results & honest status
+# 11 · Why that's the *right* finding (not a dead end)
+
+A complete repair needs the **whole via stack resized to one width** that simultaneously satisfies
+width **+** enclosure **+** containment **+** neighbor spacing. That is precisely **global
+conflict-graph / simulated-annealing legalization** (MDPI 2025): quantify conflict, accept moves
+that reduce *net* conflict.
+
+**Our architecture already contains the hard half:** the keep-best loop *is* the SA acceptance
+test, and verify *is* the exact cost function. What remains is a **global multi-edit
+move-generator** — a well-scoped extension, not a rebuild.
+
+This is the same pattern as our other tracks: the verification spine is done; the open work is
+candidate generation.
+
+---
+
+# 12 · Results & honest status
 
 - **Environment**: version-exact KLayout 0.30.1, Dockerized; DRC calibrated (11/14 rules exact).
-- **Agent**: runner-contract compliant; **all 5 blocks eligible, connectivity preserved**
-  (final-violation-rate ≈ 1.25–1.32 = the eligible baseline).
-- **Repair-rule library**: exact-deck + literature grounded; coordinated wide-metal-via fixer
-  **solves the enclosure coupling** — the first strategy to do so — but hits neighbor spacing.
-- **Characterization**: rigorous, reproducible proof that block-repair is a global legalization
-  problem, with the two concrete solution paths scoped.
+- **Agent**: runner-contract compliant; **all 5 blocks (Block1/2/3/6/7) eligible, connectivity
+  preserved** (final-violation-rate ≈ 1.25–1.32 = the eligible baseline).
+- **Repair-rule library**: exact-deck + literature grounded; drives deterministic fixers + model
+  prompt.
+- **Coordinated wide-metal-via fixer**: **solves the enclosure coupling** — the first strategy to
+  do so.
+- **Characterization**: rigorous, reproducible proof that block-repair is global legalization,
+  with two concrete solution paths scoped.
 
-**We never ship a regression and never break connectivity** — the safety guarantee holds on every
-block. The verification-first spine (measure the scorer, keep-best) is the same discipline that
-delivered our NVIDIA (ADP 0.727 / 0.605) and NXP (2-call perfect solve) results.
+**Never a regression, never a broken net — on every block.** Same discipline that delivered NVIDIA
+(ADP 0.727 / 0.605) and NXP (2-call perfect solve).
 
 ---
 
-# 7 · Next: from characterization to sub-baseline
+# 13 · Next: from characterization to sub-baseline
 
 - **Global move-generator (the missing piece)** — SA over *multi-edit* stack moves: resize the
-  whole via stack (metal+via+metal) to a consistent width, accept by net-conflict-delta (our
-  keep-best loop is already the acceptance test). This is the path to `final_violation_rate < 1`.
+  whole via stack to a consistent width, accept by net-conflict-delta (keep-best already is the
+  acceptance test). The path to `final_violation_rate < 1`.
 - **Multimodal repair (DRC-Coder ISPD'25 style)** — feed Gemini the **screenshot** + exact rules +
-  violation geometry so it localizes and proposes *stack-coordinated* edits (the model over-corrected
-  globally without visual grounding).
+  violation geometry so it localizes and proposes *stack-coordinated* edits (unguided, the model
+  over-corrected globally).
 - **Per-rule independent fixers** — min-area / isolated edges (no via nearby) as free deterministic
   wins.
 - Agents remain updatable through **Jul 26**.
 
 ---
 
-# 8 · Summary — every claim, one command
+# 14 · How this mirrors our NVIDIA & NXP agents
+
+| | NVIDIA | NXP | **ASU** |
+|---|---|---|---|
+| Tools before tokens | zero-token PPA diagnosis | library introspection | **zero-token DRC diagnosis** |
+| Knowledge asset | 45-rule playbook | 20 IP reference models | **DRC repair-rule library** |
+| Verify | 5-layer + LEC/dualsim | 30-check TB + KAT + STG | **render+DRC+connectivity == scorer** |
+| Safety | accept only measured improvement | always ship eligible | **keep-best, never regress** |
+| Env rigor | pristine baselines | runner contract | **version-exact KLayout 0.30.1** |
+
+One architecture, three domains — the discipline transfers.
+
+---
+
+# 15 · Summary — every claim, one command
 
 | Claim | Reproduce with |
 |---|---|
@@ -221,6 +330,6 @@ delivered our NVIDIA (ADP 0.727 / 0.605) and NXP (2-call perfect solve) results.
 | 5/5 blocks eligible | Block1/2/3/6/7, connectivity preserved |
 
 **Repo:** github.com/chelsea85/chip-convergence-iclad26 (`asu_work/`)
-Companion: **Engineering Learnings** — what the research + experiments taught us.
+Companion deck: **Engineering Learnings** (attached) — what the research + experiments taught us.
 
 **Harikrishnan KC · Chip Convergence · greatharikrishnan@gmail.com**
