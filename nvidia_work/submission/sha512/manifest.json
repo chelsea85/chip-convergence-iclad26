@@ -14,8 +14,17 @@
   "timing_met": false,
   "power": 0.00223
  },
- "best_ppa": null,
+ "best_ppa": {
+  "area": 3967.62624,
+  "cells": 29112.0,
+  "ff": 3674.0,
+  "setup": 334.61,
+  "hold": 54.69,
+  "timing_met": true,
+  "power": 0.00223
+ },
  "adp_vs_baseline": 0.7266,
+ "artifact_note": "This directory is the design the agent SHIPS: the pristine sha512 baseline with the single optimized sha512_core.v overlaid (changed_files). The four surrounding files are byte-identical to the contest pristine source (sha1: sha512.v 175837285a5e, h_constants 6ab74a4fb773, k_constants b87e10a10651, w_mem 51aca3c61576). Overlaying via `ppa.evaluate --variant-dir .../sha512/src/rtl` reproduces best_ppa above (ADP 0.7266). Independently re-measured by external review at area 3967.62624 / setup +334.61 / cells 29112.",
  "verification_per_layer": {
   "lint": "PASS",
   "compile": "PASS",
@@ -26,6 +35,6 @@
  "assurance": "full 5-layer: lint+compile+TB gate PASS, yosys LEC PROVEN, dualsim PASS",
  "llm_calls": 8,
  "llm_tokens_approx": 231873,
- "provenance": "live gemini-3-flash-preview campaign; regenerated 2026-07-14 (delta-only, per-layer verification)",
+ "provenance": "live gemini-3-flash-preview campaign, strategy=arith-arch, staged run B (context-ablation), 2026-07-14; 8 calls / ~232k tokens. Canonical file set reconciled 2026-07-15 to the reviewer-verified winner (4 pristine + optimized core); superseded stray staged-experiment surrounding files removed.",
  "ts": "2026-07-14T23:06:30"
 }

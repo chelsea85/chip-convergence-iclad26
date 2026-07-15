@@ -82,7 +82,7 @@ module sha512_w_mem(
   // Wires.
   //----------------------------------------------------------------
   reg [63 : 0] w_tmp;
-  wire [63 : 0] w_new;
+  reg [63 : 0] w_new;
 
 
   //----------------------------------------------------------------
@@ -156,28 +156,16 @@ module sha512_w_mem(
   //
   // Logic that calculates the next value to be inserted into
   // the sliding window of the memory.
-  // Guided by [p2-balanced-tree] and [rtlscout-cutpoints].
   //----------------------------------------------------------------
-  wire [63 : 0] w_0  = w_mem[0];
-  wire [63 : 0] w_1  = w_mem[1];
-  wire [63 : 0] w_9  = w_mem[9];
-  wire [63 : 0] w_14 = w_mem[14];
-
-  wire [63 : 0] d0 = {w_1[0],     w_1[63 : 1]} ^ // ROTR1
-                     {w_1[7 : 0], w_1[63 : 8]} ^ // ROTR8
-                     {7'b0000000, w_1[63 : 7]};  // SHR7
-
-  wire [63 : 0] d1 = {w_14[18 : 0], w_14[63 : 19]} ^ // ROTR19
-                     {w_14[60 : 0], w_14[63 : 61]} ^ // ROTR61
-                     {6'b000000,    w_14[63 : 6]};   // SHR6
-
-  // Balanced 4-operand addition tree
-  wire [63 : 0] w_new_s0 = w_0 + d0;
-  wire [63 : 0] w_new_s1 = w_9 + d1;
-  assign w_new = w_new_s0 + w_new_s1;
-
   always @*
     begin : w_mem_update_logic
+      reg [63 : 0] w_0;
+      reg [63 : 0] w_1;
+      reg [63 : 0] w_9;
+      reg [63 : 0] w_14;
+      reg [63 : 0] d0;
+      reg [63 : 0] d1;
+
       w_mem00_new = 64'h0;
       w_mem01_new = 64'h0;
       w_mem02_new = 64'h0;
@@ -195,6 +183,21 @@ module sha512_w_mem(
       w_mem14_new = 64'h0;
       w_mem15_new = 64'h0;
       w_mem_we    = 0;
+
+      w_0  = w_mem[0];
+      w_1  = w_mem[1];
+      w_9  = w_mem[9];
+      w_14 = w_mem[14];
+
+      d0 = {w_1[0],     w_1[63 : 1]} ^ // ROTR1
+           {w_1[7 : 0], w_1[63 : 8]} ^ // ROTR8
+           {7'b0000000, w_1[63 : 7]};  // SHR7
+
+      d1 = {w_14[18 : 0], w_14[63 : 19]} ^ // ROTR19
+           {w_14[60 : 0], w_14[63 : 61]} ^ // ROTR61
+           {6'b000000,    w_14[63 : 6]};   // SHR6
+
+      w_new = w_0 + d0 + w_9 + d1;
 
       if (init)
         begin
@@ -264,3 +267,7 @@ module sha512_w_mem(
     end // w_ctr
 
 endmodule // sha512_w_mem
+
+//======================================================================
+// sha512_w_mem.v
+//======================================================================

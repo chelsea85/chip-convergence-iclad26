@@ -14,7 +14,10 @@ cp "$SRC/nvidia_work/agent/ledger"/*.jsonl "$DST/nvidia_work/agent/ledger/" 2>/d
 cp -R "$SRC/nvidia_work/agent/ledger/raw" "$DST/nvidia_work/agent/ledger/" 2>/dev/null || true
 cp -R "$SRC/nvidia_work/agent/variants" "$DST/nvidia_work/agent/" 2>/dev/null || true
 for d in exp1_graycomb exp2_sha512_balanced exp3_sha512_wsched exp4_ascon_muxfold submission; do
-  [ -d "$SRC/nvidia_work/$d" ] && cp -R "$SRC/nvidia_work/$d" "$DST/nvidia_work/"
+  # rm before cp: cp -R MERGES (never deletes), which silently kept stale/renamed
+  # artifact files in the mirror (2026-07-15 sha512 canonical-dir incident). Mirror
+  # these trees as clean copies so a deletion in SRC propagates.
+  [ -d "$SRC/nvidia_work/$d" ] && { rm -rf "$DST/nvidia_work/$d"; cp -R "$SRC/nvidia_work/$d" "$DST/nvidia_work/"; }
 done
 cp "$SRC/nvidia_work/AGENT_UPGRADE_SPEC.md" "$SRC/nvidia_work/OPTIMIZATION_CATALOG.md" "$DST/nvidia_work/" 2>/dev/null || true
 cp "$SRC/NVIDIA_DAILY_RUN_LOG.md" "$DST/nvidia_work/"
@@ -32,6 +35,7 @@ mkdir -p "$DST/asu_work/agent" "$DST/asu_work/docker"
 cp "$SRC/asu_work/agent"/*.py "$SRC/asu_work/agent"/*.json "$SRC/asu_work/agent/README.md" "$DST/asu_work/agent/" 2>/dev/null || true
 cp "$SRC/asu_work/docker/Dockerfile" "$DST/asu_work/docker/"
 cp "$SRC/ASU_DAILY_RUN_LOG.md" "$DST/asu_work/"
+rm -rf "$DST/asu_work/submission" "$DST/asu_work/official_submission"   # clean mirror (see NVIDIA note)
 cp -R "$SRC/asu_work/submission" "$DST/asu_work/" 2>/dev/null || true
 cp -R "$SRC/asu_work/official_submission" "$DST/asu_work/" 2>/dev/null || true
 cp -R "$SRC/asu_work/baselines" "$DST/asu_work/" 2>/dev/null || true

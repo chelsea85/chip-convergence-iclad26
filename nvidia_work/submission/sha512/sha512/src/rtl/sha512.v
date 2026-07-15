@@ -243,13 +243,13 @@ module sha512(
       tmp_read_data      = 32'h0;
       tmp_error          = 1'h0;
 
-      block_addr = address[4 : 0] - 5'h10;
+      block_addr = address[4 : 0] - ADDR_BLOCK0[4 : 0];
 
       if (cs)
         begin
           if (we)
             begin
-              if (address[7:4] == 4'h1 || address[7:4] == 4'h2)
+              if ((address >= ADDR_BLOCK0) && (address <= ADDR_BLOCK31))
                 block_we = 1'h1;
 
               case (address)
@@ -273,10 +273,11 @@ module sha512(
 
           else
             begin
-              if (address[7:4] == 4'h4)
-                tmp_read_data = digest_reg[(15 - address[3:0]) * 32 +: 32];
-              else if (address[7:4] == 4'h1 || address[7:4] == 4'h2)
-                tmp_read_data = block_reg[address[4:0]];
+              if ((address >= ADDR_DIGEST0) && (address <= ADDR_DIGEST15))
+                tmp_read_data = digest_reg[(15 - (address - ADDR_DIGEST0)) * 32 +: 32];
+
+              if ((address >= ADDR_BLOCK0) && (address <= ADDR_BLOCK31))
+                tmp_read_data = block_reg[address[4 : 0]];
 
               case (address)
                 ADDR_NAME0:
@@ -304,3 +305,7 @@ module sha512(
         end
     end // addr_decoder
 endmodule // sha512
+
+//======================================================================
+// EOF sha512.v
+//======================================================================

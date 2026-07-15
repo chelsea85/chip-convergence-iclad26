@@ -5,7 +5,7 @@ Solo team (Hari Krishnan), Cloud track. **Three agents, one verification-first a
 | Track | Agent | Headline result (live gemini-3-flash-preview) |
 |-------|-------|------------------------------------------------|
 | **NVIDIA** — RTL PPA optimization | `nvidia_work/agent/` | sha512 **ADP 0.727**, WNS −97→**+335 ps (MET), LEC-proven** (agent's live rewrite beat our best hand-derived 0.787); prim **ADP 0.605** (power −67%) in 6 calls |
-| **NXP** — SoC generation from diagrams | `nxp_work/agent/` | **Perfect solve in 2 model calls / 42 s**: self-test 30/30, KAT 79/79 on both oracles, STG differential cycle-identical to reference over 3,662 cycles |
+| **NXP** — SoC generation from diagrams | `nxp_work/agent/` | **2 model calls / 42 s, perfect against our full verification stack**: self-test 30/30, KAT 79/79 on both oracles, STG differential cycle-identical to reference over 3,662 cycles (organizer hidden testbench is not in the public checkout, so the official score is organizer-confirmed only) |
 | **ASU** — block DRC repair | `asu_work/agent/` | **Final-violation-rate 0.68–0.76 on all 5 public blocks** (via-bar repair, derived from the exact rule) — eligible + rendered-connectivity-credible; version-exact KLayout 0.30.1 Dockerized env; verify identical to the official scorer |
 
 All three agents are verification-first: every model output passes deterministic gates
