@@ -22,12 +22,13 @@ footer: "Chip Convergence — ICLAD-DAC 2026 — ASU Block DRC Repair"
 <!-- _class: lead -->
 <!-- _footer: "" -->
 
-# Measure the Scorer, Never Ship a Regression
+# Measure the Scorer, Repair What the Rule Really Says
 
 ## Verification-first DRC repair of ASAP7 layout scripts
 
-**Version-exact scoring env · verify identical to the official evaluator ·
-keep-best guarantee: never worse than the eligible baseline, on all 5 blocks**
+**Final-violation-rate 0.68–0.76 on ALL 5 public blocks** — eligible, and
+rendered-connectivity-credible. Version-exact env · verify identical to the
+official evaluator · a repair derived from the exact rule, not guessed.
 
 Harikrishnan KC · Team **Chip Convergence** · greatharikrishnan@gmail.com
 ASU Problem · ICLAD-DAC 2026 GenAI Chip Hackathon
@@ -85,7 +86,7 @@ already eligible → **never regress, never break connectivity.**
 
 <rect x="262" y="40" width="426" height="52" class="box"/>
 <text x="475" y="60" text-anchor="middle" class="t" font-size="12.5">fix-pass = ORIGINAL script + appended pya (runs before write)</text>
-<text x="475" y="78" text-anchor="middle" class="tiny">deterministic: coordinated wide-metal-via, grid-snap (exact-rule-derived)</text>
+<text x="475" y="78" text-anchor="middle" class="tiny">deterministic: via-bar (multi-cut array -> continuous bar), grid-snap</text>
 <line x1="475" y1="92" x2="475" y2="106" stroke="#1a3a6b" stroke-width="1.6" marker-end="url(#aar)"/>
 <rect x="262" y="108" width="426" height="40" class="abox"/>
 <text x="475" y="126" text-anchor="middle" class="s">model fix-pass (rules + coupling + screenshot) — best-of-N,</text>
@@ -120,10 +121,10 @@ already eligible → **never regress, never break connectivity.**
 <text x="842" y="160" text-anchor="middle" class="t" font-size="12.5">env: KLayout 0.30.1</text>
 <text x="842" y="178" text-anchor="middle" class="tiny">version-exact Docker (organizer</text>
 <text x="842" y="192" text-anchor="middle" class="tiny">scoring target); amd64 image</text>
-<text x="842" y="208" text-anchor="middle" class="tiny">5/5 blocks eligible, conn preserved</text>
+<text x="842" y="208" text-anchor="middle" class="tiny">5/5 blocks FVR 0.68-0.76</text>
 </svg>
 
-<span style="font-size:16px;color:#555">Same verification-first spine as our NVIDIA/NXP agents: diagnose with tools (0 tokens) → propose → verify == scorer → keep-best → emit. Validated eligible on all 5 blocks.</span>
+<span style="font-size:16px;color:#555">Same verification-first spine as NVIDIA/NXP: diagnose (0 tokens) → propose → verify == scorer → keep-best (credibility-gated) → emit. <b>FVR 0.68–0.76 on all 5 blocks.</b></span>
 
 ---
 
@@ -226,88 +227,79 @@ never kept.
 
 ---
 
-# 9 · The breakthrough: decode the rule, don't guess the fix
+# 9 · Decode the rule, then reshape the *via* — not the metal
 
-We stopped reverse-engineering fixes from report *descriptions* and read the **actual KLayout rule
-deck** — the ground truth:
+The dominant class (~74% of every block) is via-width-match. The exact deck says:
 
 ```
-V2.M3.AUX.2  satisfied  ⟺  via INSIDE M3  AND  ≥2 via edges COINCIDENT with M3 edges
-V2.M2.EN.1   M2 must enclose the via by 5 nm on two opposite sides
-V2.AUX.1     the via must be INSIDE both M2 and M3
+V2.M3.AUX.2  satisfied  ⟺  via INSIDE the metal  AND  ≥2 via edges COINCIDENT with metal edges
 ```
 
-So the width-match fix is *derived*, not guessed: **make the via's ⟂-to-metal-length edges flush
-with the metal, and patch the lower metal to keep enclosure + containment.** This is the "wide
-metal needs a wide via" idiom from the PDK — now exact.
+We first tried reshaping the **metal** (a surgical neck) — falsified by exact DRC: the neck's own
+shoulders trip `M3.S.4` (net +1 even at the best site). The key realization: **reshape the via.**
+The seeding split each via landing into a **multi-cut array** of min-vias — and every min-via fails
+the rule (the counts are all multiples of 3).
 
 ---
 
-# 10 · The finding: block repair is global legalization
+# 10 · The via-bar: replace the array with one continuous bar
 
-We built the coordinated fixer from that exact geometry and measured every strategy on Block1
-(baseline 315 violations):
+**Fix:** at each flagged landing, replace the multi-cut min-via array with **one continuous via
+bar** spanning the metal's length — keeping the **minimum via thickness**, so the lower metal needs
+**no widening** (this is what sank every earlier "grow-via" attempt).
 
-| Fix | target rule | but breaks | net |
-|---|---|---|---|
-| grow via → metal width | AUX.2 ✓ | lower-metal enclosure | 315→387 |
-| shrink metal → via width | AUX.2 ✓ | upper-via enclosure | 315→339 |
-| **coordinated via + metal patch** | AUX.2 ✓, **enclosure preserved ✓** | neighbor **M2 spacing** | 315→379 |
+- ends **coincident** with the metal's edges → satisfies the width-match rule
+- min thickness → no lower-metal enclosure/spacing cascade
+- joins cuts that already shared the landing → **no net change** (connectivity preserved)
+- **device layer V0/M1 excluded** (bars there explode enclosure + break nets)
 
-Every fix **cascades to the next layer of the via stack** (M2-V2-M3-V3-M4…). The coordinated fixer
-is the first to **solve the enclosure coupling** — but a wide via forces a wide lower metal, which
-crowds neighbor tracks.
-
----
-
-# 11 · We pinned the exact mechanism — and it's uniform
-
-A **perturbation characterization** (flagged vs correct via stacks, 0 tokens) found the seeding is
-systematic: every correct stack is min-via-in-min-metal; every flagged one is a **correct min-via
-in a wide metal** — and that wide metal legitimately encloses a **larger via stacked above it**.
-
-**The local tension:** at a flagged site, one M3 must *flush-match* the small via below
-(V2 = 72) **and** *enclose* the larger via above (V3 = 96) — i.e. be simultaneously 72 **and** ≥106.
-No single-metal edit can satisfy both; only relocating neighbors (global) can.
-
-| Block | total | **via-width (over-constrained)** |
-|---|---|---|
-| Block1 / 2 / 3 / 6 / 7 | 244 / 68 / 89 / 247 / 765 | **74% / 76% / 74% / 74% / 71%** |
-
-**~74% of every block** is this coupled class → every local transform we evaluated regressed, so a
-sub-baseline result needs **neighbor-aware / global relocation** (full legalization, MDPI 2025). Our
-keep-best loop already *is* the SA acceptance test and verify *is* the exact cost function — the
-open work is a global multi-edit move-generator, a well-scoped (multi-day) extension.
+Block1: `V2.M3.AUX.2 72→0`, then adding V4/M5 + V5/M6 → **315 → 178**, zero connectivity change.
+Derived from the exact rule; verified by the exact evaluator.
 
 ---
 
-# 12 · Results & honest status
+# 11 · Result: every public block below FVR 1.0
 
-- **Environment**: version-exact KLayout 0.30.1, Dockerized; DRC calibrated (11/14 rules exact).
-- **Agent**: runner-contract compliant; **all 5 blocks (Block1/2/3/6/7) eligible, connectivity
-  preserved** (final-violation-rate ≈ 1.25–1.32 = the eligible baseline).
-- **Repair-rule library**: exact-deck + literature grounded; drives deterministic fixers + model
-  prompt.
-- **Coordinated wide-metal-via fixer**: **solves the enclosure coupling** — the first strategy to
-  do so.
-- **Characterization**: rigorous, reproducible proof that block-repair is global legalization,
-  with two concrete solution paths scoped.
+| Block | baseline (exact) | → via-bar | **final_violation_rate** | eligible | credible |
+|---|---:|---:|---:|:--:|:--:|
+| Block1 | 315 | 178 | **0.730** | ✓ | ✓ |
+| Block2 | 90 | 52 | **0.765** | ✓ | ✓ |
+| Block3 | 111 | 68 | **0.764** | ✓ | ✓ |
+| Block6 | 321 | 167 | **0.676** | ✓ | ✓ |
+| Block7 | 957 | 522 | **0.682** | ✓ | ✓ |
 
-**Never a regression, never a broken net — on every block.** Same discipline that delivered NVIDIA
-(ADP 0.727 / 0.605) and NXP (2-call perfect solve).
+**All 5 below the reference denominator** (repair_rate ≈ 0.59 on Block1). "credible" = passes a
+**rendered-geometry** connectivity check (net count + conducting area), not just the source-parsing
+official gate — so the win is a real physical repair, not an evaluator artifact. The agent enforces
+this gate in production keep-best: a candidate that isn't credible is discarded.
 
 ---
 
-# 13 · Next: from characterization to sub-baseline
+# 12 · How we got here — the discipline that found the win
 
-- **Global move-generator (the missing piece)** — SA over *multi-edit* stack moves: resize the
-  whole via stack to a consistent width, accept by net-conflict-delta (keep-best already is the
-  acceptance test). The path to `final_violation_rate < 1`.
-- **Multimodal repair (DRC-Coder ISPD'25 style)** — feed Gemini the **screenshot** + exact rules +
-  violation geometry so it localizes and proposes *stack-coordinated* edits (unguided, the model
-  over-corrected globally).
-- **Per-rule independent fixers** — min-area / isolated edges (no via nearby) as free deterministic
-  wins.
+The win came from a **review-and-falsify loop**, not a lucky guess:
+- **Environment**: version-exact KLayout 0.30.1, Dockerized; DRC calibrated (11/14 rules exact);
+  verify imports the official evaluator's own functions.
+- **Falsified the wrong idea first**: the metal-neck (net +1, `M3.S.4` shoulders) — with exact DRC,
+  in ~1 h, instead of building a multi-day legalizer.
+- **Then the right one**: reshape the *via* into a bar — derived from the exact rule, verified on all
+  5 blocks, and **gated by a rendered-connectivity credibility check** so it can't be an exploit.
+- **Every candidate measured identically to how it will be scored** — no proxy, no drift.
+
+**Three tracks, one architecture, three real results:** NVIDIA ADP 0.727 / 0.605 · NXP 2-call
+perfect solve · **ASU FVR 0.68–0.76 on all 5 blocks.**
+
+---
+
+# 13 · Next: push the margin further
+
+- **Clean the small collateral** — the bar adds a few `V4/V5.AUX.1` containment findings; trimming
+  the bar ends to sit fully inside the lower metal should push FVR lower still.
+- **Layer-aware credibility graph** — upgrade the rendered check from aggregate net-count to a
+  per-layer metal/via reachability graph (endpoint partition equivalence).
+- **Minority classes** — grid / spacing findings on the same blocks, for additional margin.
+- **V0/M1 (device layer)** — a device-aware bar variant (respecting LISD/LIG/enclosure), the one
+  via/metal pair the routing bar can't touch.
 - Agents remain updatable through **Jul 26**.
 
 ---

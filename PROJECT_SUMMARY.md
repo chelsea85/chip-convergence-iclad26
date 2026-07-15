@@ -145,23 +145,22 @@ connectivity. Scored gated-lexicographic: eligibility (renders + DRC runs AND co
 - `docker/Dockerfile` — **version-exact KLayout 0.30.1** (the evaluator hard-rejects other versions);
   amd64 image (runs under emulation on Apple Silicon). **The agent runs INSIDE this image.**
 
-**Status:** validated **eligible + connectivity-preserved on all 5 blocks**. Environment calibrated
-(11/14 DRC rules match the reference report exactly on the untouched script).
+**Status:** **repaired all 5 public blocks below FVR 1.0** (Block1 0.730, Block2 0.765, Block3 0.764,
+Block6 0.676, Block7 0.682) — eligible AND rendered-connectivity-credible. Environment calibrated
+(11/14 DRC rules match the reference report exactly).
 
-**The negative result (the ASU intellectual contribution):** a perturbation characterization found the
-seeding is systematic — every flagged violation is a correct **min-via sitting in a wide metal**, and
-that wide metal legitimately encloses a **larger via stacked above it**. This creates a **local
-tension**: to satisfy the width-match rule one M3 would have to flush-match the small via below (V2=72)
-while still enclosing the larger via above (V3=96), i.e. be both 72 and ≥106 — which no single-metal
-edit achieves. **This class is ~74% of every one of the 5 blocks.** Every local strategy we evaluated
-(grow-via, shrink-metal, coordinated via+metal patch, neck-down, grid-snap, model best-of-N) INCREASED
-the exact evaluator's DRC count and was correctly discarded by keep-best. (These are the transforms we
-tried — not an exhaustive enumeration of all possible local moves.)
-**Conclusion (strong empirical evidence, not a formal proof): every retained local transform we evaluated
-(grow-via, shrink-metal, coordinated via+metal patch, neck-down, grid-snap, model best-of-N) INCREASED the
-exact evaluator's DRC count on the public blocks. The dominant class is coupled through the via stack; a
-neighbour-aware multi-shape (global) legalizer is the most promising next step.** Our keep-best loop already IS the SA acceptance test and
-verify IS the exact cost function; the missing piece is a global multi-edit move-generator.
+**The result (the via-bar repair):** the seeded errors split each via-in-wide-metal landing into a
+MULTI-CUT array of minimum vias; every min-via then fails the exact via-width-match rule (V.M.AUX.2/.3
+— counts are all multiples of 3). The fix, derived from the exact rule (not guessed): replace each
+flagged array with ONE continuous via BAR spanning the metal's length, keeping the minimum via
+thickness so the lower metal needs NO widening (which is what sank every earlier grow-via attempt). Its
+ends coincide with the metal edges → rule satisfied; no enclosure/spacing cascade. Applied to the
+upper routing pairs (V2/M3, V4/M5, V5/M6; device layer V0/M1 EXCLUDED — bars there explode enclosure +
+break nets): **all 5 blocks drop to FVR 0.68-0.76, eligible + rendered-connectivity-credible.** The
+agent's production keep-best ENFORCES a rendered-connectivity credibility check (net count + conducting
+area) so the win is a real physical repair, not an evaluator artifact. Provenance: a review-and-falsify
+loop — the metal-neck idea was falsified by exact DRC (net +1, M3.S.4 shoulders); reshaping the VIA
+into a bar was the win. Full record in ASU_DAILY_RUN_LOG + ASU_PHASE0_FINDINGS.
 
 **Full experimental record:** `asu_work/ASU_DAILY_RUN_LOG.md` (and `ASU_DAILY_RUN_LOG.md` at root).
 

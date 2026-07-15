@@ -6,7 +6,7 @@ Solo team (Hari Krishnan), Cloud track. **Three agents, one verification-first a
 |-------|-------|------------------------------------------------|
 | **NVIDIA** — RTL PPA optimization | `nvidia_work/agent/` | sha512 **ADP 0.727**, WNS −97→**+335 ps (MET), LEC-proven** (agent's live rewrite beat our best hand-derived 0.787); prim **ADP 0.605** (power −67%) in 6 calls |
 | **NXP** — SoC generation from diagrams | `nxp_work/agent/` | **Perfect solve in 2 model calls / 42 s**: self-test 30/30, KAT 79/79 on both oracles, STG differential cycle-identical to reference over 3,662 cycles |
-| **ASU** — block DRC repair | `asu_work/agent/` | Version-exact (KLayout 0.30.1) Dockerized env; verify identical to the official scorer; **keep-best guarantee: eligible + connectivity-preserved on all 5 blocks**; exact-rule-grounded repair-rule library + rigorous characterization of block-repair as global legalization |
+| **ASU** — block DRC repair | `asu_work/agent/` | **Final-violation-rate 0.68–0.76 on all 5 public blocks** (via-bar repair, derived from the exact rule) — eligible + rendered-connectivity-credible; version-exact KLayout 0.30.1 Dockerized env; verify identical to the official scorer |
 
 All three agents are verification-first: every model output passes deterministic gates
 (equivalence checks, port contracts, structural diffs, known-answer tests, DRC/connectivity)
@@ -58,6 +58,7 @@ docker build --platform linux/amd64 -t asu-klayout:0.30.1 asu_work/docker   # KL
 # runner contract (inside the image; klayout on PATH):
 docker run --rm --platform linux/amd64 -v <ASU_repo>:/asu -v $PWD/asu_work/agent:/agent \
     asu-klayout:0.30.1 python3 /agent/asu_agent.py /asu/task/.../BlockN_info.json --model none
+#   -> via-bar repair; emits BlockN_repaired.py (FVR ~0.68-0.76) + manifest to submission/BlockN/
 python3 asu_work/agent/drc_digest.py <BlockN.drc.json>   # zero-token DRC diagnosis
 ```
 
@@ -72,7 +73,7 @@ python3 asu_work/agent/drc_digest.py <BlockN.drc.json>   # zero-token DRC diagno
 | NVIDIA model interface | `nvidia_work/agent$ python3 test_model_iface.py` | 13/13 |
 | NVIDIA cold-start drill | `python3 test_cold_start.py` (needs Docker) | 6/6 |
 | NVIDIA discovery fixtures | `python3 -m ppa.discover --validate` | 3 MATCH |
-| ASU 5-block validation | `asu_agent.py <info.json> --model none` (in KLayout 0.30.1 image) | 5/5 eligible, connectivity preserved |
+| ASU 5-block repair | `asu_agent.py <info.json> --model none` (in KLayout 0.30.1 image) | 5/5 FVR 0.68–0.76, eligible + credible |
 
 ## Repo layout
 
