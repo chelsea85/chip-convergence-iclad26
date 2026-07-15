@@ -1,0 +1,69 @@
+{
+  "_meta": {
+    "purpose": "DRC-repair rule library for ASAP7 block layouts. Each entry maps a DRC rule CLASS to a coordinated repair transform, with the coupling hazards that make single-layer fixes fail. Used two ways: (1) parameterizes deterministic fixers, (2) injected (structure-matched) into the model prompt. Provenance: rule semantics (the DRC description states the constraint), EDA legalization literature (MDPI Electronics 2025 simulated-annealing standard-cell DRC repair; EDN automated DRC correction = cut-slide/merge/drop without creating new errors; USPTO 7,380,227 asymmetric-enclosure directional extension), and our own measured Block1 experiments (grow-via 315->387, shrink-metal 315->339: both fix the target rule but push the violation to an adjacent stack layer).",
+    "dbu_per_nm": 4.0,
+    "layers": {"M1":19,"M2":20,"M3":30,"M4":40,"M5":50,"M6":60,"V0":18,"V1":21,"V2":25,"V3":35,"V4":45,"V5":55}
+  },
+  "rules": [
+    {
+      "id": "via-width-match",
+      "match": "^V\\d+\\.M\\d+\\.AUX\\.[23]$",
+      "kind": "width-match",
+      "semantics": "The via (V) width perpendicular to the connected metal (M) length must EXACTLY equal that metal's width.",
+      "transform": "coordinated-stack-width: pick a consistent width W for the via-stack (via + metal-above + metal-below) at each flagged site; set via perpendicular dim = W, extend BOTH the upper and lower metal to enclose the via by their required margin, then snap the via edges to the via grid.",
+      "coupling": "Changing ONLY the via width breaks lower-metal enclosure (V.M(lower).EN) and via grid (V.AUX.1). Changing ONLY the metal width breaks the OTHER via's enclosure (upper V.M.EN) and its grid. Must edit via + both metals + grid together.",
+      "provenance": "semantics + measured (Block1 grow-via -> V2.M2.EN.1+72/V2.AUX.1+72; shrink-M3 -> V3.M3.EN.1+48/V3.AUX.1+48)",
+      "priority": 1
+    },
+    {
+      "id": "grid-snap",
+      "match": "^M\\d+\\.AUX\\.1$",
+      "kind": "grid",
+      "semantics": "Metal edges (horizontal for M4/M6, vertical for M5) must lie on an N-nm grid (M4=24, M5=24, M6=32).",
+      "transform": "snap each FLAGGED edge to the nearest grid line in the direction that PRESERVES via enclosure (never move an edge inward past a via it encloses); only touch edges DRC actually flagged, not the whole layer.",
+      "coupling": "Whole-layer snapping moves via-enclosing edges -> V.M.EN + V.AUX explosions (measured: M4/M5/M6 snap 315->510). Restrict to flagged, via-free edges.",
+      "provenance": "semantics + measured (whole-layer nearest-snap 315->510, outward-snap 315->1451)",
+      "priority": 3
+    },
+    {
+      "id": "enclosure",
+      "match": "\\.EN\\.\\d+$",
+      "kind": "enclosure",
+      "semantics": "Metal must enclose the via by a minimum margin on the specified sides (often asymmetric, e.g. 5 & 2 nm).",
+      "transform": "extend the metal edge outward over the via by the required margin (directional, per USPTO 7,380,227). Grow only the metal, never move the via.",
+      "coupling": "Growing metal can create spacing violations with adjacent metal on the same layer; check the neighbour gap before extending.",
+      "provenance": "semantics + USPTO 7,380,227 (asymmetric enclosure correction)",
+      "priority": 2
+    },
+    {
+      "id": "spacing",
+      "match": "^M\\d+\\.S\\.\\d+$",
+      "kind": "spacing",
+      "semantics": "Minimum edge-to-edge spacing between two same-layer metal polygons (tip-to-tip / tip-to-side), conditional on edge lengths.",
+      "transform": "trim or shift the offending edge by the spacing deficit, moving the SHORTER/least-connected of the two shapes; prefer trimming a jog over moving a routed wire.",
+      "coupling": "Trimming can violate min-width or break via enclosure on the trimmed shape; shifting can create a new spacing violation with the next neighbour.",
+      "provenance": "semantics + EDN (cut-slide/merge without creating new errors)",
+      "priority": 4
+    },
+    {
+      "id": "parallel-run",
+      "match": "^M\\d+\\.S\\.5$",
+      "kind": "parallel-run",
+      "semantics": "Minimum parallel run length of two adjacent-track metal polygons.",
+      "transform": "shorten the overlap (trim one end) or nudge one wire to a non-adjacent track.",
+      "coupling": "Trimming a routed wire can break its via landing; nudging can violate spacing on the new track.",
+      "provenance": "semantics + EDN cut-slide",
+      "priority": 5
+    },
+    {
+      "id": "min-area",
+      "match": "\\.A\\.|AREA",
+      "kind": "area",
+      "semantics": "Polygon area must be >= a minimum.",
+      "transform": "grow the polygon (prefer along its routing direction) until min area is met; this rule is usually INDEPENDENT of the via stack -> safe deterministic win when no via is nearby.",
+      "coupling": "Growth can cause spacing; check neighbour gap.",
+      "provenance": "semantics",
+      "priority": 2
+    }
+  ]
+}

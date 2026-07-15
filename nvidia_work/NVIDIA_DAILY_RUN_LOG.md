@@ -827,3 +827,20 @@ S-box axis to power wins; the delay headroom needs latency-CHANGING rewrites (im
 locally unverifiable until transaction-mode dualsim (future work, top priority for Jul 19+).
 aes is now fully characterized: not "we failed to improve it" but "we mapped exactly where
 its headroom is and what verification unlock is needed to claim it."
+
+## 2026-07-14 — submission repo push + fresh-clone verification (caught a shipping bug)
+
+Pushed today's full work to github.com/chelsea85/chip-convergence-iclad26 (commits 5fe1da9 +
+55f2770; 1088 files): staged optimizer + all fixes, 5 result manifests (sha512_best_0727 =
+0.727, prim_staged = 0.605, aes_staged_v2, aes_unfenced, sha512_staged_clean), evidence
+(ledgers/raw/variants), 4 decks (both tracks restructured to 5-act story + Engineering
+Learnings companions; one-picture SVG flow diagrams for both).
+
+**Fresh-clone verification (Hari's call — from GitHub, not local) caught a submission-breaking
+gap:** nvidia_work/harness/ (run_gate.sh / measure.sh / registry.tsv — mounted into Docker by
+the TB gate) was never in sync.sh → a graded fresh clone GATE-FAILED every candidate. Fixed in
+sync.sh, pushed, re-verified. Final fresh-clone status: model-iface 13/13 · NVIDIA stub e2e
+ACCEPT 0.961 through full 5-layer + Docker synth · NXP sabotage 8/8 · NXP runner e2e 6/6.
+Layout requirement (contest repo cloned/symlinked into repo root) confirmed documented in README.
+
+Slide decks (main + learnings, both tracks) live in docs/slides/ — pending Hari's review.

@@ -26,6 +26,13 @@ for d in agent tb specs rtl; do cp -R "$SRC/nxp_work/$d" "$DST/nxp_work/"; done
 cp "$SRC/nxp_work/AGENT_UPGRADE_SPEC.md" "$DST/nxp_work/"
 cp "$SRC/NXP_DAILY_RUN_LOG.md" "$DST/nxp_work/"
 
+
+# ASU track (block-repair agent)
+mkdir -p "$DST/asu_work/agent" "$DST/asu_work/docker"
+cp "$SRC/asu_work/agent"/*.py "$SRC/asu_work/agent"/*.json "$SRC/asu_work/agent/README.md" "$DST/asu_work/agent/" 2>/dev/null || true
+cp "$SRC/asu_work/docker/Dockerfile" "$DST/asu_work/docker/"
+cp "$SRC/ASU_DAILY_RUN_LOG.md" "$DST/asu_work/"
+
 # Docs
 mkdir -p "$DST/docs"
 for f in SLIDE_MATERIAL.md SLIDES_OUTLINE.md DAC_DAY_RUNBOOK.md GEMINI_SETUP.md RESEARCH_NOTES.md; do
