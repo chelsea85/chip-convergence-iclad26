@@ -409,8 +409,11 @@ class VertexModel(Model):
         # hung 47 min). 5 min/attempt >> any real response incl. thinking.
         _http = {"timeout": 300_000}
         if "EXPRESS" in name.upper():
+            # X-Goog-User-Project header per the contest AgentSetup.md — an
+            # Express-Mode requirement in the organizers' eval environment.
+            _http_ex = dict(_http, headers={"X-Goog-User-Project": ""})
             self.client = genai.Client(vertexai=True, api_key=key,
-                                       http_options=_http)
+                                       http_options=_http_ex)
             self.mode = f"vertex-express[{name}]"
         else:
             self.client = genai.Client(api_key=key, http_options=_http)

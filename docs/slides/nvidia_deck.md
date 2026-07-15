@@ -286,18 +286,17 @@ get one fix attempt each (top-2), *off* the proposal budget.
 
 # 9 · Results scoreboard (all 7 IPs, honest)
 
-| IP | Result | Verification | Cost |
+| IP | Result | Assurance (per manifest) | Cost |
 |---|---|---|---|
-| **sha512** | **ADP 0.727**, −97→**+335 ps MET**, area −0.4% | LEC PROVEN + dualsim | 8 calls / 232k |
-| **prim** | **ADP 0.605**, slack +181.5 ps, power −67% | full 5-layer | 6 calls / 167k |
-| **aes** (fenced) | power **−4.3%**, ADP 1.00 — headroom sits in the fenced S-box | dualsim PASS | 22 calls / 1.6M |
-| aes (unfenced) | power **−6.0%**, ADP 1.00 — cycle-exact sim bounds the S-box axis to power | dualsim PASS | 21 calls / 1.3M |
-| async_fifo | LEC-proven improving variant (ADP 0.961) — where published methods score 0 | full 5-layer | offline |
-| kmac / ascon | offline candidates (Keccak-θ; probes); campaigns queued for DAC window | 5-layer ready | — |
+| **sha512** | **ADP 0.727**, −97→**+335 ps MET**, area −0.4% | **full 5-layer** (gate PASS, LEC PROVEN, dualsim PASS) | 8 calls / 232k |
+| **async_fifo** | **ADP 0.961** (micro-opt) — where published methods score 0 | **full 5-layer** (LEC PROVEN) | offline |
+| **prim** | **ADP 0.605**, slack +181.5 ps, power −67% | equivalence+differential (LEC PROVEN + dualsim; gate skipped — pristine flow issue) | 6 calls / 167k |
+| **aes** (fenced / unfenced) | power **−4.3% / −6%**, ADP 1.00 — headroom sits in the S-box | differential-only (dualsim PASS; LEC inconclusive) | 22 / 21 calls |
+| kmac / ascon | offline candidates (Keccak-θ; probes); live campaigns queued (Jul 19+) | 5-layer capable | — |
 | NVDLA | baseline + zero-config onboarding (323 sources); campaign on unlimited quota | — | — |
 
-Every artifact ships as **repo-layout files + manifest.json** (PPA Δ, verification,
-calls, tokens) via `--emit-best`.
+Every artifact ships as a **repo-layout delta + manifest.json** stating its exact
+`verification_per_layer` + `assurance` — no blanket claims.
 
 ---
 

@@ -301,8 +301,10 @@ def _gen_tb(spec: IPSpec, ports: dict[str, dict], cycles: int) -> str:
     L.append("  task check;")
     L.append("    begin")
     for n in outs:
-        L.append(f"      if ((g_{n} !== c_{n}) && (^g_{n} !== 1'bx) && "
-                 f"(^c_{n} !== 1'bx)) begin")
+        # differ AND (both known  OR  candidate introduced X where golden is
+        # known) -> ERROR. Only a GOLDEN-side X (oracle/uninit limitation) is
+        # tolerated as xdiff (F-08: candidate-X vs known-golden must FAIL).
+        L.append(f"      if ((g_{n} !== c_{n}) && (^g_{n} !== 1'bx)) begin")
         L.append(f"        if (errors < 5) $display(\"MISMATCH t=%0t {n} "
                  f"gold=%h cand=%h\", $time, g_{n}, c_{n});")
         L.append("        errors = errors + 1;")

@@ -236,11 +236,11 @@ and reused by every layer of verification.**
 
 ---
 
-# 8 · Hidden testcases: an oracle that needs no golden
+# 8 · A no-golden oracle *mechanism* (a hidden-tier foundation)
 
 **KAT model path:** replay vectors on the candidate → predict expected values from the
 reference models **parameterized by the agent's own inferred YAML** → compare.
-No golden RTL, no golden TB required.
+No golden RTL, no golden TB required — the *mechanism* is topology-general.
 
 Proof the oracle follows the declared design (not a hardcoded answer):
 
@@ -249,9 +249,10 @@ Proof the oracle follows the declared design (not a hardcoded answer):
 | UART FIFO depth 8 | `fifo_depth: 16` | <span class="bad">FAIL 76/79</span> — catches the divergence |
 | UART FIFO depth 8 | `fifo_depth: 8` (plumbed) | <span class="ok">PASS 79/79</span> — consistent design accepted |
 
-Structural gates activate **by role present in the design** (fabric checks only if a fabric
-exists…). Runner contract: `python3 nxp_agent.py <info.json> --model <name>` — **6/6**
-end-to-end against a mock endpoint. Stdlib-only Python + iverilog.
+**Honest scope:** the mechanism generalizes; the *coverage* is the 8 easy IPs (0-mismatch
+calibrated) + 12 more library IPs modeled (slide 10) — a **foundation** for medium/hard, proven
+on the public case, not yet a topology-neutral solver. Runner contract:
+`python3 nxp_agent.py <info.json> --model <name>` — **6/6** e2e vs a mock endpoint.
 
 ---
 

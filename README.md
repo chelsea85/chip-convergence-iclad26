@@ -41,10 +41,15 @@ python3 nxp_agent.py <info.json> --model <name>   # contest runner contract
 
 ```bash
 cd nvidia_work/agent
-python3 -m ppa.controller --ip sha512 --rounds 3 --k 3 --model vertex \
-    --max-calls 20 --emit-best ../submission/sha512
-# offline loop check: --model stub --rounds 1 --k 1
+# real campaign (Vertex Express; needs EXPRESS_MODE_KEY + Docker + ASAP7):
+python3 nvidia_agent.py --ip sha512
+#   -> staged optimizer; writes best VERIFIED RTL (delta) + manifest to submission/sha512/
+# offline smoke (no model/network, replays a proven variant):
+python3 nvidia_agent.py --ip async_fifo --model stub --stub-replay ../exp1_graycomb
+# full control: python3 -m ppa.controller --ip <name> --model vertex --diagnose on ...
 ```
+Each `submission/<ip>/manifest.json` records the true `verification_per_layer` +
+`assurance` reached (e.g. sha512 = full 5-layer; aes = differential-only).
 
 ## Quickstart — ASU
 

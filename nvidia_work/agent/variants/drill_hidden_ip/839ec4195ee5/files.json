@@ -1,0 +1,8 @@
+{
+ "async_fifo.v": "drill_hidden_ip/rtl/async_fifo.v",
+ "fifomem.v": "drill_hidden_ip/rtl/fifomem.v",
+ "rptr_empty.v": "drill_hidden_ip/rtl/rptr_empty.v",
+ "sync_r2w.v": "drill_hidden_ip/rtl/sync_r2w.v",
+ "sync_w2r.v": "drill_hidden_ip/rtl/sync_w2r.v",
+ "wptr_full.v": "drill_hidden_ip/rtl/wptr_full.v"
+}
