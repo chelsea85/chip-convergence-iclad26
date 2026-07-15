@@ -38,9 +38,18 @@ The organizers score with **KLayout 0.30.1** (the evaluator hard-rejects other v
 ```bash
 docker build --platform linux/amd64 -t asu-klayout:0.30.1 ../docker
 # runner contract (inside the image, klayout on PATH):
+#   python3 asu_agent.py <info.json> --model <model_name>
+# --model handling: a MODEL NAME (e.g. gemini-3.5-flash, as the contest runner
+# passes) routes to endpoint mode against info.json["model_endpoint"]; the
+# keyword `none` runs the deterministic path (eligible baseline, no model calls).
 docker run --rm --platform linux/amd64 -v <ASU_repo>:/asu -v $PWD:/agent asu-klayout:0.30.1 \
     python3 /agent/asu_agent.py /asu/task/.../BlockN_info.json --model none
 ```
+
+The contest runner (`scripts/run_block_benchmark.py --agent-path asu_work/agent/asu_agent.py`)
+invokes `python3 asu_agent.py <info.json> --model <model_name>` — our agent matches that contract.
+Whatever the model proposes, keep-best guarantees the emitted script is the best ELIGIBLE one
+(the untouched baseline if nothing improves).
 
 ## Status
 

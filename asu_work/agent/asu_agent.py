@@ -177,18 +177,30 @@ def run(P: Paths, model=None, max_calls: int = 6) -> dict:
             "total": best.total}
 
 
+_MODES = {"none", "stub", "vertex", "endpoint"}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="ASU block-repair agent")
     ap.add_argument("info_json", help="runner-provided info.json")
+    # RUNNER CONTRACT (AGENT_GUIDE): the benchmark runner passes --model as a
+    # MODEL NAME (e.g. gemini-3.5-flash) to request through info.json's
+    # model_endpoint. We also accept mode keywords for dev. Any non-keyword is
+    # treated as a model name → endpoint mode against the runner's endpoint.
     ap.add_argument("--model", default="none",
-                    help="none | stub | vertex | endpoint")
-    ap.add_argument("--max-calls", type=int, default=6)
+                    help="model name (runner) OR mode: none|stub|vertex|endpoint")
+    ap.add_argument("--max-calls", type=int, default=4)
     a = ap.parse_args(argv)
     P = Paths.from_info(Path(a.info_json))
     model = None
-    if a.model not in ("none", ""):
+    if a.model and a.model != "none":
         from model_repair import make_model
-        model = make_model(a.model, P)
+        if a.model in _MODES:
+            model = make_model(a.model, P)
+        else:                       # a real model name from the runner
+            P.model_name = a.model
+            mode = "endpoint" if P.model_endpoint else "vertex"
+            model = make_model(mode, P)
     summary = run(P, model=model, max_calls=a.max_calls)
     print(json.dumps(summary, indent=1))
     return 0
