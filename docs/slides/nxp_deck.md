@@ -22,15 +22,13 @@ footer: "Chip Convergence — ICLAD-DAC 2026 — NXP SoC Generation"
 <!-- _class: lead -->
 <!-- _footer: "" -->
 
-# The Library Is the Oracle
+# NXP
 
-## Verification-first SoC generation from diagrams
+## SoC Generation from Diagrams
 
-**Diagram → verified SoC: 2 model calls, 42 seconds —
-30/30 self-test · KAT 79/79 (both oracles) · cycle-identical to reference**
+ICLAD-DAC 2026 · GenAI Chip Hackathon
 
 Harikrishnan KC · Team **Chip Convergence** · greatharikrishnan@gmail.com
-NXP Problem · ICLAD-DAC 2026 GenAI Chip Hackathon
 
 ---
 

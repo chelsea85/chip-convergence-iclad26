@@ -22,12 +22,11 @@ footer: "Chip Convergence — ICLAD-DAC 2026 — ASU Engineering Learnings (comp
 <!-- _class: lead -->
 <!-- _footer: "" -->
 
-# Engineering Learnings
+# ASU — Engineering Learnings
 
-## What building a DRC-repair agent taught us
+## Companion to the Block DRC Repair deck
 
-Companion to the **ASU problem** deck — the research and experiments behind the design.
-Built in one focused day; every claim is measured and reproducible.
+ICLAD-DAC 2026 · GenAI Chip Hackathon
 
 Harikrishnan KC · Team **Chip Convergence** · greatharikrishnan@gmail.com
 

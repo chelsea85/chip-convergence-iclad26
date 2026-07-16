@@ -22,16 +22,13 @@ footer: "Chip Convergence — ICLAD-DAC 2026 — ASU Block DRC Repair"
 <!-- _class: lead -->
 <!-- _footer: "" -->
 
-# Measure the Scorer, Repair What the Rule Really Says
+# ASU
 
-## Verification-first DRC repair of ASAP7 layout scripts
+## Block DRC Repair
 
-**Final-violation-rate 0.68–0.76 on ALL 5 public blocks** — eligible, and
-rendered-connectivity-credible. Version-exact env · verify identical to the
-official evaluator · a repair derived from the exact rule, not guessed.
+ICLAD-DAC 2026 · GenAI Chip Hackathon
 
 Harikrishnan KC · Team **Chip Convergence** · greatharikrishnan@gmail.com
-ASU Problem · ICLAD-DAC 2026 GenAI Chip Hackathon
 
 ---
 

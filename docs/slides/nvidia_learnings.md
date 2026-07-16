@@ -22,12 +22,11 @@ footer: "Chip Convergence — ICLAD-DAC 2026 — Engineering Learnings (companio
 <!-- _class: lead -->
 <!-- _footer: "" -->
 
-# Engineering Learnings
+# NVIDIA — Engineering Learnings
 
-## What building a verified RTL-optimization agent taught us
+## Companion to the RTL PPA Optimization deck
 
-Companion to the **NVIDIA problem** deck — the discoveries behind the design decisions.
-Every lesson below was found by *running*, fixed same-day, and locked in with a regression.
+ICLAD-DAC 2026 · GenAI Chip Hackathon
 
 Harikrishnan KC · Team **Chip Convergence** · greatharikrishnan@gmail.com
 

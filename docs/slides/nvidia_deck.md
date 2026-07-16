@@ -22,16 +22,13 @@ footer: "Chip Convergence — ICLAD-DAC 2026 — NVIDIA RTL PPA Optimization"
 <!-- _class: lead -->
 <!-- _footer: "" -->
 
-# Verify Everything, Learn From Every Round
+# NVIDIA
 
-## Measured, equivalence-gated RTL PPA optimization
+## RTL PPA Optimization
 
-**sha512 ADP 0.727** (timing −97 → +335 ps, MET) · **prim ADP 0.605** (power −67%)
-**aes power −4.3%** under a configurable security fence — all LEC/dualsim-verified,
-all produced live by the agent
+ICLAD-DAC 2026 · GenAI Chip Hackathon
 
 Harikrishnan KC · Team **Chip Convergence** · greatharikrishnan@gmail.com
-NVIDIA Problem · ICLAD-DAC 2026 GenAI Chip Hackathon
 
 ---
 

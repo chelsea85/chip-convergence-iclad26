@@ -22,11 +22,11 @@ footer: "Chip Convergence — ICLAD-DAC 2026 — NXP Engineering Learnings (comp
 <!-- _class: lead -->
 <!-- _footer: "" -->
 
-# Engineering Learnings
+# NXP — Engineering Learnings
 
-## What building a verification-first SoC-generation agent taught us
+## Companion to the SoC Generation deck
 
-Companion to the **NXP problem** deck — the discoveries behind the design decisions.
+ICLAD-DAC 2026 · GenAI Chip Hackathon
 
 Harikrishnan KC · Team **Chip Convergence** · greatharikrishnan@gmail.com
 
