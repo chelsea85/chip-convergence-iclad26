@@ -35,9 +35,16 @@ mkdir -p "$DST/asu_work/agent" "$DST/asu_work/docker"
 cp "$SRC/asu_work/agent"/*.py "$SRC/asu_work/agent"/*.json "$SRC/asu_work/agent/README.md" "$DST/asu_work/agent/" 2>/dev/null || true
 cp "$SRC/asu_work/docker/Dockerfile" "$DST/asu_work/docker/"
 cp "$SRC/ASU_DAILY_RUN_LOG.md" "$DST/asu_work/"
-rm -rf "$DST/asu_work/submission" "$DST/asu_work/official_submission"   # clean mirror (see NVIDIA note)
-cp -R "$SRC/asu_work/submission" "$DST/asu_work/" 2>/dev/null || true
-cp -R "$SRC/asu_work/official_submission" "$DST/asu_work/" 2>/dev/null || true
+# clean mirror, but validate the source exists FIRST so a missing/misnamed source
+# can never delete the destination and silently ship nothing (do NOT suppress the
+# copy failure for these required submission trees).
+for d in submission official_submission; do
+  if [ -d "$SRC/asu_work/$d" ]; then
+    rm -rf "$DST/asu_work/$d"; cp -R "$SRC/asu_work/$d" "$DST/asu_work/"
+  else
+    echo "sync ERROR: required source asu_work/$d missing" >&2; exit 1
+  fi
+done
 cp -R "$SRC/asu_work/baselines" "$DST/asu_work/" 2>/dev/null || true
 cp "$SRC/asu_work/ASU_IMPROVEMENT_PLAN.md" "$SRC/asu_work/ASU_PHASE0_FINDINGS.md" "$DST/asu_work/" 2>/dev/null || true
 

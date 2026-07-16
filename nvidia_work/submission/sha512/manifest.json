@@ -24,7 +24,7 @@
   "power": 0.00223
  },
  "adp_vs_baseline": 0.7266,
- "artifact_note": "This directory is the design the agent SHIPS: the pristine sha512 baseline with the single optimized sha512_core.v overlaid (changed_files). The four surrounding files are byte-identical to the contest pristine source (sha1: sha512.v 175837285a5e, h_constants 6ab74a4fb773, k_constants b87e10a10651, w_mem 51aca3c61576). Overlaying via `ppa.evaluate --variant-dir .../sha512/src/rtl` reproduces best_ppa above (ADP 0.7266). Independently re-measured by external review at area 3967.62624 / setup +334.61 / cells 29112.",
+ "artifact_note": "This directory is the design the agent SHIPS: the pristine sha512 baseline with the single optimized sha512_core.v overlaid (changed_files). The four surrounding files are byte-identical to the contest pristine source (sha256 prefixes: sha512.v 175837285a5e, h_constants 6ab74a4fb773, k_constants b87e10a10651, w_mem 51aca3c61576). Overlaying via `ppa.evaluate --variant-dir .../sha512/src/rtl` reproduces best_ppa above (ADP 0.7266). Independently re-synthesized keyless (fresh baseline + full 5-layer verify) 2026-07-15: area 3967.62624 / setup +334.61 / cells 29112 / LEC PROVEN.",
  "verification_per_layer": {
   "lint": "PASS",
   "compile": "PASS",

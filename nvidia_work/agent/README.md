@@ -13,8 +13,9 @@ whatever the pristine flow actually supports, and is never overstated:
 - **differential-only** — dualsim PASS with LEC INCONCLUSIVE (e.g. aes, an exploratory power
   tradeoff that did **not** improve ADP — not part of the headline set).
 
-Each `manifest.json` carries `verification_per_layer` + an `assurance` string; prose here and in
-the slides is driven by those fields, not the other way round.
+Each `manifest.json` carries `verification_per_layer` + an `assurance` string; prose here is
+driven by those fields (the slide decks are being reconciled to the same taxonomy — a PRIM
+deep-dive slide still says "full 5-layer" and is pending that pass).
 
 ## Layout
 

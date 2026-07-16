@@ -20,7 +20,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -698,7 +700,6 @@ def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
     """Submission artifact: ONLY the files the winning candidate actually
     changed vs pristine (a drop-in DELTA — does not overwrite unrelated
     source) + manifest.json with the ACTUAL per-layer verification status."""
-    out_dir.mkdir(parents=True, exist_ok=True)
     changed = {}
     if best and best["cid"] != "baseline":
         cand_files = pool.files_of(best["cid"])
@@ -709,10 +710,6 @@ def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
                 pristine = None
             if pristine is None or text != pristine:   # real delta only
                 changed[rel] = text
-        for rel, text in changed.items():
-            dst = out_dir / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(text)
     per_layer = _verify_status(ip, best["cid"]) if best else {}
     _adp = summary["best"]["adp_vs_baseline"] if best else None
     # label from the actual ADP outcome, not merely "did any file change" — a
@@ -740,7 +737,27 @@ def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
         "rounds": summary["rounds"],
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=1))
+    # CLEAN + ATOMIC emit: stage the FULL artifact (delta files + manifest) in a
+    # temp dir, then atomically swap it into place. Never MERGE into an existing
+    # submission dir — a re-emit that touches fewer files than a prior run would
+    # otherwise leave stale files behind (the 2026-07-15 sha512 canonical-mismatch
+    # failure class) and desync the directory from changed_files.
+    out_dir = Path(out_dir)
+    out_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(dir=out_dir.parent,
+                                    prefix=f".{out_dir.name}.emit-"))
+    try:
+        for rel, text in changed.items():
+            dst = staging / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(text)
+        (staging / "manifest.json").write_text(json.dumps(manifest, indent=1))
+        if out_dir.exists():
+            shutil.rmtree(out_dir)
+        staging.rename(out_dir)              # atomic within the same parent
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
     print(f"[{ip}] emitted {len(changed)} changed file(s) -> {out_dir} "
           f"| assurance: {manifest['assurance']}")
 
