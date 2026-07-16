@@ -74,6 +74,34 @@ docker run --rm --platform linux/amd64 -v <ASU_repo>:/asu -v $PWD/asu_work/agent
 python3 asu_work/agent/drc_digest.py <BlockN.drc.json>   # zero-token DRC diagnosis
 ```
 
+## Running with a real model — the organizer path (verified live 2026-07-15)
+
+Each track is invoked differently by the organizers. Export `EXPRESS_MODE_KEY` first;
+these are the exact real-model commands we validated end-to-end (incl. from a fresh
+tarball extract):
+
+```bash
+# NXP — contest runner starts a Vertex-backed model service; agent runs in endpoint mode
+cd <contest>/problem-categories/ICLAD26-NXP-Problems
+python3 runner/run_benchmark.py --problem easy \
+    --agent <this_repo>/nxp_work/agent/nxp_agent.py --model gemini-3-flash-preview --run-id r1
+#   -> 2 model calls, 8 IP .v + SoC top, GATE 30/30 + KAT 79/79 x2
+
+# NVIDIA — NO wrapper; the agent calls Vertex directly (AgentSetup.md). Needs Docker + ASAP7.
+cd <this_repo>/nvidia_work/agent
+python3 nvidia_agent.py --ip sha512          # staged live campaign -> submission/sha512/
+#   the shipped submission/sha512 (ADP 0.7266, full 5-layer) re-synthesizes keyless:
+python3 -m ppa.evaluate --ip sha512 --baseline
+python3 -m ppa.evaluate --ip sha512 --variant-dir ../submission/sha512/sha512/src/rtl \
+    --full-verify --workers 1 --no-proxy     # -> ADP 0.7266, LEC PROVEN
+
+# ASU — the submitted agent is DETERMINISTIC (no model call); official runner scores after:
+python3 <contest>/.../ICLAD26-ASU-Problems/official_eval/run_official_eval.py --run-id r1 \
+    --submission-dir <this_repo>/asu_work/official_submission --agent-entrypoint agent.py
+#   -> BlockN_repaired.py (FVR 0.68-0.76). Runner requires EXPRESS_MODE_KEY even though
+#      our ASU agent makes no model call.
+```
+
 ## Regression suites (all green as of last sync)
 
 | Suite | Command | Expected |

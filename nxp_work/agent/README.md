@@ -22,7 +22,26 @@ tb/tb_selfcheck.v     30-check staged self-test TB
 specs/, rtl/          hand-derived reference (stub model answers; STG reference)
 ```
 
-## Run — contest runner contract (AGENT_GUIDE.md)
+## Run — organizer path (contest runner)
+
+Organizers drive the agent through the contest runner, which creates `info.json`,
+starts a Vertex-backed model service, and invokes the agent:
+
+```bash
+# from the NXP problem dir (ICLAD26-NXP-Problems); needs EXPRESS_MODE_KEY exported
+python3 runner/run_benchmark.py --problem easy \
+    --agent <this_repo>/nxp_work/agent/nxp_agent.py --model <model_name> --run-id r1
+#   -> 8 IP .v + secure_periph_soc.v in result/<run-id>/; GATE 30/30 + KAT 79/79 ×2
+```
+
+Note: the public NXP checkout omits `scripts/model_service.py` (organizer-supplied
+Vertex wrapper). To run it yourself, either drop in a Vertex-backed `/generate`
+service (the ICLAD26-ASU-Problems `scripts/model_service.py` is the same wrapper)
+and pass `--model-endpoint http://127.0.0.1:<port>`, or use `--model stub` below.
+Verified live 2026-07-15: `run_benchmark.py … --model gemini-3-flash-preview
+--model-endpoint <live-vertex>` → 30/30 + KAT 79/79 ×2 in 2 model calls.
+
+### Agent contract (what the runner invokes)
 
 ```bash
 python3 nxp_agent.py <info_json_path> --model <model_name>
@@ -68,4 +87,6 @@ python3 kat_engine.py --gen-smoke --record --calibrate   # rebuild KAT assets
   behavior (bugs included) — the KAT model oracle works on unseen problems with no golden.
 - Known library bugs auto-patched (dma_engine cfg_rdata wire/reg — does not compile
   otherwise); watchdog kick-no-reload behavior asserted as-is.
-- Token discipline: perfect easy-tier solve measured at 2 calls / 42 s (2026-07-12).
+- Token discipline: 2 calls / 42 s, **perfect against our full verification stack** (30/30
+  self-test + KAT 79/79 on both oracles + 3,662-cycle reference match), 2026-07-12. The organizer
+  hidden testbench is not in the public checkout, so the official score is organizer-confirmed only.
