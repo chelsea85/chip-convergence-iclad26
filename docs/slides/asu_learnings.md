@@ -5,7 +5,7 @@ paginate: true
 size: "16:9"
 html: true
 style: |
-  section { font-size: 23px; padding: 48px 60px; }
+  section { font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 23px; padding: 48px 60px; }
   h1 { font-size: 38px; color: #1a3a6b; }
   h2 { font-size: 30px; color: #1a3a6b; }
   table { font-size: 19px; }

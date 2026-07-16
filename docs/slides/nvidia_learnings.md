@@ -5,7 +5,7 @@ paginate: true
 size: "16:9"
 html: true
 style: |
-  section { font-size: 23px; padding: 48px 60px; }
+  section { font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 23px; padding: 48px 60px; }
   h1 { font-size: 38px; color: #1a3a6b; }
   h2 { font-size: 30px; color: #1a3a6b; }
   table { font-size: 19px; }
@@ -114,7 +114,7 @@ last layer should never be the only one standing.
 
 ---
 
-# 6 · The contest toolkit is part of the problem
+# 6 · Toolchain anomalies need pristine differential checks
 
 - **aes flow shipped broken**: the generated all-modules file duplicates every per-module
   source; yosys re-definition errors were **masked by the run script's success banner** —

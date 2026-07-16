@@ -181,7 +181,7 @@ get one fix attempt each (top-2), *off* the proposal budget.
 
 ## [Slide 10]
 
-# 9 · Results scoreboard (all 7 IPs, honest)
+# 9 · Results scoreboard — complete seven-IP status
 
 | IP | Result | Assurance (per manifest) | Cost |
 |---|---|---|---|
@@ -199,7 +199,7 @@ Every artifact ships as a **repo-layout delta + manifest.json** stating its exac
 
 ## [Slide 11]
 
-# 10 · sha512 deep-dive: the agent beat its authors
+# 10 · sha512 deep-dive: agent 0.727 beat our best hand-rewrite (0.787)
 
 | Metric | Baseline | Agent live (Jul 14) | Δ |
 |---|---|---|---|
@@ -229,7 +229,7 @@ synthesis).
 | **ADP ratio** | 1.000 | **0.6045** | **−39.6%** |
 
 Earlier flat campaign: *no improvement — baseline is the submission.* The staged agent:
-**ADP 0.605 in 6 proposal calls / 167k tokens**, full 5-layer verified.
+**ADP 0.605 in 6 proposal calls / 167k tokens**, assurance = **equivalence+differential** (yosys LEC PROVEN + dual-instance differential sim; the pristine prim flow already fails compile/TB, so those two layers are pre-existing/skipped — not a full-5-layer claim).
 
 The library-IP shape is why: prim ships **147 files but the scored design is one CRC32
 module**. Diagnosis scopes the campaign to the file actually in the design — the third
@@ -484,7 +484,7 @@ on the public case, not yet a topology-neutral solver. Runner contract:
 
 ## [Slide 10]
 
-# 9 · The result: perfect solve, 2 calls, 42 seconds
+# 9 · The result: 2 calls, 42 s — perfect against our verification stack
 
 ```
 [1] model returned 8 YAML spec block(s)
@@ -526,7 +526,7 @@ errors are typed and model-directed — purpose-built repair material.
 
 | Item | Cost |
 |---|---|
-| Perfect easy-tier solve | **2 calls / ~40k tokens** |
+| Easy-tier solve (perfect vs our stack) | **2 calls / ~40k tokens** |
 | Repair bounds | ≤2 spec re-prompts, ≤2 generator-repair, ≤3 stitch |
 | Prevention > repair | schema in the *first* prompt ended the omission loop |
 | Every verification gate | free — deterministic, local, zero tokens |
@@ -620,7 +620,7 @@ already eligible → **never regress, never break connectivity.**
 
 [FLOW DIAGRAM] Left→right:
 - ZONE "DIAGNOSE (zero tokens)": DRC report → per-rule findings (count + exact geometry) matched to the repair-rule library.
-- CENTER, dashed box "REPAIR — candidate fix-passes (deterministic + model)": fix-pass = ORIGINAL script + appended pya (runs before write); deterministic grid-snap (exact-rule-derived); model fix-pass (rules + coupling + screenshot, best-of-N, code-compile checked, render-error repair) → VERIFY (render → DRC → connectivity, measured with the official evaluator's OWN functions = identical to the scoring machine) → decision "eligible & better?": no → KEEP-BEST (gated-lexicographic; baseline = eligible floor, a regression/breakage discarded); loop.
+- CENTER, dashed box "REPAIR — candidate fix-passes (deterministic + model)": fix-pass = ORIGINAL script + appended pya (runs before write); deterministic grid-snap (exact-rule-derived); model fix-pass (rules + coupling + screenshot, best-of-N, code-compile checked, render-error repair) → VERIFY (render → DRC → connectivity, measured with the official evaluator's OWN functions (the scorer's own code)) → decision "eligible & better?": no → KEEP-BEST (gated-lexicographic; baseline = eligible floor, a regression/breakage discarded); loop.
 - ZONE "EMIT · SCORE": best eligible script → output_path + usage.json (runner-contract compliant). Env = version-exact KLayout 0.30.1 Docker (organizer scoring target); 5/5 blocks eligible, connectivity preserved.
 Caption: diagnose (0 tokens) → propose → verify == scorer → keep-best → emit. Eligible on all 5 blocks.
 
@@ -656,7 +656,7 @@ Homebrew ships 0.30.9 (and hits Gatekeeper quarantine) — the wrong path.
 
 **Our fix — Dockerized, version-exact:** an amd64 image with the pinned
 `klayout_0.30.1-1_amd64.deb` + deps. Host is Apple Silicon (arm64) → runs under Docker emulation:
-slower, but **byte-for-byte the organizers' scoring environment.**
+slower, but **version-exact KLayout 0.30.1** — our container DRC matches the reference report on **11/14 rules**.
 
 **Calibration proof:** on the untouched Block1, our container DRC matches the reference report on
 **11 of 14 rules exactly** (V2.M3.AUX.2=72, V4.M5.AUX.2=48, V0.M1.AUX.3=37, all S-rules…). Our DRC
@@ -708,7 +708,7 @@ prompt — the model gets the transform *and* the coupling warning for the rules
 
 **Verify** (`verify.py`): render → GDS → ASAP7 DRC → connectivity, all measured with the official
 evaluator's **own** functions. Reproduces the baseline exactly (total=315, connectivity 824
-sources). No metric drift between our loop and the scoring machine.
+sources). No metric drift: the inner loop calls the evaluator's own functions (independently re-scored by the published evaluator).
 
 **Keep-best** (gated-lexicographic, matching the contest): eligible → min `final_violation_rate` →
 max `repair_rate`, with the untouched baseline as the guaranteed-eligible floor.
@@ -816,7 +816,7 @@ open work is a global multi-edit move-generator, a well-scoped (multi-day) exten
   with two concrete solution paths scoped.
 
 **Never a regression, never a broken net — on every block.** Same discipline that delivered NVIDIA
-(ADP 0.727 / 0.605) and NXP (2-call perfect solve).
+(ADP 0.727 sha512 / 0.605 prim) and NXP (2-call solve, perfect vs our verification stack).
 
 ---
 

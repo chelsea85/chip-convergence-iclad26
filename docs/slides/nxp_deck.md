@@ -5,7 +5,7 @@ paginate: true
 size: "16:9"
 html: true
 style: |
-  section { font-size: 24px; padding: 48px 60px; }
+  section { font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 24px; padding: 48px 60px; }
   h1 { font-size: 40px; color: #1a3a6b; }
   h2 { font-size: 32px; color: #1a3a6b; }
   table { font-size: 20px; }
@@ -256,7 +256,7 @@ on the public case, not yet a topology-neutral solver. Runner contract:
 
 ---
 
-# 9 · The result: perfect solve, 2 calls, 42 seconds
+# 9 · The result: 2 calls, 42 s — perfect against our verification stack
 
 ```
 [1] model returned 8 YAML spec block(s)
@@ -271,7 +271,9 @@ on the public case, not yet a topology-neutral solver. Runner contract:
 ```
 
 The generated SoC is **cycle-identical** to our hand-built reference over 3662 random
-cycles — and the whole solve cost **2 model calls / ~40k tokens**.
+cycles — and the whole solve cost **2 model calls / ~40k tokens**. "Perfect" here means
+against **our** stack (30/30 self-test + KAT 79/79 ×2 + STG); the organizer hidden
+testbench isn't in the public checkout, so the official score is organizer-confirmed only.
 
 ---
 
@@ -294,7 +296,7 @@ errors are typed and model-directed — purpose-built repair material.
 
 | Item | Cost |
 |---|---|
-| Perfect easy-tier solve | **2 calls / ~40k tokens** |
+| Easy-tier solve (perfect vs our stack) | **2 calls / ~40k tokens** |
 | Repair bounds | ≤2 spec re-prompts, ≤2 generator-repair, ≤3 stitch |
 | Prevention > repair | schema in the *first* prompt ended the omission loop |
 | Every verification gate | free — deterministic, local, zero tokens |

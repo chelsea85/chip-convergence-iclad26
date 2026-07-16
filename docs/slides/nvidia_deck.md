@@ -5,7 +5,7 @@ paginate: true
 size: "16:9"
 html: true
 style: |
-  section { font-size: 24px; padding: 48px 60px; }
+  section { font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 24px; padding: 48px 60px; }
   h1 { font-size: 40px; color: #1a3a6b; }
   h2 { font-size: 32px; color: #1a3a6b; }
   table { font-size: 20px; }
@@ -284,7 +284,9 @@ get one fix attempt each (top-2), *off* the proposal budget.
 
 ---
 
-# 9 · Results scoreboard (all 7 IPs, honest)
+<!-- _footer: "" -->
+
+# 9 · Results scoreboard — complete seven-IP status
 
 | IP | Result | Assurance (per manifest) | Cost |
 |---|---|---|---|
@@ -295,12 +297,11 @@ get one fix attempt each (top-2), *off* the proposal budget.
 | kmac / ascon | offline candidates (Keccak-θ; probes); live campaigns queued (Jul 19+) | 5-layer capable | — |
 | NVDLA | baseline + zero-config onboarding (323 sources); campaign on unlimited quota | — | — |
 
-Every artifact ships as a **repo-layout delta + manifest.json** stating its exact
-`verification_per_layer` + `assurance` — no blanket claims.
+Each artifact = **delta + manifest.json** with exact `verification_per_layer` + `assurance`.
 
 ---
 
-# 10 · sha512 deep-dive: the agent beat its authors
+# 10 · sha512 deep-dive: agent 0.727 beat our best hand-rewrite (0.787)
 
 | Metric | Baseline | Agent live (Jul 14) | Δ |
 |---|---|---|---|
@@ -328,7 +329,9 @@ synthesis).
 | **ADP ratio** | 1.000 | **0.6045** | **−39.6%** |
 
 Earlier flat campaign: *no improvement — baseline is the submission.* The staged agent:
-**ADP 0.605 in 6 proposal calls / 167k tokens**, full 5-layer verified.
+**ADP 0.605 in 6 proposal calls / 167k tokens**, assurance = **equivalence+differential**
+(yosys LEC PROVEN + dual-instance differential sim; the pristine prim flow already fails
+compile/TB, so those two layers are pre-existing/skipped — not a full-5-layer claim).
 
 The library-IP shape is why: prim ships **147 files but the scored design is one CRC32
 module**. Diagnosis scopes the campaign to the file actually in the design — the third

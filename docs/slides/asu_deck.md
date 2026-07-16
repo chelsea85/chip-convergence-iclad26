@@ -5,7 +5,7 @@ paginate: true
 size: "16:9"
 html: true
 style: |
-  section { font-size: 24px; padding: 48px 60px; }
+  section { font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 24px; padding: 48px 60px; }
   h1 { font-size: 40px; color: #1a3a6b; }
   h2 { font-size: 32px; color: #1a3a6b; }
   table { font-size: 20px; }
@@ -96,7 +96,7 @@ already eligible → **never regress, never break connectivity.**
 <rect x="262" y="164" width="426" height="56" class="box"/>
 <text x="475" y="184" text-anchor="middle" class="t" font-size="12.5">VERIFY (== official scorer)</text>
 <text x="475" y="201" text-anchor="middle" class="tiny">render → DRC → connectivity, measured with the evaluator's OWN</text>
-<text x="475" y="214" text-anchor="middle" class="tiny">functions → identical to the scoring machine</text>
+<text x="475" y="214" text-anchor="middle" class="tiny">functions → the scorer's own render/DRC/connectivity code</text>
 <line x1="475" y1="220" x2="475" y2="234" stroke="#1a3a6b" stroke-width="1.6" marker-end="url(#aar)"/>
 
 <polygon points="475,236 560,268 475,300 390,268" fill="#eef3fa" stroke="#1a3a6b" stroke-width="1.6"/>
@@ -151,7 +151,7 @@ Homebrew ships 0.30.9 (and hits Gatekeeper quarantine) — the wrong path.
 
 **Our fix — Dockerized, version-exact:** an amd64 image with the pinned
 `klayout_0.30.1-1_amd64.deb` + deps. Host is Apple Silicon (arm64) → runs under Docker emulation:
-slower, but **byte-for-byte the organizers' scoring environment.**
+slower, but **version-exact KLayout 0.30.1** — our container DRC matches the reference report on **11/14 rules**.
 
 **Calibration proof:** on the untouched Block1, our container DRC matches the reference report on
 **11 of 14 rules exactly** (V2.M3.AUX.2=72, V4.M5.AUX.2=48, V0.M1.AUX.3=37, all S-rules…). Our DRC
@@ -197,7 +197,7 @@ prompt — the model gets the transform *and* the coupling warning for the rules
 
 **Verify** (`verify.py`): render → GDS → ASAP7 DRC → connectivity, all measured with the official
 evaluator's **own** functions. Reproduces the baseline exactly (total=315, connectivity 824
-sources). No metric drift between our loop and the scoring machine.
+sources). No metric drift: the inner loop calls the evaluator's own functions (independently re-scored by the published evaluator).
 
 **Keep-best** (gated-lexicographic, matching the contest): eligible → min `final_violation_rate` →
 max `repair_rate`, with the untouched baseline as the guaranteed-eligible floor.
@@ -270,7 +270,7 @@ Derived from the exact rule; verified by the exact evaluator.
 
 **All 5 below the reference denominator** (repair_rate ≈ 0.59 on Block1). "credible" = passes a
 **rendered-geometry** connectivity check (net count + conducting area), not just the source-parsing
-official gate — so the win is a real physical repair, not an evaluator artifact. The agent enforces
+official gate — so the win survives the official render+DRC+connectivity gate PLUS a rendered-geometry credibility check — not just a counting artifact. The agent enforces
 this gate in production keep-best: a candidate that isn't credible is discarded.
 
 ---
@@ -286,8 +286,9 @@ The win came from a **review-and-falsify loop**, not a lucky guess:
   5 blocks, and **gated by a rendered-connectivity credibility check** so it can't be an exploit.
 - **Every candidate measured identically to how it will be scored** — no proxy, no drift.
 
-**Three tracks, one architecture, three real results:** NVIDIA ADP 0.727 / 0.605 · NXP 2-call
-perfect solve · **ASU FVR 0.68–0.76 on all 5 blocks.**
+**Three tracks, one architecture, three real results:** NVIDIA ADP 0.727 (sha512, full 5-layer) /
+0.605 (prim, equivalence+differential) · NXP 2-call solve, perfect vs our verification stack ·
+**ASU FVR 0.68–0.76 on all 5 blocks.**
 
 ---
 

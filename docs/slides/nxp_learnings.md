@@ -5,7 +5,7 @@ paginate: true
 size: "16:9"
 html: true
 style: |
-  section { font-size: 23px; padding: 48px 60px; }
+  section { font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 23px; padding: 48px 60px; }
   h1 { font-size: 38px; color: #1a3a6b; }
   h2 { font-size: 30px; color: #1a3a6b; }
   table { font-size: 19px; }
@@ -119,7 +119,7 @@ verification modes catch what redundant ones cannot.
 
 ---
 
-# 7 · Sabotage-validate your gates (they lie otherwise)
+# 7 · Sabotage-validate your gates (prove each fails on its own fault)
 
 Every structural gate is validated by **planting the bug it claims to catch**: 8/8 sabotage
 suite (renamed ports, dangling IRQ nets, missing instances, fabric hang-offs, bridge-bus
