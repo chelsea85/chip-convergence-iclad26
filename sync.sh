@@ -63,4 +63,4 @@ echo "synced from $SRC"
 
 # Slides
 mkdir -p "$DST/docs/slides"
-cp "$SRC/slides"/*.md "$SRC/slides"/*.pdf "$DST/docs/slides/" 2>/dev/null || true
+cp "$SRC/slides"/*.md "$SRC/slides"/*.pdf "$SRC/slides"/build.sh "$DST/docs/slides/" 2>/dev/null || true
