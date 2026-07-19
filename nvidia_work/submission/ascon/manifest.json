@@ -1,0 +1,51 @@
+{
+ "ip": "ascon",
+ "result": "optimized",
+ "cid": "b153b877f996",
+ "changed_files": [
+  "opentitan/hw/ip/ascon/yosys_syn/generated/tlul_cmd_intg_chk.v"
+ ],
+ "baseline_ppa": {
+  "area": 1789.7679,
+  "cells": 12295.0,
+  "ff": 1769.0,
+  "setup": -430.14,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.0184
+ },
+ "best_ppa": {
+  "area": 1801.05282,
+  "cells": 12386.0,
+  "ff": 1769.0,
+  "setup": -415.85,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.0183
+ },
+ "adp_vs_baseline": 0.97918,
+ "experimental_best": {
+  "cid": "1b5c86d80918",
+  "adp_vs_baseline": 0.9667,
+  "lec": "INCONCLUSIVE",
+  "note": "higher ADP but not LEC-PROVEN \u2014 NOT canonical"
+ },
+ "verification_per_layer": {
+  "lint": "PASS",
+  "compile": "PASS",
+  "gate": "PASS",
+  "lec": "PROVEN",
+  "dualsim": "PASS"
+ },
+ "candidate_aware_coverage": {
+  "compile": "candidate .v",
+  "lec": "candidate .v",
+  "dualsim": "candidate .v",
+  "gate": "pristine .sv (candidate .v NOT exercised)"
+ },
+ "assurance": "equivalence+differential: LEC PROVEN + dualsim PASS (gate ran the pristine .sv \u2014 candidate .v not exercised)",
+ "llm_calls": 16,
+ "llm_tokens_approx": 961149,
+ "rounds": [],
+ "ts": "2026-07-19T16:33:03"
+}

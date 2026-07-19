@@ -1,0 +1,33 @@
+{
+ "ip": "kmac",
+ "result": "no-improvement: baseline is the submission",
+ "cid": "baseline",
+ "changed_files": [],
+ "baseline_ppa": {
+  "area": 13353.80742,
+  "cells": 97078.0,
+  "ff": 788.0,
+  "setup": -1115.75,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.105
+ },
+ "best_ppa": {
+  "area": 13353.80742,
+  "cells": 97078.0,
+  "ff": 788.0,
+  "setup": -1115.75,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.105
+ },
+ "adp_vs_baseline": 1.0,
+ "experimental_best": null,
+ "verification_per_layer": {},
+ "candidate_aware_coverage": null,
+ "assurance": "baseline (n/a)",
+ "llm_calls": 11,
+ "llm_tokens_approx": 926477,
+ "rounds": [],
+ "ts": "2026-07-19T16:11:00"
+}

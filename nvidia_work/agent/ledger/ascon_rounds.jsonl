@@ -1,0 +1,3 @@
+{"ts": "2026-07-19T12:16:10", "round": 1, "parent": "baseline", "tag": "balanced-tree", "rungs": ["balanced-tree", "carry-save", "arith-arch", "restructure-select", "micro-opt", "share-resources"], "accepted": 3, "best_adp": 0.9666551905258777, "calls": 8, "tokens": 494470}
+{"ts": "2026-07-19T12:19:31", "round": 2, "parent": "1b5c86d80918", "tag": "ascon-arith-restructure", "rungs": ["arith-arch", "balanced-tree", "carry-save"], "accepted": 0, "best_adp": 0.9666551905258777, "calls": 12, "tokens": 726266}
+{"ts": "2026-07-19T12:23:02", "round": 3, "parent": "1b5c86d80918", "tag": "tree-balancing-harm", "rungs": ["arith-arch", "balanced-tree", "carry-save"], "accepted": 0, "best_adp": 0.9666551905258777, "calls": 16, "tokens": 961149}

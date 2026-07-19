@@ -1,0 +1,64 @@
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	parameter signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	parameter signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	parameter signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	parameter signed [31:0] top_pkg_TL_AUW = 23;
+	parameter signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	parameter signed [31:0] top_pkg_TL_AIW = 8;
+	parameter signed [31:0] top_pkg_TL_AW = 32;
+	parameter signed [31:0] top_pkg_TL_DW = 32;
+	parameter signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	parameter signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+
+	// Pre-calculate indices to simplify logic and help synthesis optimization
+	localparam UserW = tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width + tlul_pkg_H2DCmdIntgWidth + tlul_pkg_DataIntgWidth;
+	localparam ValidIdx = 7 + top_pkg_TL_SZW + top_pkg_TL_AIW + top_pkg_TL_AW + top_pkg_TL_DBW + top_pkg_TL_DW + UserW;
+
+	// Extract fields directly from the flattened bus
+	// Address: tl_i[91:60]
+	wire [top_pkg_TL_AW-1:0]  a_addr   = tl_i[top_pkg_TL_AW + (top_pkg_TL_DBW + (top_pkg_TL_DW + UserW)) -: top_pkg_TL_AW];
+	// Opcode/Size: tl_i[107:105]
+	wire [2:0]                a_opsize = tl_i[6 + (top_pkg_TL_SZW + (top_pkg_TL_AIW + (top_pkg_TL_AW + (top_pkg_TL_DBW + (top_pkg_TL_DW + UserW))))) -: 3];
+	// Mask: tl_i[59:56]
+	wire [top_pkg_TL_DBW-1:0] a_mask   = tl_i[top_pkg_TL_DBW + (top_pkg_TL_DW + UserW) -: top_pkg_TL_DBW];
+	// Instruction Type: tl_i[18:15]
+	wire [3:0]                a_instr  = tl_i[UserW - (UserW - 18) -: 4];
+	// Command Integrity: tl_i[14:8]
+	wire [6:0]                a_cmd_intg = tl_i[UserW - (UserW - 14) -: 7];
+	// Data Integrity: tl_i[7:1]
+	wire [6:0]                a_data_intg = tl_i[UserW - (UserW - 7) -: 7];
+	// Data: tl_i[55:24]
+	wire [top_pkg_TL_DW-1:0]  a_data   = tl_i[top_pkg_TL_DW + UserW -: top_pkg_TL_DW];
+	// Valid bit: tl_i[108]
+	wire                      a_valid  = tl_i[ValidIdx];
+
+	// Reconstruct command payload for integrity check
+	wire [42:0] cmd = {a_instr, a_addr, a_opsize, a_mask};
+
+	wire [1:0] err;
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i({a_cmd_intg, 14'b0, cmd}),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+
+	wire data_err;
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i({a_data_intg, a_data}),
+		.data_err_o(data_err)
+	);
+
+	// Final error output gated by valid signal
+	assign err_o = a_valid & (|err | data_err);
+
+	// Avoid lint warnings for unused bits of the wide input bus
+	wire unused_tl = |tl_i;
+endmodule

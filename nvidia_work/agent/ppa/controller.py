@@ -25,7 +25,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from .config import IPS, LEDGER_DIR, REPO
+from .config import IPS, LEDGER_DIR, REPO, NVWORK, AGENT
 from .emit import staged_replace
 from .workspace import Workspace, pristine_source
 from . import evaluate as E
@@ -639,11 +639,28 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
                   f"{plateau_rounds} rounds) — stopping")
             break
 
-    best = frontier.best(obj, base_ppa)
+    # ASSURANCE-AWARE canonical selection (2026-07-19 ascon finding): the PPA-best
+    # frontier entry is NOT necessarily the canonical winner. An LEC-INCONCLUSIVE/
+    # -ERROR candidate must never displace an LEC-PROVEN improvement just because its
+    # ADP is a little better — a rare functional mismatch can slip past limited
+    # differential sim (the rejected ascon candidate used WRONG integrity-bit slices,
+    # measured a better ADP, and missed real integrity errors). Canonical = best-ADP
+    # LEC-PROVEN improvement; if none is proven, ship the eligible baseline and keep
+    # the unproven PPA-best only as EXPERIMENTAL (never canonical).
+    ppa_best = frontier.best(obj, base_ppa)
+    best = _canonical_best(ip, pool, obj, base_ppa)   # full pool, not the frontier
+    _adp = lambda e: round(obj.adp_ratio(e["ppa"], base_ppa) or 1.0, 4)
+    _exp = _experimental_best(ip, ppa_best, best, obj, base_ppa)
+    if best is None and _exp is not None:
+        print(f"[{ip}] canonical: PPA-best {_exp['cid']} (ADP {_exp['adp_vs_baseline']}) is not "
+              f"LEC-PROVEN and no proven improvement exists -> shipping baseline; kept EXPERIMENTAL.")
+    elif best is not None and _exp is not None:
+        print(f"[{ip}] canonical: preferring LEC-PROVEN {best['cid']} (ADP {_adp(best)}) over "
+              f"higher-ADP-but-unproven {_exp['cid']} (ADP {_exp['adp_vs_baseline']}).")
     summary.update({
         "best": best and {"cid": best["cid"], "ppa": best["ppa"],
-                          "adp_vs_baseline": round(
-                              obj.adp_ratio(best["ppa"], base_ppa) or 1.0, 4)},
+                          "adp_vs_baseline": _adp(best)},
+        "experimental_best": _exp,
         "frontier_size": len(frontier.entries),
         "calls": model.calls, "tokens": model.tokens})
     print(f"\n[{ip}] DONE: {json.dumps(summary['best'], indent=1)}\n"
@@ -676,22 +693,69 @@ def _verify_status(ip: str, cid: str) -> dict:
     return last
 
 
-def _assurance(v: dict) -> str:
-    """Summarise the assurance level actually reached for this candidate."""
+def _assurance(v: dict, gate_blind: bool = False) -> str:
+    """Summarise the assurance level actually reached for this candidate.
+
+    gate_blind=True (2026-07-19 ascon finding): for an OpenTitan generated-.v edit,
+    the Verilator TB gate builds the pristine .sv, so its PASS did NOT exercise the
+    candidate — it must not be counted as a candidate-aware functional layer."""
     if not v:
         return "unknown (no ledger verify record)"
     passed = lambda k, *ok: v.get(k) in ok
+    gate_ok = passed("gate", "PASS") and not gate_blind
     if (passed("lint", "PASS") and passed("compile", "PASS")
-            and passed("gate", "PASS") and passed("lec", "PROVEN")
-            and passed("dualsim", "PASS")):
+            and gate_ok and passed("lec", "PROVEN") and passed("dualsim", "PASS")):
         return "full 5-layer: lint+compile+TB gate PASS, yosys LEC PROVEN, dualsim PASS"
     if passed("lec", "PROVEN") and passed("dualsim", "PASS"):
-        return ("equivalence+differential: LEC PROVEN + dualsim PASS "
-                f"(gate={v.get('gate')}, compile={v.get('compile')})")
+        note = ("gate ran the pristine .sv — candidate .v not exercised"
+                if gate_blind else f"gate={v.get('gate')}, compile={v.get('compile')}")
+        return f"equivalence+differential: LEC PROVEN + dualsim PASS ({note})"
     if passed("dualsim", "PASS"):
-        return (f"differential-only: dualsim PASS "
-                f"(lec={v.get('lec')}, gate={v.get('gate')})")
+        return (f"differential-only: dualsim PASS (lec={v.get('lec')}, "
+                f"gate={v.get('gate')}"
+                + (", candidate-blind" if gate_blind else "") + ")")
     return "measurement-only / see per_layer"
+
+
+def _canonical_best(ip: str, pool, obj, base_ppa: dict):
+    """Assurance-aware canonical winner, taken from the FULL accepted POOL — NOT
+    the Pareto frontier. A LEC-PROVEN candidate can be PPA-dominated by an unproven
+    one and thus EVICTED from the frontier (2026-07-19 ascon re-review: the invalid
+    INCONCLUSIVE candidate dominated the proven runner-up on area+setup+power, so a
+    frontier-only search returned None). Search every accepted state, keep only
+    LEC-PROVEN improvements, return the best-ADP one; None if none exists (caller
+    ships the eligible baseline). An unproven (INCONCLUSIVE/ERROR) candidate is
+    never canonical, however good its ADP."""
+    proven = []
+    for s in pool.states.values():
+        if s.cid == "baseline":
+            continue
+        adp = obj.adp_ratio(s.ppa, base_ppa)
+        if adp is None or adp >= 1.0:
+            continue                                  # not an ADP improvement
+        if _verify_status(ip, s.cid).get("lec") == "PROVEN":
+            proven.append((adp, s))
+    if not proven:
+        return None
+    _, s = min(proven, key=lambda ae: ae[0])
+    return {"cid": s.cid, "ppa": s.ppa}
+
+
+def _experimental_best(ip: str, ppa_best, best, obj, base_ppa: dict):
+    """The demoted, REAL (ADP-improving), UNPROVEN candidate — or None. It is never
+    baseline, never a non-improvement (adp >= 1.0), and never the canonical winner.
+    A baseline-only campaign therefore has NO experimental best (Codex 2026-07-19
+    P1: this previously recorded baseline itself)."""
+    if ppa_best is None or ppa_best["cid"] == "baseline":
+        return None
+    adp = obj.adp_ratio(ppa_best["ppa"], base_ppa)
+    if adp is None or adp >= 1.0:
+        return None
+    if best is not None and best["cid"] == ppa_best["cid"]:
+        return None
+    return {"cid": ppa_best["cid"], "adp_vs_baseline": round(adp, 4),
+            "lec": _verify_status(ip, ppa_best["cid"]).get("lec"),
+            "note": "higher ADP but not LEC-PROVEN — NOT canonical"}
 
 
 def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
@@ -699,6 +763,17 @@ def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
     """Submission artifact: ONLY the files the winning candidate actually
     changed vs pristine (a drop-in DELTA — does not overwrite unrelated
     source) + manifest.json with the ACTUAL per-layer verification status."""
+    # PATH PREFLIGHT (2026-07-19): a relative --emit-best resolved against the
+    # agent CWD once silently emitted under nvidia_work/agent/submission. Reject
+    # that location and always print the resolved ABSOLUTE target so a mistake is
+    # visible before writing.
+    out_dir = Path(out_dir).resolve()
+    _bad = (AGENT / "submission").resolve()
+    if out_dir == _bad or _bad in out_dir.parents:
+        raise SystemExit(
+            f"[{ip}] refusing to emit under {_bad} (relative-path mistake); pass an "
+            f"absolute --emit-best under {NVWORK / 'submission'} (canonical) instead")
+    print(f"[{ip}] emit target (resolved): {out_dir}")
     changed = {}
     if best and best["cid"] != "baseline":
         cand_files = pool.files_of(best["cid"])
@@ -710,6 +785,14 @@ def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
             if pristine is None or text != pristine:   # real delta only
                 changed[rel] = text
     per_layer = _verify_status(ip, best["cid"]) if best else {}
+    # CANDIDATE-AWARE COVERAGE (2026-07-19 ascon): for OpenTitan dual-representation
+    # IPs, compile/synth/LEC/dualsim consume the changed generated .v, but the
+    # Verilator TB gate builds the pristine .sv — so a generated-.v-only edit's
+    # "gate PASS" did NOT exercise the candidate and must not count as a
+    # candidate-aware functional layer.
+    spec = IPS.get(ip)
+    gate_blind = bool(getattr(spec, "sv_sources", ()) and changed
+                      and all("/generated/" in f and f.endswith(".v") for f in changed))
     _adp = summary["best"]["adp_vs_baseline"] if best else None
     # label from the actual ADP outcome, not merely "did any file change" — a
     # changed candidate that did NOT improve ADP (e.g. a power tradeoff) must not
@@ -723,14 +806,24 @@ def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
     manifest = {
         "ip": ip,
         "result": _result,
-        "cid": best["cid"] if best else None,
+        "cid": best["cid"] if best else "baseline",
         "changed_files": sorted(changed),          # true delta
         "baseline_ppa": base_ppa,
-        "best_ppa": best["ppa"] if best else None,
-        "adp_vs_baseline": summary["best"]["adp_vs_baseline"]
-        if summary.get("best") else None,
+        # baseline fallback (no proven improvement): a COMPLETE baseline manifest,
+        # not nulls — ADP 1.0 and best_ppa == baseline_ppa (Codex 2026-07-19 P1).
+        "best_ppa": best["ppa"] if best else base_ppa,
+        "adp_vs_baseline": (summary["best"]["adp_vs_baseline"]
+                            if summary.get("best") else 1.0),
+        # the unproven higher-ADP candidate (if any) — recorded, NEVER substituted
+        # for the canonical/baseline result.
+        "experimental_best": summary.get("experimental_best"),
         "verification_per_layer": per_layer,       # actual statuses
-        "assurance": _assurance(per_layer) if changed else "baseline (n/a)",
+        "candidate_aware_coverage": ({
+            "compile": "candidate .v", "lec": "candidate .v",
+            "dualsim": "candidate .v",
+            "gate": "pristine .sv (candidate .v NOT exercised)" if gate_blind
+                    else "candidate"} if changed else None),
+        "assurance": _assurance(per_layer, gate_blind) if changed else "baseline (n/a)",
         "llm_calls": summary["calls"],
         "llm_tokens_approx": summary["tokens"],
         "rounds": summary["rounds"],

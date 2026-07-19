@@ -1,0 +1,20 @@
+{
+ "result": "rejected-inequivalent",
+ "eligible": false,
+ "cid": "1b5c86d80918",
+ "rejection_reason": "Functionally inequivalent: wrong TL-UL integrity-bit slices (cmd tl_i[21:15] should be [14:8]; data tl_i[14:8] should be [7:1]).",
+ "targeted_differential": {
+  "result": "FAIL",
+  "mismatches": 7,
+  "vectors": 100000,
+  "includes_false_negatives": true,
+  "note": "missed real integrity errors \u2014 decisive for a command-integrity checker"
+ },
+ "assurance": "INEQUIVALENT \u2014 NOT SUBMISSION ELIGIBLE",
+ "forensic_ppa_only": {
+  "adp_vs_baseline": 0.9667,
+  "note": "measurement of functionally-different RTL; NOT an eligible result"
+ },
+ "superseded_by": "nvidia_work/submission/ascon (b153b877f996, ADP 0.97918, LEC PROVEN)",
+ "see": "NVIDIA_JULY19_CAMPAIGN_REVIEW.md"
+}

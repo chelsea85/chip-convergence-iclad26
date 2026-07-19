@@ -1,0 +1,252 @@
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+
+	// Simplified extraction logic based on constant parameter values
+	// tl_i is [108:0]
+	// cmd payload extraction (43 bits total)
+	wire [42:0] cmd;
+	assign cmd[38:7]  = tl_i[90:59];  // a_address
+	assign cmd[6:4]   = tl_i[106:104]; // a_opcode
+	assign cmd[3:0]   = tl_i[58:55];  // a_mask
+	assign cmd[42:39] = tl_i[18:15];  // a_user.instr_type
+
+	wire [1:0] err;
+	// Integrity bits for command are at tl_i[14:8]
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i({tl_i[14:8], 14'b0, cmd}),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+
+	wire data_err;
+	// Integrity bits for data are at tl_i[6:0], data is at tl_i[54:23]
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i(tl_i[6:0]),
+		.data_i(tl_i[54:23]),
+		.data_err_o(data_err)
+	);
+
+	// err_o is gated by a_valid (tl_i[108])
+	assign err_o = tl_i[108] & (err[1] | err[0] | data_err);
+
+	wire unused_tl;
+	assign unused_tl = |tl_i;
+endmodule
+
+// FILE: prim_subreg_shadow.v
+module prim_subreg_shadow (
+	clk_i,
+	rst_ni,
+	rst_shadowed_ni,
+	re,
+	we,
+	wd,
+	de,
+	d,
+	qe,
+	q,
+	ds,
+	qs,
+	phase,
+	err_update,
+	err_storage
+);
+	reg _sv2v_0;
+	parameter signed [31:0] DW = 32;
+	parameter [2:0] SwAccess = 3'd0;
+	parameter [DW - 1:0] RESVAL = 1'sb0;
+	parameter [0:0] Mubi = 1'b0;
+	input clk_i;
+	input rst_ni;
+	input rst_shadowed_ni;
+	input re;
+	input we;
+	input [DW - 1:0] wd;
+	input de;
+	input [DW - 1:0] d;
+	output wire qe;
+	output wire [DW - 1:0] q;
+	output wire [DW - 1:0] ds;
+	output wire [DW - 1:0] qs;
+	output wire phase;
+	output wire err_update;
+	output wire err_storage;
+	localparam [2:0] InvertedSwAccess = (SwAccess == 3'd4 ? 3'd5 : (SwAccess == 3'd5 ? 3'd4 : SwAccess));
+	wire phase_clear;
+	reg phase_q;
+	reg shadow_we;
+	wire committed_we;
+	wire committed_de;
+	wire committed_qe;
+	reg [DW - 1:0] shadow_wd;
+	reg [DW - 1:0] shadow_q;
+	wire [DW - 1:0] committed_q;
+	wire [DW - 1:0] committed_qs;
+	wire wr_en;
+	wire [DW - 1:0] wr_data;
+
+	prim_subreg_arb #(
+		.DW(DW),
+		.SwAccess(SwAccess),
+		.Mubi(Mubi)
+	) wr_en_data_arb(
+		.we(we),
+		.wd(wd),
+		.de(de),
+		.d(d),
+		.q(q),
+		.wr_en(wr_en),
+		.wr_data(wr_data)
+	);
+
+	assign phase_clear = (SwAccess == 3'd1 ? 1'b0 : re);
+	always @(posedge clk_i or negedge rst_ni) begin : phase_reg
+		if (!rst_ni)
+			phase_q <= 1'b0;
+		else if ((wr_en && !err_storage) && !err_update)
+			phase_q <= ~phase_q;
+		else if ((phase_clear || err_storage) || err_update)
+			phase_q <= 1'b0;
+	end
+
+	always @(posedge clk_i or negedge rst_shadowed_ni)
+		if (!rst_shadowed_ni)
+			shadow_q <= ~RESVAL;
+		else if (shadow_we)
+			shadow_q <= shadow_wd;
+
+	wire [DW-1:0] shadow_q_inv = ~shadow_q;
+
+	generate
+		if (InvertedSwAccess == SwAccess) begin : gen_shadow_reg_std
+			wire shadow_wr_en;
+			wire [DW - 1:0] shadow_wr_data;
+			prim_subreg_arb #(
+				.DW(DW),
+				.SwAccess(InvertedSwAccess),
+				.Mubi(Mubi)
+			) wr_en_data_arb_shadow(
+				.we(we),
+				.wd(~wr_data),
+				.de(de),
+				.d(~d),
+				.q(shadow_q),
+				.wr_en(shadow_wr_en),
+				.wr_data(shadow_wr_data)
+			);
+			always @(*) begin
+				shadow_we = 1'b0;
+				shadow_wd = shadow_wr_data;
+				if (!err_storage) begin
+					if (err_update || phase_clear) begin
+						shadow_we = 1'b1;
+						shadow_wd = ~committed_q;
+					end
+					else if (!phase_q && shadow_wr_en) begin
+						shadow_we = 1'b1;
+						shadow_wd = shadow_wr_data;
+					end
+				end
+			end
+			// Optimization: Explicit XOR reduction for comparison
+			assign err_update = phase_q & wr_en & (|(shadow_q_inv ^ wr_data));
+		end
+		else begin : gen_shadow_reg_wxx
+			wire shadow_wr_en_phase0;
+			wire shadow_wr_en_phase1;
+			wire [DW - 1:0] shadow_wr_data_phase0;
+			wire [DW - 1:0] shadow_wr_data_phase1;
+			prim_subreg_arb #(
+				.DW(DW),
+				.SwAccess(3'd0),
+				.Mubi(Mubi)
+			) wr_en_data_arb_phase0(
+				.we(we),
+				.wd(~wd),
+				.de(de),
+				.d(~d),
+				.q(shadow_q),
+				.wr_en(shadow_wr_en_phase0),
+				.wr_data(shadow_wr_data_phase0)
+			);
+			prim_subreg_arb #(
+				.DW(DW),
+				.SwAccess(InvertedSwAccess),
+				.Mubi(Mubi)
+			) wr_en_data_arb_phase1(
+				.we(we),
+				.wd(~wr_data),
+				.de(de),
+				.d(~d),
+				.q(~committed_q),
+				.wr_en(shadow_wr_en_phase1),
+				.wr_data(shadow_wr_data_phase1)
+			);
+			always @(*) begin
+				shadow_we = 1'b0;
+				shadow_wd = shadow_wr_data_phase0;
+				if (!err_storage) begin
+					if (err_update || phase_clear) begin
+						shadow_we = 1'b1;
+						shadow_wd = ~committed_q;
+					end
+					else if (!phase_q) begin
+						shadow_we = shadow_wr_en_phase0;
+						shadow_wd = shadow_wr_data_phase0;
+					end
+					else begin
+						shadow_we = shadow_wr_en_phase1;
+						shadow_wd = shadow_wr_data_phase1;
+					end
+				end
+			end
+			// Optimization: Explicit XOR reduction for comparison
+			assign err_update = phase_q & wr_en & (|(shadow_q_inv ^ wd));
+		end
+	endgenerate
+
+	assign committed_we = ((we & phase_q) & ~err_update) & ~err_storage;
+	assign committed_de = ((de & phase_q) & ~err_update) & ~err_storage;
+
+	prim_subreg #(
+		.DW(DW),
+		.SwAccess(SwAccess),
+		.RESVAL(RESVAL),
+		.Mubi(Mubi)
+	) committed_reg(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.we(committed_we),
+		.wd(wr_data),
+		.de(committed_de),
+		.d(d),
+		.qe(committed_qe),
+		.q(committed_q),
+		.ds(ds),
+		.qs(committed_qs)
+	);
+
+	assign phase = phase_q;
+	// Optimization: Explicit XOR reduction for comparison
+	assign err_storage = ~phase_q & (|(shadow_q_inv ^ committed_q));
+	assign qe = committed_qe;
+	assign q = committed_q;
+	assign qs = committed_qs;
+	initial _sv2v_0 = 0;
+endmodule

@@ -188,7 +188,7 @@
    "avoid"
   ],
   "content": "AVOID re-balancing logic ABC already optimizes well (absorbed by synthesis, adds churn/risk for ~0 gain) \u2014 e.g. simple 2-3 operand expressions (Dr. RTL AVOID).",
-  "helpful": 14,
+  "helpful": 18,
   "harmful": 0,
   "created": "2026-07-03"
  },
@@ -233,7 +233,7 @@
    "arith-carry-chain"
   ],
   "content": "P2 applicability (MEASURED, exp3): source-level balancing of a PURE N-operand sum (e.g. w_new = a+b+c+d) is a no-op \u2014 ABC's delay-aware mapping already rebalances clean sums (identical netlist). P2 pays when serial adds are ENTANGLED with nonlinear logic between terms (Ch/Maj/sigma in exp2: +332ps). Target entangled chains only.",
-  "helpful": 11,
+  "helpful": 15,
   "harmful": 0,
   "created": "2026-07-03"
  },
@@ -406,7 +406,7 @@
   ],
   "content": "Wide carry-propagate add on the critical path -> parallel-prefix adder (Kogge-Stone / Brent-Kung / Sklansky): O(log n) carry depth vs O(n) ripple. Equivalence-safe (same sum). Trade area (KS) vs wires (BK).",
   "helpful": 4,
-  "harmful": 1,
+  "harmful": 2,
   "created": "2026-07-13",
   "seeded": true
  },
@@ -1133,5 +1133,137 @@
   "helpful": 1,
   "harmful": 0,
   "created": "2026-07-14"
+ },
+ {
+  "id": "learned-95-38555",
+  "section": "pitfall",
+  "tags": [
+   "dualsim-arithmetic",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Manual arithmetic restructuring like carry-save or tree-balancing in complex cores is highly prone to dual-simulation mismatches.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-18"
+ },
+ {
+  "id": "learned-96-38555",
+  "section": "timing",
+  "tags": [
+   "manual-arithmetic",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Manual arithmetic re-architecting often degrades setup slack by disrupting synthesis-level timing-driven optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-18"
+ },
+ {
+  "id": "learned-97-39536",
+  "section": "timing",
+  "tags": [
+   "arithmetic-restructure",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Manual arithmetic restructuring like CSA or tree balancing can degrade timing by interfering with synthesis-driven logic optimization.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-18"
+ },
+ {
+  "id": "learned-98-39536",
+  "section": "area",
+  "tags": [
+   "arithmetic-restructure",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Source-level arithmetic transformations like balanced trees or CSA can provide area savings at the cost of timing slack.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-18"
+ },
+ {
+  "id": "learned-99-88570",
+  "section": "timing",
+  "tags": [
+   "arith-arch",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Architectural arithmetic optimizations like carry-save or prefix-adders provide the best timing-to-area trade-off for Ascon's data path.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-100-88570",
+  "section": "pitfall",
+  "tags": [
+   "restructure-select",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Manual restructuring of multiplexer trees or selection logic often degrades timing compared to native synthesis optimization.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-101-88570",
+  "section": "avoid",
+  "tags": [
+   "balanced-tree",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Avoid manual tree-balancing on complex logic paths as it may lead to synthesis failures or sub-optimal mapping compared to tool-driven balancing.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-102-88771",
+  "section": "timing",
+  "tags": [
+   "ascon-arith-manual",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Manual arithmetic restructuring in Ascon (carry-save, tree balancing) consistently degrades timing slack compared to synthesis defaults.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-103-88771",
+  "section": "avoid",
+  "tags": [
+   "ascon-arith-restructure",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Avoid manual arithmetic architecture overrides in Ascon as they tend to increase critical path delay.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-104-88982",
+  "section": "timing",
+  "tags": [
+   "manual-arith-interference",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Manual arithmetic structural overrides can degrade timing by preventing synthesis tools from performing context-aware logic mapping.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-105-88982",
+  "section": "timing",
+  "tags": [
+   "tree-balancing-harm",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Manual balancing of associative operations in RTL can disrupt synthesis timing-driven structuring, leading to worse slack.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
  }
 ]

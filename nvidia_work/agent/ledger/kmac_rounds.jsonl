@@ -1,0 +1,2 @@
+{"ts": "2026-07-18T22:22:35", "round": 1, "parent": "baseline", "tag": "manual-arithmetic", "rungs": ["balanced-tree", "carry-save", "arith-arch", "restructure-select", "micro-opt", "share-resources"], "accepted": 0, "best_adp": 1.0, "calls": 7, "tokens": 652653}
+{"ts": "2026-07-18T22:38:56", "round": 2, "parent": "baseline", "tag": "arithmetic-restructure", "rungs": ["balanced-tree", "carry-save", "arith-arch"], "accepted": 0, "best_adp": 1.0, "calls": 11, "tokens": 926477}

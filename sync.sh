@@ -7,7 +7,7 @@ DST="$(cd "$(dirname "$0")" && pwd)"
 # NVIDIA track
 mkdir -p "$DST/nvidia_work/agent"
 cp -R "$SRC/nvidia_work/agent/ppa" "$DST/nvidia_work/agent/"
-cp "$SRC/nvidia_work/agent"/{nvidia_agent.py,playbook.json,README.md,test_cold_start.py,test_model_iface.py,test_emit_replace.py} "$DST/nvidia_work/agent/"
+cp "$SRC/nvidia_work/agent"/{nvidia_agent.py,playbook.json,README.md,test_cold_start.py,test_model_iface.py,test_emit_replace.py,test_selection.py} "$DST/nvidia_work/agent/"
 mkdir -p "$DST/nvidia_work/agent/ledger"
 cp "$SRC/nvidia_work/agent/ledger"/*.json "$DST/nvidia_work/agent/ledger/" 2>/dev/null || true
 cp "$SRC/nvidia_work/agent/ledger"/*.jsonl "$DST/nvidia_work/agent/ledger/" 2>/dev/null || true

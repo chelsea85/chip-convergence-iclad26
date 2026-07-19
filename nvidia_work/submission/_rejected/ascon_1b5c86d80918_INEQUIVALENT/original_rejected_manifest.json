@@ -1,0 +1,55 @@
+{
+ "ip": "ascon",
+ "result": "optimized",
+ "cid": "1b5c86d80918",
+ "changed_files": [
+  "opentitan/hw/ip/ascon/yosys_syn/generated/tlul_cmd_intg_chk.v"
+ ],
+ "baseline_ppa": {
+  "area": 1789.7679,
+  "cells": 12295.0,
+  "ff": 1769.0,
+  "setup": -430.14,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.0184
+ },
+ "best_ppa": {
+  "area": 1794.25854,
+  "cells": 12031.0,
+  "ff": 1769.0,
+  "setup": -411.18,
+  "hold": 9.62,
+  "timing_met": false,
+  "power": 0.0182
+ },
+ "adp_vs_baseline": 0.9667,
+ "verification_per_layer": {
+  "lint": "PASS",
+  "compile": "PASS",
+  "gate": "PASS",
+  "lec": "INCONCLUSIVE",
+  "dualsim": "PASS"
+ },
+ "assurance": "differential-only: dualsim PASS (lec=INCONCLUSIVE, gate=PASS)",
+ "llm_calls": 16,
+ "llm_tokens_approx": 961149,
+ "rounds": [
+  {
+   "round": 1,
+   "accepted": 3,
+   "best_adp": 0.9667
+  },
+  {
+   "round": 2,
+   "accepted": 0,
+   "best_adp": 0.9667
+  },
+  {
+   "round": 3,
+   "accepted": 0,
+   "best_adp": 0.9667
+  }
+ ],
+ "ts": "2026-07-19T12:23:02"
+}

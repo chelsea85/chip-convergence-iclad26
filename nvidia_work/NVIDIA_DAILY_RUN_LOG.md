@@ -844,3 +844,192 @@ ACCEPT 0.961 through full 5-layer + Docker synth · NXP sabotage 8/8 · NXP runn
 Layout requirement (contest repo cloned/symlinked into repo root) confirmed documented in README.
 
 Slide decks (main + learnings, both tracks) live in docs/slides/ — pending Hari's review.
+
+## 2026-07-15 → 07-18 — submission shipped + review-driven fixes (bridge)
+
+Full submission pushed to github.com/chelsea85/chip-convergence-iclad26 (through commit 2b99406).
+NVIDIA-relevant items acted on from three external reproducibility reviews:
+- **P0 canonical sha512 fix (dcbb101):** the shipped submission/sha512 contained 3 stray
+  non-pristine surrounding files (sha512.v, k_constants, w_mem) and measured ~0.7364, not the
+  headline 0.7266 — while its manifest claimed changed_files=[sha512_core.v]. Reconciled to
+  pristine baseline + optimized sha512_core.v only = the reviewer-verified 0.7266 winner. Root
+  cause = sync.sh `cp -R` never deletes stale files → fixed to a clean copy. Independently
+  re-synthesized keyless from a fresh clone: area 3967.62624 / setup +334.61 / **ADP 0.7266, full
+  5-layer, LEC PROVEN**.
+- **_emit_best hardened (ppa/emit.py + test_emit_replace.py, 2/2):** the artifact writer was a
+  MERGE (left stale files) then a non-recoverable rmtree-then-rename. Now a clean staged
+  replacement WITH ROLLBACK (stage → move-old-aside → swap → restore-on-failure); never destroys
+  the last-known-good artifact.
+- **Verification language aligned to the per-layer manifests:** prim = equivalence+differential
+  (NOT full 5-layer; pristine compile/TB pre-existing); aes = differential-only; the emit `result`
+  label now derives from actual ADP (not merely "did a file change").
+- Live-key organizer paths validated end-to-end (NXP 2-call solve via run_benchmark; NVIDIA
+  --model vertex live campaign) — all on Hari's keys, no repo/transcript leakage.
+
+## 2026-07-19 — remaining IPs on the FREE organizer key: kmac (no-improve), ascon (0.9667 diff-only)
+
+**Key setup (zero cost to Hari).** Organizer-provisioned project "GenAI Chip Hackathon-9207"
+(ai-chip-design26lgb-9207, **Tier 3 — organizer-billed**); AI Studio key created via incognito
+(so it's NOT Hari's billing) and stored in .env as `HACKATHON_AISTUDIO_KEY`. All campaigns run
+`--model vertex --key-env HACKATHON_AISTUDIO_KEY` → proposer mode `ai-studio` (routing follows the
+env-var NAME; no "EXPRESS" → no paid-Vertex path), plus `unset EXPRESS_MODE_KEY` in-process as
+belt-and-suspenders. Free-tier fallback `GEMINI_API_KEY_2` (AI Studio, ~20/day) also available.
+Model = gemini-3-flash-preview (works on AI Studio; a thinking model).
+
+**kmac — honest no-improvement (ADP 1.0).** Zero-token diagnosis: WNS −1559 ps, arith-carry-chain;
+the worst path runs through TL-UL/register infra (tlul_cmd_intg_chk, prim_subreg_shadow,
+tlul_socket_1n, prim_packer_fifo), NOT the Keccak core; largest area = kmac_app.v (48.7k cells).
+Bounded campaign (rounds 2, k 3, max-calls 10, diagnose on): **11 calls, accepted=0.** Every
+candidate rejected by the gates — several **DUALSIM-FAIL** (the model's timing edits broke
+functionality; differential sim caught them), plus duplicates and perf/power regressions. Emitted
+baseline (0 changed files). Correct outcome: kmac's badly-violated bus timing has no safe
+local-edit headroom → "baseline is the submission." (Prior offline exp7 = prim_trivium.v, the
+masking PRNG, had LEC-ERROR — deliberately avoided this run.)
+
+**ascon — real but weak-assurance win: ADP 0.9667 (−3.3%), DIFFERENTIAL-ONLY.** Diagnosis: WNS
+−926 ps, same TL-UL infra critical path; small IP (largest prim_ascon_duplex 6k cells → fast
+synth). Campaign (rounds 3, k 3, max-calls 15): **16 calls, 3 accepts**, best = arith-arch on
+`tlul_cmd_intg_chk.v`. baseline area 1789.77 / setup −430.14 / cells 12295 → candidate area
+1794.26 / setup −411.18 / cells 12031 (timing +19 ps, cells −2.1%, **area +0.25%**, power −1%).
+verify: lint/compile/gate/dualsim PASS, **lec INCONCLUSIVE** → assurance = differential-only
+(same tier as aes).
+
+### Findings / open concerns (for Codex review)
+1. **ascon assurance caveat.** The win edits `tlul_cmd_intg_chk.v` — the bus **command-integrity
+   checker** — and LEC is **INCONCLUSIVE**, not PROVEN. gate+dualsim pass functionally, but a
+   rewrite of an integrity/parity module that formal equivalence cannot prove is a legitimacy
+   concern for a security IP; the gain is modest and area actually ticked up. Recommendation: keep
+   ONLY if labeled honestly as differential-only (like aes), never as a headline/proven win.
+   Alternatives: seek a LEC-PROVEN candidate (may resist, since the winning edit IS the integrity
+   module), or drop it. **Pending Hari's decision.**
+2. **kmac is a clean honest negative** — the verification spine correctly rejected every
+   functionally-broken candidate. This is a *good* signal for the gates, not a flow failure.
+3. **Emit-location bug (mine):** campaigns were run from `nvidia_work/agent` with
+   `--emit-best submission/<ip>`, so artifacts landed in `agent/submission/<ip>` instead of the
+   real `nvidia_work/submission/<ip>` (convention is `../submission/`). Both kmac + ascon artifacts
+   are currently in `agent/submission/` pending a keep/relocate decision. Fix: use an ABSOLUTE
+   `--emit-best` path for NVDLA.
+4. **NVDLA campaign still pending** — the largest IP (323 sources); baseline only so far. Next.
+
+## 2026-07-19 (rev, after Codex review) — ascon 0.9667 REJECTED as inequivalent; assurance-aware selection fixed
+
+Codex's independent review (`NVIDIA_JULY19_CAMPAIGN_REVIEW.md`) overturned my earlier ascon
+conclusion — correctly. **The ascon ADP 0.9667 candidate (`1b5c86d80918`, arith-arch) is
+functionally INEQUIVALENT, not merely "differential-only".** It uses the WRONG integrity-bit
+slices — `cmd_intg = tl_i[21:15]` (correct [14:8]), `data_intg = tl_i[14:8]` (correct [7:1]) — with
+a hallucinated "overlap is expected" comment. A 100,000-vector module differential test found **7
+mismatches including false negatives (MISSED integrity errors)** — disqualifying for a bus
+command-integrity checker. Verified the slices directly against pristine + tlul_pkg. My "keep it,
+honestly labeled" recommendation was wrong; the correct call is REJECT.
+
+**Root cause (systemic) — assurance-blind selection. FIXED.** `frontier.best()` picked the PPA-best
+entry regardless of LEC, so an LEC-INCONCLUSIVE candidate with a slightly better ADP displaced the
+LEC-PROVEN one. Added `_canonical_best()` (ppa/controller.py): canonical = best-ADP **LEC-PROVEN**
+improvement; an unproven (INCONCLUSIVE/ERROR) candidate is NEVER canonical, and if no proven
+improvement exists the eligible baseline ships (unproven best recorded as `experimental_best`).
+Validated on the existing ascon pool: old logic → `1b5c86d80918` (0.9666, INCONCLUSIVE); new logic
+→ **`b153b877f996` (0.9792, PROVEN)**. Protects NVDLA.
+
+**Candidate-aware coverage — FIXED.** For OpenTitan dual-representation IPs, compile/synth/LEC/
+dualsim consume the changed generated `.v` but the Verilator TB gate builds the pristine `.sv`, so
+a generated-`.v`-only edit's "gate PASS" never exercised the candidate. `_assurance()` no longer
+counts a candidate-blind gate as full-5-layer; the manifest gains `candidate_aware_coverage`.
+
+**Banked the valid ascon result:** `b153b877f996` re-emitted to canonical `nvidia_work/submission/
+ascon` — one changed file (tlul_cmd_intg_chk.v, CORRECT slices), **ADP 0.97918 (−2.1%), assurance =
+equivalence+differential (LEC PROVEN + dualsim PASS; gate ran pristine .sv → candidate .v not
+exercised).** The rejected `1b5c86d80918` is quarantined at `submission/_rejected/
+ascon_1b5c86d80918_INEQUIVALENT/` with a REJECTED.md — evidence, never canonical.
+
+**Path preflight — FIXED.** `_emit_best` now resolves `--emit-best` to an absolute path, prints it,
+and REFUSES to emit under `nvidia_work/agent/submission` (the relative-CWD mistake that mislocated
+both artifacts). kmac baseline-only + the corrected ascon are now under `nvidia_work/submission/`.
+
+**kmac — narrative narrowed (Codex).** Not "no safe local-edit headroom" but "no eligible
+improvement in this bounded two-stage campaign." Precisely: 3 candidates DUALSIM-FAILed
+(functionally broken, correctly rejected), some were duplicates, and 4 passed dualsim but regressed
+ADP (none crossed the 0.995 threshold). Baseline remains the submission; a future revisit would
+target the unexplored files (tlul_socket_1n, prim_packer_fifo, kmac_app for area) with stronger
+proof requirements. Not the immediate next action.
+
+**Billing wording corrected (Codex).** Incognito mode does NOT establish billing ownership; Gemini
+keys bill to their linked project/account. Accurate claim: campaigns used the organizer-provided
+key through the organizer project "GenAI Chip Hackathon-9207" (Tier 3) via the AI Studio client (no
+personal Vertex Express key selected — code-confirmed); billing is *assumed* to remain with the
+organizer-controlled project per their provisioning — verify in the project billing dashboard, not
+proven by incognito. Also: `max-calls` = proposal-turn budget; manifest `llm_calls` = all successful
+calls incl. reflect/repair (explains kmac 10→11, ascon 15→16).
+
+**NVDLA — proceed only after this preflight/policy pass (now done):** absolute emit path, low
+concurrency (workers=1, small first k), explicit PROVEN-vs-experimental acceptance, full per-layer
+logs. Selection + coverage + path fixes are in; ready when Hari is.
+
+## 2026-07-19 (rev2, after Codex RE-review) — P0 selector integration bug fixed; HOLD kmac Pro retry
+
+Codex's re-review (`NVIDIA_JULY19_FIXES_REREVIEW.md`) caught a real **P0 integration bug** in my
+selector fix and it was right. `_canonical_best()` searched `frontier.entries`, but the real
+`ParetoFrontier` **evicts** the proven candidate: the invalid `1b5c86d80918` dominates
+`b153b877f996` on area+setup+power, so the frontier held only `['1b5c86d80918']` and the selector
+returned **None** (would emit a null baseline, not the proven candidate). My 3/3 test missed it
+because it used a synthetic frontier that never exercised dominance eviction.
+
+FIXED:
+- **`_canonical_best(ip, pool, obj, base_ppa)`** now searches the **full accepted pool**
+  (`pool.states.values()`), not the assurance-blind frontier. Validated with a real integration
+  test: `ParetoFrontier` evicts the proven candidate (`entries=['1b5c86d80918']`) yet
+  `_canonical_best(pool)` recovers `b153b877f996` (PROVEN). `test_selection.py` rewritten → **3/3**
+  incl. the real-frontier eviction case. ascon re-emitted (b153b877f996, ADP 0.97918); manifest now
+  also records `experimental_best` = 1b5c86d80918 (0.9666, INCONCLUSIVE, NOT canonical).
+- **Baseline fallback** (best=None) now emits a COMPLETE manifest (`cid:"baseline"`,
+  `best_ppa=baseline_ppa`, `adp_vs_baseline:1.0`) instead of nulls.
+- **Rejected ascon manifest** made machine-unambiguously ineligible: `result:"rejected-inequivalent"`,
+  `eligible:false`, `rejection_reason`, `targeted_differential:{result:FAIL,mismatches:7/100000}`;
+  the old machine manifest preserved as `original_rejected_manifest.json` (forensic). So no
+  eligible ADP-0.9667 claim survives anywhere machine-readable.
+
+**KEY DECISION — HOLD the kmac Pro retry.** Every kmac whole-design LEC on record is **ERROR**, and
+the new policy requires **PROVEN**, so no candidate can be canonical regardless of model — this is a
+verifier-readiness problem, not a model problem. Prerequisites before any kmac retry: (1) a
+**no-model whole-design LEC diagnostic** (classify ERROR = tool/setup / unsupported construct /
+timeout; preserve the Yosys script+log), (2) an explicit eligibility predicate (e.g. module-level
+LEC PROVEN + candidate-aware dualsim as a *labeled* fallback when top LEC is a pre-existing tool
+error), and (3) the model-config migration below.
+
+**Corrections (Codex).** (a) ascon was a MODEL error AND a FLOW failure (candidate-blind gate,
+limited dualsim sampling, inconclusive-LEC policy, PPA-only frontier) — not "not a flow bug".
+(b) Repo state: `HEAD == origin/main` at 2b99406 but the working tree is **not clean** (intended
+uncommitted `sync.sh` + these fixes). (c) kmac timing: my model-question cited WNS −1559 ps (the
+FLATTEN=0 diagnosis worst-path STA); the baseline report/manifest record −1115.75 ps (baseline
+synth STA) — different STA passes; reconcile provenance before a retry. (d) Quota: Tier 3 is
+**paid** organizer-project capacity (no personal cost expected, but a finite shared resource) —
+"only downside is quota" understated the tradeoffs; formal verification, not model size, is the
+safety boundary.
+
+**Model readiness (P1, before any Pro campaign) — NOT yet done:** current client hard-codes
+`thinking_budget=8192` (numeric) + `temperature=0.2`/`top_p=0.6`; Google's Gemini-3 guidance says
+use `thinking_level` (medium for 3.5-flash, high for 3.1-pro) and default sampling — and installed
+`google-genai 1.47.0` has no `thinking_level`. Before a new-model run: pin a supported SDK/Python,
+make generation config model-aware, drop the sampling overrides unless A/B-justified, add model/SDK
+provenance to manifests, and smoke each model's parser/finish/token metadata.
+
+**DEFERRED (Codex, not blocking canonical correctness):** staged parent-selection + plateau are
+still assurance-blind (`frontier.best()`) so rounds 2–3 built on the unproven parent — make
+canonical/proven progress drive parent/plateau and log ACCEPT-PROVEN vs ACCEPT-EXPERIMENTAL; harden
+the path guard to require the resolved target under NVWORK/submission; preserve per-layer LEC/dualsim
+logs+hashes in the ledger; the evaluate.py `layers.get("compile")=="PRE-EXISTING"` dict-vs-string
+comparison is always False (dualsim runs anyway — keep, but make the policy explicit + tested).
+
+## 2026-07-19 (rev3, Codex verdict `NVIDIA_JULY19_REREVIEW_FIXES_VERDICT.md`) — P0 CLOSED; last P1 fixed
+
+Codex confirmed the **P0 selector defect is closed** (pool-based `_canonical_best` recovers the
+frontier-evicted proven candidate; a separate PROVEN frontier is unnecessary) and the baseline/
+rejected manifests are substantially correct. **One P1 remained before commit — now fixed:** a
+baseline-only campaign recorded **baseline itself** as `experimental_best`. Extracted
+`_experimental_best(ip, ppa_best, best, obj, base_ppa)` (never baseline, never a non-improvement,
+never the canonical winner) + regression → `test_selection` now **4/4**; ascon's experimental_best
+is still correctly `1b5c86d80918` (a real improving unproven candidate). Per Codex the selector work
+is now commit-ready. **Sequence from here:** commit these fixes → **no-model kmac whole-design LEC
+diagnostic** (preserve full failure evidence, then design the eligibility predicate from the actual
+error — no speculative exception) → **assurance-aware parent/plateau** (blocks NVDLA, not the
+selector commit) → **model-config migration** (thinking_level/SDK pin) → bounded Pro kmac only if a
+proof path exists. HOLD on kmac Pro stands.

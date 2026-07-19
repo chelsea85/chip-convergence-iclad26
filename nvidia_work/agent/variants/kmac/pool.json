@@ -1,0 +1,18 @@
+[
+ {
+  "cid": "baseline",
+  "ppa": {
+   "area": 13353.80742,
+   "cells": 97078.0,
+   "ff": 788.0,
+   "setup": -1115.75,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.105
+  },
+  "parent": null,
+  "strategy": "baseline",
+  "wins": 2.824576940884158,
+  "losses": 6.175423059115841
+ }
+]

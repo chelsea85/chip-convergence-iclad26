@@ -1,0 +1,465 @@
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+
+	// Simplified bit extraction for the command integrity check.
+	// Based on the TL-UL H2D struct mapping:
+	// a_valid    : tl_i[108]
+	// a_opcode   : tl_i[107:105]
+	// a_address  : tl_i[91:60]
+	// a_mask     : tl_i[59:56]
+	// a_user     : tl_i[23:0]
+	//   .instr_type : tl_i[18:15]
+	//   .cmd_intg   : tl_i[14:8]
+	//   .data_intg  : tl_i[7:1]
+	
+	// [rtlscout-cutpoints] Declare named intermediate wires to help partition optimization.
+	wire [42:0] cmd_payload;
+	assign cmd_payload = {
+		tl_i[18:15],  // a_user.instr_type (4 bits)
+		tl_i[91:60],  // a_address (32 bits)
+		tl_i[107:105],// a_opcode (3 bits)
+		tl_i[59:56]   // a_mask (4 bits)
+	};
+
+	wire [6:0] cmd_intg = tl_i[14:8];
+	wire [1:0] err;
+	
+	// SECDED decoder for command integrity.
+	// Input is 64 bits: 7 bits ECC + 57 bits data.
+	// cmd_payload is 43 bits, so we pad with 14 zeros.
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i({cmd_intg, 14'b0, cmd_payload}),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+
+	// Data integrity check.
+	wire [31:0] a_data = tl_i[55:24];
+	wire [6:0] data_intg = tl_i[7:1];
+	wire data_err;
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i({data_intg, a_data}),
+		.data_err_o(data_err)
+	);
+
+	// Final error signal is gated by a_valid.
+	// [rtlscout-cutpoints] Explicit width for reduction.
+	wire a_valid = tl_i[108];
+	assign err_o = a_valid & (err[1] | err[0] | data_err);
+
+	// Silence unused bits warning.
+	wire unused_tl;
+	assign unused_tl = ^tl_i;
+endmodule
+
+// FILE: prim_subreg_shadow.v
+module prim_subreg_shadow (
+	clk_i,
+	rst_ni,
+	rst_shadowed_ni,
+	re,
+	we,
+	wd,
+	de,
+	d,
+	qe,
+	q,
+	ds,
+	qs,
+	phase,
+	err_update,
+	err_storage
+);
+	reg _sv2v_0;
+	parameter signed [31:0] DW = 32;
+	parameter [2:0] SwAccess = 3'd0;
+	parameter [DW - 1:0] RESVAL = 1'sb0;
+	parameter [0:0] Mubi = 1'b0;
+	input clk_i;
+	input rst_ni;
+	input rst_shadowed_ni;
+	input re;
+	input we;
+	input [DW - 1:0] wd;
+	input de;
+	input [DW - 1:0] d;
+	output wire qe;
+	output wire [DW - 1:0] q;
+	output wire [DW - 1:0] ds;
+	output wire [DW - 1:0] qs;
+	output wire phase;
+	output wire err_update;
+	output wire err_storage;
+
+	localparam [2:0] InvertedSwAccess = (SwAccess == 3'd4 ? 3'd5 : (SwAccess == 3'd5 ? 3'd4 : SwAccess));
+	
+	wire phase_clear;
+	reg phase_q;
+	reg shadow_we;
+	wire committed_we;
+	wire committed_de;
+	wire committed_qe;
+	reg [DW - 1:0] shadow_wd;
+	reg [DW - 1:0] shadow_q;
+	wire [DW - 1:0] committed_q;
+	wire [DW - 1:0] committed_qs;
+	wire wr_en;
+	wire [DW - 1:0] wr_data;
+
+	prim_subreg_arb #(
+		.DW(DW),
+		.SwAccess(SwAccess),
+		.Mubi(Mubi)
+	) wr_en_data_arb(
+		.we(we),
+		.wd(wd),
+		.de(de),
+		.d(d),
+		.q(q),
+		.wr_en(wr_en),
+		.wr_data(wr_data)
+	);
+
+	// [rtlscout-cutpoints] Explicitly define comparison logic to avoid carry-chain inference.
+	// Comparison A != B is implemented as |(A ^ B).
+	wire [DW-1:0] storage_diff = shadow_q ^ ~committed_q;
+	wire storage_mismatch = |storage_diff;
+	assign err_storage = storage_mismatch & ~phase_q;
+
+	// Update error logic.
+	wire [DW-1:0] update_diff = shadow_q ^ ~wr_data;
+	wire update_mismatch = |update_diff;
+	assign err_update = update_mismatch & phase_q & wr_en;
+
+	assign phase_clear = (SwAccess == 3'd1 ? 1'b0 : re);
+
+	// Simplified phase register logic.
+	always @(posedge clk_i or negedge rst_ni) begin : phase_reg
+		if (!rst_ni)
+			phase_q <= 1'b0;
+		else if (phase_clear || err_storage || err_update)
+			phase_q <= 1'b0;
+		else if (wr_en)
+			phase_q <= ~phase_q;
+	end
+
+	always @(posedge clk_i or negedge rst_shadowed_ni)
+		if (!rst_shadowed_ni)
+			shadow_q <= ~RESVAL;
+		else if (shadow_we)
+			shadow_q <= shadow_wd;
+
+	generate
+		if (InvertedSwAccess == SwAccess) begin : gen_shadow_reg_std
+			wire shadow_wr_en;
+			wire [DW - 1:0] shadow_wr_data;
+			prim_subreg_arb #(
+				.DW(DW),
+				.SwAccess(InvertedSwAccess),
+				.Mubi(Mubi)
+			) wr_en_data_arb_shadow(
+				.we(we),
+				.wd(~wr_data),
+				.de(de),
+				.d(~d),
+				.q(shadow_q),
+				.wr_en(shadow_wr_en),
+				.wr_data(shadow_wr_data)
+			);
+			always @(*) begin
+				shadow_we = 1'b0;
+				shadow_wd = shadow_wr_data;
+				if (!err_storage) begin
+					if (err_update || phase_clear) begin
+						shadow_we = 1'b1;
+						shadow_wd = ~committed_q;
+					end
+					else if (!phase_q && shadow_wr_en) begin
+						shadow_we = 1'b1;
+						shadow_wd = shadow_wr_data;
+					end
+				end
+			end
+		end
+		else begin : gen_shadow_reg_wxx
+			wire shadow_wr_en_phase0;
+			wire shadow_wr_en_phase1;
+			wire [DW - 1:0] shadow_wr_data_phase0;
+			wire [DW - 1:0] shadow_wr_data_phase1;
+			prim_subreg_arb #(
+				.DW(DW),
+				.SwAccess(3'd0),
+				.Mubi(Mubi)
+			) wr_en_data_arb_phase0(
+				.we(we),
+				.wd(~wd),
+				.de(de),
+				.d(~d),
+				.q(shadow_q),
+				.wr_en(shadow_wr_en_phase0),
+				.wr_data(shadow_wr_data_phase0)
+			);
+			prim_subreg_arb #(
+				.DW(DW),
+				.SwAccess(InvertedSwAccess),
+				.Mubi(Mubi)
+			) wr_en_data_arb_phase1(
+				.we(we),
+				.wd(~wr_data),
+				.de(de),
+				.d(~d),
+				.q(~committed_q),
+				.wr_en(shadow_wr_en_phase1),
+				.wr_data(shadow_wr_data_phase1)
+			);
+			always @(*) begin
+				shadow_we = 1'b0;
+				shadow_wd = shadow_wr_data_phase0;
+				if (!err_storage) begin
+					if (err_update || phase_clear) begin
+						shadow_we = 1'b1;
+						shadow_wd = ~committed_q;
+					end
+					else if (!phase_q) begin
+						shadow_we = shadow_wr_en_phase0;
+						shadow_wd = shadow_wr_data_phase0;
+					end
+					else begin
+						shadow_we = shadow_wr_en_phase1;
+						shadow_wd = shadow_wr_data_phase1;
+					end
+				end
+			end
+		end
+	endgenerate
+
+	assign committed_we = ((we & phase_q) & ~err_update) & ~err_storage;
+	assign committed_de = ((de & phase_q) & ~err_update) & ~err_storage;
+
+	prim_subreg #(
+		.DW(DW),
+		.SwAccess(SwAccess),
+		.RESVAL(RESVAL),
+		.Mubi(Mubi)
+	) committed_reg(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.we(committed_we),
+		.wd(wr_data),
+		.de(committed_de),
+		.d(d),
+		.qe(committed_qe),
+		.q(committed_q),
+		.ds(ds),
+		.qs(committed_qs)
+	);
+
+	assign phase = phase_q;
+	assign qe = committed_qe;
+	assign q = committed_q;
+	assign qs = committed_qs;
+	initial _sv2v_0 = 0;
+endmodule
+
+// FILE: prim_alert_sender.v
+module prim_alert_sender (
+	clk_i,
+	rst_ni,
+	alert_test_i,
+	alert_req_i,
+	alert_ack_o,
+	alert_state_o,
+	alert_rx_i,
+	alert_tx_o
+);
+	reg _sv2v_0;
+	parameter [0:0] AsyncOn = 1'b1;
+	parameter [31:0] SkewCycles = 1;
+	parameter [0:0] IsFatal = 1'b0;
+	input clk_i;
+	input rst_ni;
+	input alert_test_i;
+	input alert_req_i;
+	output wire alert_ack_o;
+	output wire alert_state_o;
+	input wire [3:0] alert_rx_i;
+	output wire [1:0] alert_tx_o;
+
+	wire ping_sigint;
+	wire ping_event;
+	wire ping_n;
+	wire ping_p;
+	prim_sec_anchor_buf #(.Width(2)) u_prim_buf_ping(
+		.in_i({alert_rx_i[2], alert_rx_i[3]}),
+		.out_o({ping_n, ping_p})
+	);
+	prim_diff_decode #(
+		.AsyncOn(AsyncOn),
+		.SkewCycles(SkewCycles)
+	) u_decode_ping(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.diff_pi(ping_p),
+		.diff_ni(ping_n),
+		.level_o(),
+		.rise_o(),
+		.fall_o(),
+		.event_o(ping_event),
+		.sigint_o(ping_sigint)
+	);
+
+	wire ack_sigint;
+	wire ack_level;
+	wire ack_n;
+	wire ack_p;
+	prim_sec_anchor_buf #(.Width(2)) u_prim_buf_ack(
+		.in_i({alert_rx_i[0], alert_rx_i[1]}),
+		.out_o({ack_n, ack_p})
+	);
+	prim_diff_decode #(
+		.AsyncOn(AsyncOn),
+		.SkewCycles(SkewCycles)
+	) u_decode_ack(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.diff_pi(ack_p),
+		.diff_ni(ack_n),
+		.level_o(ack_level),
+		.rise_o(),
+		.fall_o(),
+		.event_o(),
+		.sigint_o(ack_sigint)
+	);
+
+	reg [2:0] state_d;
+	reg [2:0] state_q;
+	wire alert_pq;
+	wire alert_nq;
+	reg alert_pd;
+	reg alert_nd;
+	wire sigint_detected;
+	assign sigint_detected = ack_sigint | ping_sigint;
+	assign alert_tx_o[1] = alert_pq;
+	assign alert_tx_o[0] = alert_nq;
+
+	wire alert_set_d;
+	reg alert_set_q;
+	reg alert_clr;
+	wire alert_test_set_d;
+	reg alert_test_set_q;
+	wire ping_set_d;
+	reg ping_set_q;
+	reg ping_clr;
+
+	wire alert_req;
+	prim_sec_anchor_buf #(.Width(1)) u_prim_buf_in_req(
+		.in_i(alert_req_i),
+		.out_o(alert_req)
+	);
+
+	wire alert_req_trigger = alert_req | alert_set_q;
+	assign alert_set_d = (IsFatal) ? alert_req_trigger : (alert_clr ? 1'b0 : alert_req_trigger);
+
+	wire alert_test_trigger = alert_test_i | alert_test_set_q;
+	assign alert_test_set_d = (alert_clr ? 1'b0 : alert_test_trigger);
+
+	wire alert_trigger = alert_req_trigger | alert_test_trigger;
+	wire ping_trigger = ping_set_q | ping_event;
+	assign ping_set_d = (ping_clr ? 1'b0 : ping_trigger);
+
+	assign alert_ack_o = alert_clr & alert_set_q;
+	assign alert_state_o = alert_set_q;
+
+	always @(*) begin : p_fsm
+		state_d = state_q;
+		alert_pd = 1'b0;
+		alert_nd = 1'b1;
+		ping_clr = 1'b0;
+		alert_clr = 1'b0;
+		(* full_case, parallel_case *)
+		case (state_q)
+			3'd0:
+				if (alert_trigger || ping_trigger) begin
+					state_d = (alert_trigger ? 3'd1 : 3'd3);
+					alert_pd = 1'b1;
+					alert_nd = 1'b0;
+				end
+			3'd1:
+				if (ack_level)
+					state_d = 3'd2;
+				else begin
+					alert_pd = 1'b1;
+					alert_nd = 1'b0;
+				end
+			3'd2:
+				if (!ack_level) begin
+					state_d = 3'd5;
+					alert_clr = 1'b1;
+				end
+			3'd3:
+				if (ack_level)
+					state_d = 3'd4;
+				else begin
+					alert_pd = 1'b1;
+					alert_nd = 1'b0;
+				end
+			3'd4:
+				if (!ack_level) begin
+					ping_clr = 1'b1;
+					state_d = 3'd5;
+				end
+			3'd5: state_d = 3'd6;
+			3'd6: state_d = 3'd0;
+			default: state_d = 3'd0;
+		endcase
+		if (sigint_detected) begin
+			state_d = 3'd0;
+			alert_pd = 1'b0;
+			alert_nd = 1'b0;
+			ping_clr = 1'b1;
+			alert_clr = 1'b0;
+		end
+	end
+
+	prim_sec_anchor_flop #(
+		.Width(2),
+		.ResetValue(2'b10)
+	) u_prim_flop_alert(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.d_i({alert_nd, alert_pd}),
+		.q_o({alert_nq, alert_pq})
+	);
+
+	always @(posedge clk_i or negedge rst_ni) begin : p_reg
+		if (!rst_ni) begin
+			state_q <= 3'd0;
+			alert_set_q <= 1'b0;
+			alert_test_set_q <= 1'b0;
+			ping_set_q <= 1'b0;
+		end
+		else begin
+			state_q <= state_d;
+			alert_set_q <= alert_set_d;
+			alert_test_set_q <= alert_test_set_d;
+			ping_set_q <= ping_set_d;
+		end
+	end
+	initial _sv2v_0 = 0;
+endmodule

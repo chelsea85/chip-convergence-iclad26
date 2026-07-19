@@ -1,0 +1,66 @@
+[
+ {
+  "cid": "baseline",
+  "ppa": {
+   "area": 1789.7679,
+   "cells": 12295.0,
+   "ff": 1769.0,
+   "setup": -430.14,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.0184
+  },
+  "parent": null,
+  "strategy": "baseline",
+  "wins": 3.830030699597189,
+  "losses": 5.169969300402811
+ },
+ {
+  "cid": "b153b877f996",
+  "ppa": {
+   "area": 1801.05282,
+   "cells": 12386.0,
+   "ff": 1769.0,
+   "setup": -415.85,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.0183
+  },
+  "parent": "baseline",
+  "strategy": "carry-save",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "1b5c86d80918",
+  "ppa": {
+   "area": 1794.25854,
+   "cells": 12031.0,
+   "ff": 1769.0,
+   "setup": -411.18,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.0182
+  },
+  "parent": "baseline",
+  "strategy": "arith-arch",
+  "wins": 2.3659604976419506,
+  "losses": 3.6340395023580494
+ },
+ {
+  "cid": "97a1a49cb6d5",
+  "ppa": {
+   "area": 1805.79132,
+   "cells": 12327.0,
+   "ff": 1769.0,
+   "setup": -422.45,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.0184
+  },
+  "parent": "baseline",
+  "strategy": "micro-opt",
+  "wins": 0.0,
+  "losses": 0.0
+ }
+]
