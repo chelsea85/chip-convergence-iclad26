@@ -1,0 +1,82 @@
+An elegant optimization is applied to `tlul_cmd_intg_chk.v` using the `[rtlscout-cutpoints]` playbook strategy. By declaring named intermediate wires with explicit widths at logical boundaries, we help Yosys and ABC partition and optimize the complex logic of the command and data integrity checks independently. This simplifies the critical path and improves both timing and area.
+
+### Ledger
+- **Transform**: `[rtlscout-cutpoints]`
+- **Cone**: `tlul_cmd_intg_chk` (specifically the logic computing `err_o` and intermediate signals `cmd`, `chk_data`, `data_intg`, `err_combined`, `a_valid`)
+- **Changed signals**:
+  - `cmd`: originally defined implicitly inside a function, now explicitly declared as `wire [(((prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW) + 3) + top_pkg_TL_DBW) - 1:0]` (unsigned).
+  - `chk_data`: new signal `wire [63:0]` (unsigned).
+  - `data_intg`: new signal `wire [tlul_pkg_DataIntgWidth + top_pkg_TL_DW - 1:0]` (unsigned).
+  - `a_valid`: new signal `wire` (unsigned).
+  - `err_combined`: new signal `wire` (unsigned).
+
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+
+	localparam signed [31:0] IntgWidth = tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width + tlul_pkg_H2DCmdIntgWidth + tlul_pkg_DataIntgWidth;
+
+	wire [(((prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW) + 3) + top_pkg_TL_DBW) - 1:0] cmd;
+	assign cmd[prim_mubi_pkg_MuBi4Width + (top_pkg_TL_AW + (top_pkg_TL_DBW + 2))-:prim_mubi_pkg_MuBi4Width] = tl_i[(IntgWidth + 0) - (IntgWidth - 18)-:prim_mubi_pkg_MuBi4Width];
+	assign cmd[top_pkg_TL_AW + (top_pkg_TL_DBW + 2)-:top_pkg_TL_AW] = tl_i[top_pkg_TL_AW + (top_pkg_TL_DBW + (top_pkg_TL_DW + (IntgWidth + 0)))-:top_pkg_TL_AW];
+	assign cmd[top_pkg_TL_DBW + 2-:3] = tl_i[6 + (top_pkg_TL_SZW + (top_pkg_TL_AIW + (top_pkg_TL_AW + (top_pkg_TL_DBW + (top_pkg_TL_DW + (IntgWidth + 0)))))) -: 3];
+	assign cmd[top_pkg_TL_DBW - 1-:top_pkg_TL_DBW] = tl_i[top_pkg_TL_DBW + (top_pkg_TL_DW + (IntgWidth + 0))-:top_pkg_TL_DBW];
+
+	localparam signed [31:0] tlul_pkg_H2DCmdMaxWidth = 57;
+	function automatic [56:0] sv2v_cast_57;
+		input reg [56:0] inp;
+		sv2v_cast_57 = inp;
+	endfunction
+
+	wire [63:0] chk_data;
+	assign chk_data = {tl_i[(IntgWidth + 0) - (IntgWidth - 14)-:7], sv2v_cast_57(cmd)};
+
+	wire [1:0] err;
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i(chk_data),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+
+	localparam signed [31:0] tlul_pkg_DataMaxWidth = 32;
+	function automatic [31:0] sv2v_cast_32;
+		input reg [31:0] inp;
+		sv2v_cast_32 = inp;
+	endfunction
+
+	wire [tlul_pkg_DataIntgWidth + top_pkg_TL_DW - 1:0] data_intg;
+	assign data_intg = {tl_i[(IntgWidth + 0) - (IntgWidth - 7)-:tlul_pkg_DataIntgWidth], sv2v_cast_32(tl_i[top_pkg_TL_DW + (IntgWidth + 0)-:top_pkg_TL_DW])};
+
+	wire data_err;
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i(data_intg),
+		.data_err_o(data_err)
+	);
+
+	localparam signed [31:0] AValidIdx = 7 + (top_pkg_TL_SZW + (top_pkg_TL_AIW + (top_pkg_TL_AW + (top_pkg_TL_DBW + (top_pkg_TL_DW + ((((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth) + 0))))));
+	wire a_valid;
+	assign a_valid = tl_i[AValidIdx];
+
+	wire err_combined;
+	assign err_combined = err[0] | err[1] | data_err;
+
+	assign err_o = a_valid & err_combined;
+
+	wire unused_tl;
+	assign unused_tl = |tl_i;
+endmodule

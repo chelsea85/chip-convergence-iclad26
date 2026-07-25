@@ -136,8 +136,12 @@ def test_vertex_model():
     except _FakeAPIError:
         check("non-retryable 400 raises", True)
 
-    # no key -> clear SystemExit
-    os.environ.pop("GEMINI_API_KEY")
+    # no key -> clear SystemExit. Pop EVERY candidate key name the proposer
+    # falls back to, so the test is environment-independent (a shell exporting
+    # EXPRESS_MODE_KEY/GEMINI_API_KEY_2 previously made this fail 12/13).
+    for k in ("GEMINI_API_KEY", "GEMINI_API_KEY_2", "EXPRESS_MODE_KEY",
+              "HACKATHON_AISTUDIO_KEY"):
+        os.environ.pop(k, None)
     try:
         proposer.VertexModel()
         check("missing key -> SystemExit", False)

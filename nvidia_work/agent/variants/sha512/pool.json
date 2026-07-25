@@ -12,8 +12,8 @@
   },
   "parent": null,
   "strategy": "baseline",
-  "wins": 0.9260310992729714,
-  "losses": 0.07396890072702855
+  "wins": 5.300001374776434,
+  "losses": 6.199998625223566
  },
  {
   "cid": "67ad60a10f97",
@@ -27,6 +27,182 @@
    "power": 0.00223
   },
   "parent": "baseline",
+  "strategy": "balanced-tree",
+  "wins": 3.606759806497865,
+  "losses": 5.393240193502135
+ },
+ {
+  "cid": "f3d12f581633",
+  "ppa": {
+   "area": 4054.086,
+   "cells": 29908.0,
+   "ff": 3674.0,
+   "setup": 221.78,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "baseline",
+  "strategy": "balanced-tree",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "84e1ac5bfc0a",
+  "ppa": {
+   "area": 4084.004,
+   "cells": 30357.0,
+   "ff": 3674.0,
+   "setup": 173.23,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "baseline",
+  "strategy": "carry-save",
+  "wins": 0.42735447864485454,
+  "losses": 2.5726455213551453
+ },
+ {
+  "cid": "db68da46807e",
+  "ppa": {
+   "area": 4016.265,
+   "cells": 29332.0,
+   "ff": 3674.0,
+   "setup": 335.38,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "67ad60a10f97",
+  "strategy": "carry-save",
+  "wins": 1.441187982569634,
+  "losses": 3.058812017430366
+ },
+ {
+  "cid": "bc636db71869",
+  "ppa": {
+   "area": 4064.073,
+   "cells": 29988.0,
+   "ff": 3674.0,
+   "setup": 273.91,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "67ad60a10f97",
+  "strategy": "arith-arch",
+  "wins": 2.4080264707670596,
+  "losses": 2.0919735292329404
+ },
+ {
+  "cid": "07260f03a2fd",
+  "ppa": {
+   "area": 3996.334,
+   "cells": 29216.0,
+   "ff": 3674.0,
+   "setup": 350.87,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "db68da46807e",
+  "strategy": "arith-arch",
+  "wins": 0.6095877968060714,
+  "losses": 2.3904122031939283
+ },
+ {
+  "cid": "2008d6ff3f3b",
+  "ppa": {
+   "area": 3983.475,
+   "cells": 29256.0,
+   "ff": 3674.0,
+   "setup": 23.73,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "baseline",
+  "strategy": "balanced-tree",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "03620ff52149",
+  "ppa": {
+   "area": 3983.62,
+   "cells": 29371.0,
+   "ff": 3674.0,
+   "setup": -28.31,
+   "hold": 48.66,
+   "timing_met": false,
+   "power": 0.00223
+  },
+  "parent": "baseline",
+  "strategy": "carry-save",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "9402d6c1582c",
+  "ppa": {
+   "area": 4105.568,
+   "cells": 30284.0,
+   "ff": 3674.0,
+   "setup": 364.04,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "bc636db71869",
+  "strategy": "late-arrival-shannon",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "2083f19e7359",
+  "ppa": {
+   "area": 4117.757,
+   "cells": 30450.0,
+   "ff": 3674.0,
+   "setup": 460.62,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "bc636db71869",
+  "strategy": "carry-save",
+  "wins": 1.0872013060795362,
+  "losses": 1.9127986939204638
+ },
+ {
+  "cid": "ebda6eacda07",
+  "ppa": {
+   "area": 4108.367,
+   "cells": 30267.0,
+   "ff": 3674.0,
+   "setup": 468.23,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00222
+  },
+  "parent": "2083f19e7359",
+  "strategy": "carry-save",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "3bac9fe7672d",
+  "ppa": {
+   "area": 4171.703,
+   "cells": 30966.0,
+   "ff": 3674.0,
+   "setup": 501.46,
+   "hold": 48.66,
+   "timing_met": true,
+   "power": 0.00223
+  },
+  "parent": "2083f19e7359",
   "strategy": "balanced-tree",
   "wins": 0.0,
   "losses": 0.0

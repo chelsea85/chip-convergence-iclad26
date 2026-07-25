@@ -30,6 +30,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import contract as C
 from .config import IPS, REPO
 from .workspace import Workspace
 
@@ -39,6 +40,19 @@ def _file_stems(ip: str) -> dict[str, str]:
     """{module/file stem -> repo-relative source} for attribution. OpenTitan &
     the NVIDIA IPs name a module after its file, so the stem is the key."""
     spec = IPS[ip]
+    ctr = C.get_contract(spec)
+    if ctr.name == "tmake":
+        # Tool reports name modules from the generated filelist, but campaign
+        # attribution must point back to the editable vmod source. Dependencies
+        # with no reverse mapping (vlibs/RAM wrappers) are intentionally absent
+        # so diagnosis cannot select a forbidden generated file.
+        model = ctr.filelist_model(REPO)
+        out = {}
+        for generated in model.sources:
+            editable = ctr.generated_to_source(generated)
+            if editable is not None and ctr.is_editable(editable):
+                out[Path(generated).stem] = editable
+        return out
     return {Path(s).stem: s for s in spec.sources}
 
 
@@ -146,15 +160,17 @@ def _parse_timing(ws: Workspace, reports: str, stems: dict) -> tuple:
     # first path block (reports are sorted worst-first per group) on the WORST
     # group. Grab all instance paths from the first ~40 cell lines.
     crit, ordered = {}, []
-    # find the worst-slack block across the file
+    # Find the worst-slack block across the file. NVDLA's current SDC/report
+    # contains reset synchronizer/distribution paths that were intended to be
+    # false-pathed; those are not optimization targets. Drop those blocks
+    # before ranking and fall back to area attribution if none remain.
     blocks = re.split(r"\nStartpoint:", text)
-    worst_block, worst_slack = "", 0.0
+    ranked = []
     for b in blocks[1:]:
-        sm = re.search(r"slack \(VIOLATED\)", b)
         vm = re.search(r"(-?\d+\.\d+)\s+slack", b)
-        if vm and float(vm.group(1)) < worst_slack:
-            worst_slack, worst_block = float(vm.group(1)), b
-    src = worst_block or (blocks[1] if len(blocks) > 1 else "")
+        if vm and not _excluded_timing_artifact(ws.spec.name, b):
+            ranked.append((float(vm.group(1)), b))
+    src = min(ranked, key=lambda item: item[0])[1] if ranked else ""
     cell_types = []
     for cm in re.finditer(r"([\w\\/\[\].]+)/\w+/Y \((\w+?)x", src):
         f = _attribute_instance(cm.group(1), stems)
@@ -166,15 +182,43 @@ def _parse_timing(ws: Workspace, reports: str, stems: dict) -> tuple:
     return wns, met, crit, ordered, cell_types
 
 
+_NVDLA_RESET_PATH = re.compile(
+    r"(?i)(?:"
+    r"(?:^|[/_.])u_sync_(?:core|falcon)_reset(?:[/_.\s]|$)|"
+    r"(?:^|[/_.])(?:sync_reset|reset_synced|core_reset|falcon_reset)"
+    r"(?:[/_.\s]|$)|"
+    r"(?:^|[/_.])(?:dla_reset_rstn|direct_reset_)(?:[/_.\s]|$)|"
+    r"(?:^|/)u_NV_NVDLA_car(?:/|[/_.\s]|$)"
+    r")")
+
+
+def _excluded_timing_artifact(ip: str, block: str) -> bool:
+    """True only for the host-confirmed NVDLA reset-distribution artifact.
+
+    Ordinary datapath synchronizers such as CDP's data sync FIFO are not
+    excluded merely because their name contains ``sync``.
+    """
+    return ip == "nvdla" and bool(_NVDLA_RESET_PATH.search(block))
+
+
 def _parse_area(ws: Workspace, stems: dict) -> dict:
     """Per-module cell counts via yosys stat (hierarchy kept)."""
     spec = ws.spec
-    files = " ".join(Path(s).name for s in spec.sources)
-    gen = f"{spec.syn_dir}/generated" if spec.skip_sv2v else spec.rtl_dir
-    r = ws.run(
-        f"cd {gen} && yosys -p 'read_verilog -sv {files}; "
-        f"hierarchy -check -top {spec.top}; proc; opt -fast; techmap; "
-        f"opt -fast; stat' 2>&1", timeout=3600)
+    ctr = C.get_contract(spec)
+    if ctr.name == "tmake":
+        di = ctr.design_inputs(ws.root, "candidate")
+        script = (di.yosys_read()
+                  + f"hierarchy -check -top {spec.top}\n"
+                    "proc\nopt -fast\ntechmap\nopt -fast\nstat\n")
+        ws.write(".diagnose/area.ys", script)
+        r = ws.run("yosys .diagnose/area.ys 2>&1", timeout=3600)
+    else:
+        files = " ".join(Path(s).name for s in spec.sources)
+        gen = f"{spec.syn_dir}/generated" if spec.skip_sv2v else spec.rtl_dir
+        r = ws.run(
+            f"cd {gen} && yosys -p 'read_verilog -sv {files}; "
+            f"hierarchy -check -top {spec.top}; proc; opt -fast; techmap; "
+            f"opt -fast; stat' 2>&1", timeout=3600)
     out = r.stdout or ""
     area, seq = {}, {}
     # per-module: "=== <mod> ===" ... "<N> cells" then a $_TYPE_ breakdown
@@ -193,12 +237,22 @@ def _parse_area(ws: Workspace, stems: dict) -> dict:
 # ── entry point ─────────────────────────────────────────────────────────────────
 def diagnose(ip: str, reuse_reports: str | None = None) -> DiagnoseResult:
     if ip not in IPS:
+        from . import registry
+        registry.ensure_registered()
+    if ip not in IPS:
         from .discover import get_spec, register
         register(get_spec(ip));
     stems = _file_stems(ip)
     res = DiagnoseResult(ip=ip)
     ws = Workspace.create(ip, tag="diag")
     try:
+        ctr = C.get_contract(ws.spec)
+        if ctr.name == "tmake":
+            ok, log = ctr.regenerate(ws.root, ws.run)
+            if not ok:
+                raise C.ContractError(
+                    f"NVDLA pristine regeneration failed before diagnosis: "
+                    f"{log[-800:]}")
         reports = reuse_reports or _run_flatten0(ws)
         wns, met, crit, ordered, cell_types = _parse_timing(ws, reports, stems)
         area, seq = _parse_area(ws, stems)
@@ -229,6 +283,11 @@ def diagnose(ip: str, reuse_reports: str | None = None) -> DiagnoseResult:
             res.notes.append("flat/shallow hierarchy — no per-file timing "
                              "attribution available; using area ranking (fine "
                              "for small IPs that send full context anyway)")
+        if ip == "nvdla":
+            res.notes.append(
+                "NVDLA reset-synchronizer/distribution paths are excluded "
+                "from timing ranking; if no ordinary path is attributable, "
+                "the first campaign is area-ranked")
         res.notes.append("power: proxy only (leakage~=cells); ADP=area*delay "
                          "is the acceptance objective")
     finally:

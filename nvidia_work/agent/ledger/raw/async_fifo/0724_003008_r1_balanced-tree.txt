@@ -1,0 +1,90 @@
+An elegant way to optimize the critical path in `wptr_full` is to apply the **balanced-tree** transform to the serial addition chain. 
+
+### Ledger
+- **Transform**: `balanced-tree` (re-associated the serial addition `(wbin + cond) + 1` into `wbin + (cond + 1)`)
+- **Cone**: `wgraynextp1` in `wptr_full.v`
+- **Changed signals**:
+  - `wbinnext + 1'b1` (implicit intermediate, 5-bit, unsigned) -> `wbinnextp1` (5-bit, unsigned)
+
+### Explanation
+In the original design, `wgraynextp1` is computed as:
+```verilog
+assign wgraynextp1 = ((wbinnext + 1'b1) >> 1) ^ (wbinnext + 1'b1);
+```
+where `wbinnext` is itself the output of an addition:
+```verilog
+assign wbinnext = wbin + ((winc & ~wfull) ? 1 : 0);
+```
+This creates a serial chain of two additions: `(wbin + cond) + 1`. By re-associating this into `wbin + (cond + 1)`, we can pre-compute `cond + 1` as a simple 2-bit multiplexed constant (`cond ? 2 : 1`). This reduces the logic depth of the adder from two cascaded stages to a single stage, significantly improving the setup slack on the write-clock domain.
+
+Here is the complete updated file:
+
+// FILE: wptr_full.v
+// distributed under the mit license
+// https://opensource.org/licenses/mit-license.php
+
+`timescale 1 ns / 1 ps
+`default_nettype none
+
+module wptr_full
+
+	#(
+		parameter ADDRSIZE = 4
+	)(
+		input  wire                wclk,
+		input  wire                wrst_n,
+		input  wire                winc,
+		input  wire [ADDRSIZE  :0] wq2_rptr,
+		output reg                 wfull,
+		output reg                 awfull,
+		output wire [ADDRSIZE-1:0] waddr,
+		output reg  [ADDRSIZE  :0] wptr
+	);
+
+    reg  [ADDRSIZE:0] wbin;
+    wire [ADDRSIZE:0] wgraynext, wbinnext, wgraynextp1;
+    wire              awfull_val, wfull_val;
+
+	// GRAYSTYLE2 pointer
+	always @(posedge wclk or negedge wrst_n) begin
+
+		if (!wrst_n)
+			{wbin, wptr} <= 0;
+		else
+			{wbin, wptr} <= {wbinnext, wgraynext};
+
+	end
+
+    // Memory write-address pointer (okay to use binary to address memory)
+    assign waddr = wbin[ADDRSIZE-1:0];
+    assign wbinnext  = wbin + ((winc & ~wfull) ? 1 : 0);
+    assign wgraynext = (wbinnext >> 1) ^ wbinnext;
+
+    // Re-associate (wbin + cond) + 1 to wbin + (cond + 1) to balance the addition tree
+    wire [ADDRSIZE:0] wbinnextp1 = wbin + ((winc & ~wfull) ? 2'd2 : 2'd1);
+    assign wgraynextp1 = (wbinnextp1 >> 1) ^ wbinnextp1;
+
+    //------------------------------------------------------------------
+    // Simplified version of the three necessary full-tests:
+    // assign wfull_val=((wgnext[ADDRSIZE] !=wq2_rptr[ADDRSIZE] ) &&
+    //                   (wgnext[ADDRSIZE-1]  !=wq2_rptr[ADDRSIZE-1]) &&
+    // (wgnext[ADDRSIZE-2:0]==wq2_rptr[ADDRSIZE-2:0]));
+    //------------------------------------------------------------------
+
+     assign wfull_val = (wgraynext == {~wq2_rptr[ADDRSIZE:ADDRSIZE-1],wq2_rptr[ADDRSIZE-2:0]});
+     assign awfull_val = (wgraynextp1 == {~wq2_rptr[ADDRSIZE:ADDRSIZE-1],wq2_rptr[ADDRSIZE-2:0]});
+
+     always @(posedge wclk or negedge wrst_n) begin
+
+        if (!wrst_n) begin
+            awfull <= 1'b0;
+            wfull  <= 1'b0;
+        end else begin
+            awfull <= awfull_val;
+            wfull  <= wfull_val;
+        end
+    end
+
+endmodule
+
+`resetall

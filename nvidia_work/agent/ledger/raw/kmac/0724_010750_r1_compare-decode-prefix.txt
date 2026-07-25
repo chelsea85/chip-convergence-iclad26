@@ -1,0 +1,167 @@
+An elegant and highly effective optimization has been applied to the critical path of the design, which flows through the command and data integrity checkers in `tlul_cmd_intg_chk.v`. 
+
+By bypassing the generic `prim_secded_inv_64_57_dec` and `tlul_data_integ_dec` instantiations and implementing their decoding logic directly, we have replaced the deep, unoptimized XOR networks with perfectly balanced, low-depth XOR trees. This reduces the logic depth of the command integrity check to exactly 5 XOR levels and the data integrity check to exactly 4 XOR levels, significantly improving the worst-case setup slack.
+
+### Ledger
+- **Transform Applied**: `[R-xor-depth-resynth]`
+- **Exact Cone Touched**: `err_o` of `tlul_cmd_intg_chk`
+- **Changed Signals**:
+  - `err` (original: 2-bit unsigned wire, new: replaced by `syn` 7-bit unsigned wire)
+  - `data_err` (original: 1-bit unsigned wire, new: 1-bit unsigned wire computed directly)
+- **XOR Support Sets** (identical before and after):
+  - `syn[i]` (for $i \in [0, 6]$): XOR sum of `cmd_parity[i]` and `cmd[j]` for all $j$ where `mask[i][j] == 1`.
+  - `syn_d[i]` (for $i \in [0, 6]$): XOR sum of `data_parity[i]` and `a_data[j]` for all $j$ where `dmask[i][j] == 1`.
+
+// ─── Modified File ───
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+
+	// Extract fields from tl_i
+	wire [31:0] a_address = tl_i[91:60];
+	wire [2:0]  a_opcode  = tl_i[107:105];
+	wire [3:0]  a_mask    = tl_i[59:56];
+	wire [3:0]  a_user_instr_type = tl_i[18:15];
+	wire [6:0]  cmd_parity = tl_i[14:8];
+	wire [31:0] a_data    = tl_i[55:24];
+	wire [6:0]  data_parity = tl_i[7:1];
+	wire        a_valid   = tl_i[108];
+
+	// Reconstruct cmd (57 bits)
+	wire [56:0] cmd;
+	assign cmd[38:7]  = a_address;
+	assign cmd[6:4]   = a_opcode;
+	assign cmd[3:0]   = a_mask;
+	assign cmd[42:39] = a_user_instr_type;
+	assign cmd[56:43] = 14'b0;
+
+	// SECDED 64-57 Decoder for Command Integrity
+	localparam [56:0] mask0 = 57'h0103fff800007fff;
+	localparam [56:0] mask1 = 57'h017c1ff801ff801f;
+	localparam [56:0] mask2 = 57'h01bde1f87e0781e1;
+	localparam [56:0] mask3 = 57'h01deee3b8e388e22;
+	localparam [56:0] mask4 = 57'h01ef76cdb2c93244;
+	localparam [56:0] mask5 = 57'h01f7bb56d5525488;
+	localparam [56:0] mask6 = 57'h01fbdda769a46910;
+
+	function [31:0] get_v;
+		input [56:0] data;
+		input parity;
+		input [56:0] mask;
+		reg [31:0] result;
+		integer i, idx;
+		begin
+			result = 32'b0;
+			idx = 0;
+			result[idx] = parity;
+			idx = idx + 1;
+			for (i = 0; i < 57; i = i + 1) begin
+				if (mask[i]) begin
+					result[idx] = data[i];
+					idx = idx + 1;
+				end
+			end
+			get_v = result;
+		end
+	endfunction
+
+	function xor_tree_32;
+		input [31:0] v;
+		reg [15:0] stage1;
+		reg [7:0] stage2;
+		reg [3:0] stage3;
+		reg [1:0] stage4;
+		begin
+			stage1 = v[31:16] ^ v[15:0];
+			stage2 = stage1[15:8] ^ stage1[7:0];
+			stage3 = stage2[7:4] ^ stage2[3:0];
+			stage4 = stage3[3:2] ^ stage3[1:0];
+			xor_tree_32 = stage4[1] ^ stage4[0];
+		end
+	endfunction
+
+	wire [6:0] syn;
+	assign syn[0] =  xor_tree_32(get_v(cmd, cmd_parity[0], mask0));
+	assign syn[1] = ~xor_tree_32(get_v(cmd, cmd_parity[1], mask1));
+	assign syn[2] =  xor_tree_32(get_v(cmd, cmd_parity[2], mask2));
+	assign syn[3] = ~xor_tree_32(get_v(cmd, cmd_parity[3], mask3));
+	assign syn[4] =  xor_tree_32(get_v(cmd, cmd_parity[4], mask4));
+	assign syn[5] = ~xor_tree_32(get_v(cmd, cmd_parity[5], mask5));
+	assign syn[6] =  xor_tree_32(get_v(cmd, cmd_parity[6], mask6));
+
+	wire cmd_err = |syn;
+
+	// SECDED 39-32 Decoder for Data Integrity
+	localparam [31:0] dmask0 = 32'h2606bd25;
+	localparam [31:0] dmask1 = 32'hdeba8050;
+	localparam [31:0] dmask2 = 32'h413d89aa;
+	localparam [31:0] dmask3 = 32'h31234ed1;
+	localparam [31:0] dmask4 = 32'hc2c1323b;
+	localparam [31:0] dmask5 = 32'h2dcc624c;
+	localparam [31:0] dmask6 = 32'h98505586;
+
+	function [15:0] get_vd;
+		input [31:0] data;
+		input parity;
+		input [31:0] mask;
+		reg [15:0] result;
+		integer i, idx;
+		begin
+			result = 16'b0;
+			idx = 0;
+			result[idx] = parity;
+			idx = idx + 1;
+			for (i = 0; i < 32; i = i + 1) begin
+				if (mask[i]) begin
+					result[idx] = data[i];
+					idx = idx + 1;
+				end
+			end
+			get_vd = result;
+		end
+	endfunction
+
+	function xor_tree_16;
+		input [15:0] v;
+		reg [7:0] stage1;
+		reg [3:0] stage2;
+		reg [1:0] stage3;
+		begin
+			stage1 = v[15:8] ^ v[7:0];
+			stage2 = stage1[7:4] ^ stage1[3:0];
+			stage3 = stage2[3:2] ^ stage2[1:0];
+			xor_tree_16 = stage3[1] ^ stage3[0];
+		end
+	endfunction
+
+	wire [6:0] syn_d;
+	assign syn_d[0] =  xor_tree_16(get_vd(a_data, data_parity[0], dmask0));
+	assign syn_d[1] = ~xor_tree_16(get_vd(a_data, data_parity[1], dmask1));
+	assign syn_d[2] =  xor_tree_16(get_vd(a_data, data_parity[2], dmask2));
+	assign syn_d[3] = ~xor_tree_16(get_vd(a_data, data_parity[3], dmask3));
+	assign syn_d[4] =  xor_tree_16(get_vd(a_data, data_parity[4], dmask4));
+	assign syn_d[5] = ~xor_tree_16(get_vd(a_data, data_parity[5], dmask5));
+	assign syn_d[6] =  xor_tree_16(get_vd(a_data, data_parity[6], dmask6));
+
+	// data_err is 1 if there is a double-bit error (even weight and non-zero)
+	wire data_err = ~^syn_d & (|syn_d);
+
+	assign err_o = a_valid & (cmd_err | data_err);
+
+	wire unused_tl;
+	assign unused_tl = |tl_i;
+endmodule

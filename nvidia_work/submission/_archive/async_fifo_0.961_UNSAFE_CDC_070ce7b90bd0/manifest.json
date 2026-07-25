@@ -1,0 +1,40 @@
+{
+ "ip": "async_fifo",
+ "result": "optimized",
+ "cid": "070ce7b90bd0",
+ "changed_files": [
+  "async_fifo/rtl/rptr_empty.v",
+  "async_fifo/rtl/wptr_full.v"
+ ],
+ "baseline_ppa": {
+  "area": 120.37248,
+  "cells": 918.0,
+  "ff": 170.0,
+  "setup": 22.22,
+  "hold": 46.63,
+  "timing_met": true,
+  "power": 0.00292
+ },
+ "best_ppa": {
+  "area": 121.40766,
+  "cells": 933.0,
+  "ff": 162.0,
+  "setup": 35.21,
+  "hold": 46.63,
+  "timing_met": true,
+  "power": 0.00291
+ },
+ "adp_vs_baseline": 0.961,
+ "verification_per_layer": {
+  "lint": "PASS",
+  "compile": "PASS",
+  "gate": "PASS",
+  "lec": "PROVEN",
+  "dualsim": "PASS"
+ },
+ "assurance": "full 5-layer: lint+compile+TB gate PASS, yosys LEC PROVEN, dualsim PASS",
+ "llm_calls": null,
+ "llm_tokens_approx": null,
+ "provenance": "live gemini-3-flash-preview campaign; regenerated 2026-07-14 (delta-only, per-layer verification)",
+ "ts": "2026-07-14T23:06:30"
+}

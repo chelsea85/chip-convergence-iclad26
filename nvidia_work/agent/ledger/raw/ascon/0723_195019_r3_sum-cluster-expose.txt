@@ -1,0 +1,3 @@
+The strategy's preconditions for **sum-cluster-expose** are NOT present in the provided file (`prim_alert_sender.v`), as there are no arithmetic addition (`+`) chains or operators in this module. 
+
+As per the hard constraints, no edits will be made to force an inapplicable transform.

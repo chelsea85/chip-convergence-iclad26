@@ -1,0 +1,5 @@
+The requested strategy `xor-depth-resynthesize` requires the optimization of a strictly linear GF(2) cone (consisting of XOR, XNOR, NOT, and constants only). 
+
+Upon reviewing the only modifiable file, `aes_ctrl_gcm_reg_shadowed.v`, there are no functional XOR/XNOR operations or linear GF(2) cones present in the design (the only XOR operator is a reduction XOR on a dummy `unused_ctrl_gcm` signal in an inactive `generate` branch, which has no impact on the active logic or critical path).
+
+Since the preconditions for the `xor-depth-resynthesize` strategy are **NOT** present in the provided file, no edits have been made to preserve the integrity of the design and avoid forcing an inapplicable transform.

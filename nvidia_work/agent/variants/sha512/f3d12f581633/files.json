@@ -1,0 +1,7 @@
+{
+ "sha512.v": "sha512/src/rtl/sha512.v",
+ "sha512_core.v": "sha512/src/rtl/sha512_core.v",
+ "sha512_w_mem.v": "sha512/src/rtl/sha512_w_mem.v",
+ "sha512_k_constants.v": "sha512/src/rtl/sha512_k_constants.v",
+ "sha512_h_constants.v": "sha512/src/rtl/sha512_h_constants.v"
+}

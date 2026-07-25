@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import IPS, LEDGER_DIR, IPSpec
+from .config import IPS, LEDGER_DIR, IPSpec, IMAGE
 from .workspace import (RegenError, Workspace, candidate_from_dir,
                         pristine_source)
 from . import verify as V
@@ -120,18 +120,43 @@ _PPA_RE = re.compile(
     r"\s+\[(\w+)\]\s+\|\s+pwr=(\S+)W")
 
 
+# mandatory scoring metrics; area/cells/ff/power must be finite AND > 0,
+# setup/hold must be finite (may be <= 0). Any violation => measurement rejected.
+_MEASURE_SCHEMA = "top-area-v2"
+_REQ_POSITIVE = ("area", "cells", "ff", "power")
+_REQ_FINITE = ("setup", "hold")
+
+
 def measure(ws: Workspace, label: str = "m") -> dict | None:
+    """Full synth+STA measurement. FAIL CLOSED: returns None (never a partial
+    dict) if measure.sh exits nonzero or any mandatory metric is missing/
+    nonnumeric/nonfinite — so a bogus baseline or candidate is never cached or
+    compared. measure.sh already exits nonzero when it cannot parse a metric."""
     spec = ws.spec
     r = ws.run(f"bash /harness/measure.sh {spec.syn_dir} {label} RVT TT 0 "
                f"{spec.skip_sv2v} {spec.top}", timeout=7200)
+    if getattr(r, "returncode", 1) != 0:
+        return None
     line = (r.stdout or "").strip().splitlines()[-1] if r.stdout else ""
     m = _PPA_RE.search(line)
     if not m:
         return None
-    num = lambda s: float(s) if re.match(r"^-?\d", s) else None
-    return {"area": num(m[1]), "cells": num(m[2]), "ff": num(m[3]),
-            "setup": num(m[4]), "hold": num(m[5]), "timing_met": m[6] == "MET",
-            "power": num(m[7])}
+
+    def num(s):
+        try:
+            v = float(s)
+        except (TypeError, ValueError):
+            return None
+        return v if math.isfinite(v) else None
+
+    ppa = {"area": num(m[1]), "cells": num(m[2]), "ff": num(m[3]),
+           "setup": num(m[4]), "hold": num(m[5]), "timing_met": m[6] == "MET",
+           "power": num(m[7])}
+    if any(ppa[k] is None or ppa[k] <= 0 for k in _REQ_POSITIVE):
+        return None
+    if any(ppa[k] is None for k in _REQ_FINITE):
+        return None
+    return ppa
 
 
 def _save_reports(ws: Workspace, cand: Candidate):
@@ -172,8 +197,14 @@ def baseline(ip: str, refresh: bool = False) -> dict:
     try:
         prox = proxy_metrics(ws)
         ppa = measure(ws, f"{ip}-base")
-        assert ppa, "baseline measurement failed"
-        data = {"ppa": ppa, "proxy": prox}
+        # FAIL CLOSED: a failed/invalid measurement must NOT be cached and must
+        # NEVER overwrite an existing known-good cache with null metrics.
+        if not ppa:
+            raise RuntimeError(
+                f"baseline measurement for {ip} failed (missing/invalid metric); "
+                f"refusing to write baseline cache")
+        data = {"ppa": ppa, "proxy": prox, "schema": _MEASURE_SCHEMA,
+                "image": IMAGE}
         LEDGER_DIR.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(data, indent=1))
         return data
@@ -316,6 +347,12 @@ def _finish(cand: Candidate, res: EvalResult, vr: V.VerifyResult,
     ledger_append(cand.ip, {
         "cid": cand.cid, "status": res.status, "meta": cand.meta,
         "verify": {k: v["status"] for k, v in vr.layers.items()},
+        # Retain the normalized proof note (recipe/rc/total/proven/unproven)
+        # and other layer details. Status-only ledgers made the 2026-07-24
+        # banking review unable to audit LEC counts after workspaces were
+        # destroyed.
+        "verify_evidence": {
+            k: v["detail"] for k, v in vr.layers.items() if v["detail"]},
         "proxy": {k: v for k, v in (res.proxy or {}).items() if k != "hist"},
         "ppa": res.ppa, "wall_s": round(res.wall_s, 1),
         "detail": res.detail[:500]})
@@ -323,10 +360,41 @@ def _finish(cand: Candidate, res: EvalResult, vr: V.VerifyResult,
 
 
 # ── parallel driver ───────────────────────────────────────────────────────────
+def _refuse_tmake(ip: str, where: str):
+    """Explicit fail-closed dispatch (corrective review SS4.9): tmake IPs are
+    evaluated ONLY by ppa.orchestrate - the legacy spec.sources path cannot
+    express their contract and must refuse, not accidentally fail."""
+    from . import contract as _C
+    if _C.get_contract(IPS[ip]).name == "tmake":
+        raise _C.ContractError(
+            f"{where}: tmake contract '{ip}' must be evaluated through "
+            f"ppa.orchestrate.evaluate_tmake_candidate (legacy evaluator "
+            f"refuses tmake)")
+
+
+def _clamped_workers(ip: str, requested: int) -> int:
+    """Contract hard worker cap consumed at the executor (SS11 step 3 /
+    SSH.5): min(requested, contract cap). NVDLA/tmake: 1 (743 MB workspaces +
+    regeneration cost). The clamp is logged - never silent."""
+    from . import contract as _C
+    cap = _C.get_contract(IPS[ip]).worker_cap()
+    if requested > cap:
+        print(f"[{ip}] workers clamped {requested} -> {cap} "
+              f"(contract hard cap)")
+        return cap
+    return requested
+
+
 def evaluate_many(cands: list[Candidate], *, max_workers: int = 4,
                   use_proxy: bool = True, full_verify: bool = False) -> list[EvalResult]:
     assert cands
     ip = cands[0].ip
+    if any(c.ip != ip for c in cands):
+        raise ValueError(f"evaluate_many: mixed-IP batch "
+                         f"({sorted({c.ip for c in cands})}) - the contract "
+                         f"worker cap and baseline are per-IP authorities")
+    _refuse_tmake(ip, "evaluate_many")
+    max_workers = _clamped_workers(ip, max_workers)
     base = baseline(ip)
     fps: list[tuple] = []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:

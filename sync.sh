@@ -7,7 +7,13 @@ DST="$(cd "$(dirname "$0")" && pwd)"
 # NVIDIA track
 mkdir -p "$DST/nvidia_work/agent"
 cp -R "$SRC/nvidia_work/agent/ppa" "$DST/nvidia_work/agent/"
-cp "$SRC/nvidia_work/agent"/{nvidia_agent.py,playbook.json,README.md,test_cold_start.py,test_model_iface.py,test_emit_replace.py,test_selection.py} "$DST/nvidia_work/agent/"
+cp "$SRC/nvidia_work/agent"/{nvidia_agent.py,playbook.json,README.md} "$DST/nvidia_work/agent/"
+# Ship the WHOLE test battery, not a hardcoded subset. The earlier fixed list
+# (4 of 15 suites) silently omitted the suites that are the merge evidence for
+# the contract/buildout code -- test_contract, test_nvdla_buildout,
+# test_migration3, test_timing_rungs, test_cone_templates -- so a fresh clone
+# carried the machinery but could not reproduce its verification.
+cp "$SRC/nvidia_work/agent"/test_*.py "$DST/nvidia_work/agent/"
 mkdir -p "$DST/nvidia_work/agent/ledger"
 cp "$SRC/nvidia_work/agent/ledger"/*.json "$DST/nvidia_work/agent/ledger/" 2>/dev/null || true
 cp "$SRC/nvidia_work/agent/ledger"/*.jsonl "$DST/nvidia_work/agent/ledger/" 2>/dev/null || true

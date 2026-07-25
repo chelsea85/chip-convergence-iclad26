@@ -1,0 +1,3 @@
+The preconditions for the `sum-cluster-expose` strategy are not present in the provided file `tlul_cmd_intg_chk.v`. The file contains only constant-expression index calculations, bit-slicing, and instantiations of SECDED/integrity decoders, with no runtime arithmetic additions or addition chains. 
+
+Therefore, no edits have been made to the design.

@@ -1033,3 +1033,969 @@ diagnostic** (preserve full failure evidence, then design the eligibility predic
 error — no speculative exception) → **assurance-aware parent/plateau** (blocks NVDLA, not the
 selector commit) → **model-config migration** (thinking_level/SDK pin) → bounded Pro kmac only if a
 proof path exists. HOLD on kmac Pro stands.
+
+## 2026-07-19 (rev4) — committed 1997ed4; kmac no-model LEC diagnostic complete
+
+Committed + pushed the selector/manifest fixes → **1997ed4**. Then ran the no-model kmac LEC
+diagnostic (Codex's gate; evidence in `kmac_lec_diag/`, writeup `NVIDIA_KMAC_LEC_DIAGNOSTIC.md`):
+- **Whole-design LEC = pre-existing yosys tool crash.** `verify --ip kmac --baseline --layers lec`
+  (pristine-vs-pristine, identical designs) crashes IN the equiv_make pass:
+  `ERROR: Assert count_id(wire->name)==0 failed in kernel/rtlil.cc:2961` — a wire-name collision on
+  the 60+-module flatten, BEFORE any equivalence check. Candidate-independent + pre-existing → kmac
+  can NEVER reach whole-design lec==PROVEN under this flow (fully explains the campaign's uniform
+  lec:ERROR).
+- **Module-level LEC = PROVEN** on all 3 editable modules (isolated -top flatten, pristine-vs-
+  pristine): tlul_socket_1n (8109 $equiv cells), prim_packer_fifo (157), kmac_app (6760) — all
+  "Equivalence successfully proven!". So a module-equivalence fallback is *viable*, not hypothetical.
+- Proposed eligibility predicate (NOT implemented): whole-design error proven pre-existing + every
+  changed module module-level-LEC PROVEN + candidate-aware dualsim + no interface/latency/reset/
+  integrity change → assurance "module-equivalence + differential; whole-design LEC pre-existing".
+  Needs a per-module LEC harness in verify.py + a richer assurance predicate in _canonical_best.
+- **Open (asked Codex):** try a yosys prep workaround (uniquify/rename/equiv_opt/newer yosys) to get
+  REAL whole-design PROVEN before building the fallback — cheaper+stronger if it works. Also: make
+  the predicate generic (NVDLA may hit the same wall). HOLD on kmac Pro still stands pending Codex.
+
+## 2026-07-20 (rev5) — kmac model probes: Pro & 3.5-Flash; kmac CLOSED as bounded negative
+
+Answered Codex's "is it the model?" with 3 bounded probes on the free organizer key (Tier 3), all
+emitted to /tmp scratch (submission/kmac untouched; selector shipped baseline every time).
+FINDING 1 — **kmac has NO ADP headroom with ANY model.** Pro (tlul_socket_1n 6c, kmac_app 4c) and
+3.5-flash (tlul_socket_1n 6c) all accepted=0, ADP 1.0 — regress/no-change/dup/synth-fail. With the
+earlier flash campaign (tlul_cmd_intg_chk broke, prim_subreg_shadow regressed) + dead prim_packer_fifo,
+ALL diagnosis-selected kmac files are now attempted incl. the strongest model → **kmac is a bounded
+negative; baseline is the submission; stop kmac search.** FINDING 2 — **model matters for CORRECTNESS:
+Pro > 3.5-flash > old-flash.** Same file (tlul_socket_1n, 6 cands): Pro 0 broken; 3.5-flash 3 broken
+(1 dualsim-fail + 2 synth-fail); old-flash 3 dualsim-fail. So a stronger model avoids the ascon-class
+functional breaks — but doesn't create headroom. ROUTING: Pro for hard/correctness-critical;
+3.5-flash for breadth (gates catch its ~50% defect rate); retire 3-flash-preview. thinking_budget=8192
+worked for both new models (config migration still recommended, not blocking). Wrote
+NVIDIA_KMAC_MODEL_PROBE_FINDINGS.md for Codex. YOSYS FIX: doesn't help kmac (no headroom) but is the
+right GENERIC investment for NVDLA/hidden — flow-workaround (portable, same 0.63) preferred over
+bundling a custom binary; must pass positive+negative controls. NEXT (pending Codex): fix-first yosys
+spike + NVDLA no-model preflight (may not hit the same equiv_make wall). HOLD on kmac Pro is now moot
+(kmac closed).
+
+## 2026-07-20 (rev6) — CORRECTIONS to rev5 overclaims (per Codex review of the model-probe findings)
+
+Codex reviewed `NVIDIA_KMAC_MODEL_PROBE_FINDINGS.md` (`NVIDIA_KMAC_MODEL_PROBE_REVIEW.md`). It
+**approved the operational decision** (kmac closed as a bounded negative, baseline retained, no more
+kmac search) but flagged that several rev5 statements are stronger than the evidence. Correcting them
+here so they don't bias future work. The decision does NOT change; only the calibration does.
+
+- **RETRACT "kmac has NO ADP headroom with ANY model."** Supported claim: *None of the 16 candidates
+  generated in the bounded kmac probes improved on baseline ADP.* That justifies a resource decision
+  (kmac operationally closed, baseline canonical), NOT architectural impossibility for all models /
+  all transformations / all microarchitectures. New label: **bounded negative result; operationally
+  closed; baseline retained.** Reopen only on an explicit trigger (concrete high-impact cone from
+  non-model analysis; a working formal path for a materially different transform class; NVDLA +
+  submission-hardening done with quota/time to spare; a newer model/flow shown on a matched benchmark
+  to raise valid-candidate yield).
+- **RETRACT "Pro produced 0 broken candidates."** Correct: *No Pro proposal in these probes was
+  rejected by synthesis or the available differential test; equivalence was NOT formally proven, so
+  functional correctness is not claimed.* Whole-design LEC never reached a proof (equiv_make crash),
+  and there is no candidate-specific module-level proof for these proposals. Ascon is the standing
+  counterexample: dualsim-PASS ≠ equivalent. Do NOT say the gates "catch all defects" — they catch
+  the failures they exercise. Note: some Pro `kmac_app` candidates changed stateful request-tracking
+  / X-sensitive (case-equality) expressions, which can alter 4-state behavior even when sampled
+  simulation passes — extra reason not to claim correctness.
+- **DOWNGRADE the model ranking to a one-probe pilot signal.** The only clean matched experiment is
+  `tlul_socket_1n`, 6 candidates: 0/6 Pro rejected by synth+diff vs 3/6 for 3.5-flash. That is a
+  useful early yield signal, NOT a proven/stable ranking across modules/strategies/seeds. The
+  old-flash "same file" comparison in rev5 is **wrong** — old flash was measured on *different* files
+  (tlul_cmd_intg_chk, prim_subreg_shadow), so it was not a matched A/B. Retire `gemini-3-flash-preview`
+  as a superseded preview (stable successor + Google migration guidance), NOT on a conclusive
+  head-to-head.
+- **FIX call/cost language.** rev5's "~17 free calls" is imprecise. Evidence shows **18 apparent
+  successful calls** across the three probes = 16 candidate-generating calls + 2 apparent
+  reflector/coordination calls (any API smoke test counts separately). Replace "free" with
+  **"organizer-provided key/project, no expected personal charge"** — Tier 3 is paid-project capacity
+  with finite shared quota; billing ownership was not independently verified in the artifacts.
+- **Provenance gap (for NVDLA):** the candidate ledger does not durably bind each candidate to model
+  ID / SDK version / effective gen-config / prompt revision / call-type. Narrative attribution is
+  insufficient for a contest audit. Before the NVDLA campaign: one append-only machine-readable run
+  manifest per campaign, written as the run happens.
+- **Supersede stale earlier-rev LEC wording:** where earlier revs implied whole-design LEC is
+  universally candidate-independent or that the module-level fallback is already "viable/complete" —
+  correct to: the equiv_make crash is candidate-independent *for kmac's pristine-vs-pristine case*
+  (demonstrated), and module-level proof is *demonstrated for pristine modules only*, NOT a complete
+  candidate-aware eligibility fallback (needs changed-module discovery, real params/generates, black
+  boxes, candidate-specific sources, hierarchical effects, proof logs + labels).
+- **Model-interface migration is now a PREREQUISITE for a consequential NVDLA model campaign** (not
+  merely "recommended"). Numeric thinking_budget being *accepted* ≠ recommended/comparable config;
+  Google guidance recommends supported SDK + `thinking_level` + default sampling for Gemini 3.x. Fine
+  for an isolated smoke call; must be done before NVDLA to keep cross-model comparison interpretable.
+
+NEXT (Codex-approved order): (1) this correction [done]; (2) NVDLA **no-model preflight** (no model
+calls, no canonical changes — env/repro, design discovery, baseline stability ×2, pristine-vs-pristine
+LEC + compare signature to kmac's equiv_make assert, agent-mechanics dry run in scratch, go/no-go);
+(3) **in parallel**, a tightly timeboxed whole-design Yosys spike (same-pinned-0.63 prep fixes first —
+uniquify/rename/hierarchy/flatten-order/equiv_opt; newer-build only as a diagnostic/internal-proof
+path, clearly distinguished from the official scorer); (4) finish model-interface migration +
+assurance-aware parent/plateau controls BEFORE the first consequential NVDLA model run. On the
+Docker/Apple host, serialize the heaviest Yosys phases (don't run two memory-heavy jobs at once).
+
+## 2026-07-20 (rev7) — NVDLA no-model preflight DONE (Codex §A–§F); wrote NVIDIA_NVDLA_PREFLIGHT_FINDINGS.md
+
+Ran the full preflight, no model calls, no canonical changes (submission/nvdla doesn't even exist).
+Disposable workspace in scratch; evidence in `nvdla_lec_diag/`.
+- **§A env:** iclad-dev:v1 e258fff6 (Yosys 0.63), ASAP7 NLDM, contest 7623b53, submission 1997ed4.
+  Host 48 GB but **Docker VM caps ~7.65 GB** — that's the real ceiling (both heavy jobs fit under it).
+- **§B discovery:** top `NV_nvdla` = 5 partitions (a/c/m×2/o/p), 320 modules, 323 sources,
+  `hierarchy -check` PASS, **RAMs blackboxed** (nvdla_ram_blackbox.v), clocks 30/60 ns, FLATTEN=0.
+- **§C baseline stability = DETERMINISTIC, tol 0.0:** ledger + 2 fresh clean runs identical to the
+  digit (cells 952591, ff 42457, area 78346.607, WNS −5788.40 ps, hold +42.40, power 1.04e-02).
+  Wall 598 s synth+STA. **WNS −5788 ps on a 30 ns clock = real timing headroom** (unlike kmac).
+- **§D whole-design LEC = `Equivalence successfully proven!`** — 381,209 $equiv cells (35,523 groups)
+  all proven, 758 s, peak 1478 MB, RC=0. **NVDLA does NOT hit kmac's equiv_make assert.** ⇒ the
+  equiv_make crash is **kmac-specific, not a generic large-design wall**; the whole-design assurance
+  gate is AVAILABLE for NVDLA; the **Yosys spike stays kmac-only and timeboxed** (not blocking NVDLA).
+  Caveat (ascon lesson): this proves the flow (identical designs prove, no crash), NOT yet a
+  candidate-aware proof — a real edited candidate hasn't been LEC'd; that's a named prereq.
+- **§E agent mechanics:** tests pass (selection 4/4, emit 2/2, model-iface 13/13, cold-start 6/6);
+  path guard present; baseline fallback + rejected-non-canonical + full-pool selector all hold; no
+  canonical mutation. **Surfaced 2 NVDLA discovery gaps + confirmed 1 known gap:**
+  (1) `discover.py` sets `rtl_dir = NVDLA/vmod/vlibs` (the CELL-LIBRARY dir, not the functional RTL
+  under outdir/.../nvdla/) → a campaign would edit the wrong files → **NVDLA needs an explicit
+  IPSpec**; (2) discovered clocks 10/14 ns vs real 30/60 ns (harmless for synth PPA — synth reads the
+  SDC — but wrong for diagnosis); (3) **parent/plateau still assurance-blind** (controller.py:273-286,
+  PPA-only) — unproven improver can seed later rounds; must fix before iterative model rounds.
+- **§F verdict:** **GO** for NVDLA verification/infra work (both hard unknowns — baseline repro & LEC
+  at scale — cleared). **NO-GO for a model campaign** until 4 prereqs land: (1) explicit NVDLA IPSpec
+  + edit-scope assertion; (2) NVDLA functional-gate + candidate-aware LEC validation on a no-op edit;
+  (3) model-interface migration + per-campaign run manifest; (4) assurance-aware parent/plateau.
+Next (user's call): author NVDLA IPSpec → validate gate/candidate-LEC → model-config migration →
+parent/plateau patch → staged campaign. Yosys spike deprioritized for NVDLA (LEC works).
+
+## 2026-07-20 (rev8) — CORRECTIONS to rev7 (per Codex review `NVIDIA_NVDLA_PREFLIGHT_REVIEW.md`)
+
+Codex approved the core result (NVDLA custom top-level LEC completes ⇒ kmac's `equiv_make` crash is
+NOT an NVDLA-scale blocker; keep the Yosys spike PARKED for kmac/hidden-trigger only) and the NO-GO,
+but flagged rev7 overstatements + 4 new P0s. Corrections (decision unchanged; calibration + expanded
+gate):
+- **"timing headroom" was WRONG.** WNS −5788 ps is a reproducible **setup violation** (~35.8 ns
+  critical path vs 30 ns). Worse, the worst paths are **reset-synchronizer/distribution** paths the
+  SDC comments intend to false-path — likely a constraint-application artifact, NOT a datapath
+  opportunity. Correct: *reproducible measured setup violation; valid datapath opportunity NOT shown;
+  target validity pends a constraint-intent audit.* Do NOT optimize this WNS (risks reset/CDC edits).
+- **Baseline area cache is WRONG (P0 bug).** `NVDLA_baseline.json area=0.75816` is a **submodule**
+  area: `harness/measure.sh:43` greps the FIRST `"Chip area for module"` and misses the hierarchical
+  `"Chip area for top module" = 78346.606860`. rev7's determinism table mislabeled 78346.607 as "the
+  ledger value" — it's the report value, not the cached one. **Blast radius = NVDLA ONLY** — every
+  other IP sets `FLATTEN=1` (collapses to one top module, so grep -m1 hits the top): async_fifo/
+  sha512/ascon/aes/kmac/prim ledger areas are all correct top-scale values; **banked sha512 0.7266 /
+  ascon 0.97918 are UNAFFECTED.** Fix (prereq): parse top-module area explicitly, fail closed if
+  absent/ambiguous, add a hierarchical-report fixture, refresh the NVDLA cache, verify the returned
+  PPA object (not just reports), store raw metric source-lines + hashes.
+- **LEC diagnostic ≠ agent LEC (P0).** rev7 said the .ys "mirrors verify.py::lec exactly" — FALSE.
+  The diagnostic uses per-file `read_verilog -defer` + 4 defines + 22 includes; `_read_stanza` uses a
+  single `read_verilog -sv <files>` with none → agent LEC would FAIL on NVDLA as-is. Result proves
+  **flow feasibility, not agent readiness.** Prereq: move the recipe into the real verification path;
+  golden=immutable pristine, gate=regenerated candidate, distinct hashes; run pristine + known-
+  equivalent + **mandatory known-INEQUIVALENT negative control** (a no-op test alone is insufficient);
+  raise/scale the 900 s timeout (baseline LEC already 758 s → 142 s margin); timeout/error = ineligible.
+- **`outdir`-only edit target is NOT the fix (P0).** `vmod/nvdla` is the ePerl source-of-truth;
+  `outdir/nv_small/vmod/nvdla` is generated by `tmake -build vmod`; the gate (`run_varilator_test.sh`)
+  runs `tmake -clean -build vmod` FIRST → an `outdir`-only candidate is overwritten / candidate-blind
+  (OpenTitan dual-representation again). Needs: editable=`vmod/nvdla`, explicit source→generated map,
+  regenerate-in-workspace-after-overlay-before-every-consumer, candidate-survival tripwire, gate-does-
+  not-erase-candidate guard, manifest emits the source delta, clean-build reproduces the generated RTL.
+- **Also (P1):** NVDLA `proxy: null` (cheap-gate cascade not functioning for NVDLA — same read-config
+  gap); the real acceptance predicate is unspecified (controller needs dualsim PASS to pool-admit,
+  selector needs LEC PROVEN — NVDLA dualsim untested/maybe impractical; define one predicate and align
+  pool-admit/parent/plateau/canonical/manifest); baseline is "metric-repeatable in this env", NOT
+  "fully deterministic / any delta trustworthy" (keep the 1 ps / 0.5% epsilons, not tol=0).
+- **Prereq list SUPERSEDED:** the rev7 4-item list → Codex's **10-item go/no-go gate** (source
+  contract; top-module metric+cache; timing/constraint intent + safe cone; NVDLA compile/proxy;
+  candidate-aware gate w/o overwrite; candidate-aware LEC + pos/neg controls; full eligibility
+  predicate; assurance-aware parent/plateau; model SDK/config + provenance; explicit quota/compute/
+  wall/disk/stop budget). Codex 6-phase order: (1) correct the record [this rev]; (2) source contract;
+  (3) metric+timing repair + pick ONE safe leaf; (4) candidate-aware LEC+gate w/ controls + predicate;
+  (5) parent/plateau + model migration (parallel OK, hard gate before any model call); (6) first
+  bounded campaign = ONE leaf unit / ONE file / 1 round / 3 proposals (≤4–6 calls) / 1 worker / no
+  clock-reset-CDC-RAM-vlibs-top-interface edits / no canonical emit / stop on any control deviation.
+  Model migration may run in parallel but source-regen + metrics + verification come FIRST.
+- **Provenance nits:** record the NESTED NVIDIA repo commit (`08cc17e`) not just outer contest HEAD;
+  use full image digest `sha256:e258fff6…` + arch `arm64`; "six partition instances (5 types; m ×2)".
+
+## 2026-07-20 (rev9) — P0-A parser fix + NVDLA Phase 2 source contract DONE
+
+**Parser fix (P0-A):** `harness/measure.sh` area extractor now takes the TOP-module area — prefer
+`"Chip area for top module"` (STAT, hierarchical/full-precision) → `"Total Area"` (FINAL, universal
+top total) → by-name `"Chip area for module '\<TOP>'"` → **fail closed** (empty, so evaluate.py flags
+a missing metric rather than trusting a wrong one). Was `grep -m1 "Chip area for module"` = first line
+= a SUBMODULE for hierarchical designs. New `harness/test_measure_area.sh` = **4/4** (hierarchical→top,
+flat→Total Area, opentitan→by-name, fail-closed). Validated on real reports: NVDLA→78346.606860 (was
+0.75816), sha512→3903.649. **Corrected `ledger/NVDLA_baseline.json` area 0.75816 → 78346.60686**
+(other NVDLA metrics were already correct). Confirmed **blast radius = NVDLA only** for the CACHE, but
+the parser was also *fragile* for OpenTitan IPs (ascon/aes stats list submodules first and can reorder
+between baseline/candidate) — the fix hardens all of them. **Banked submission manifests re-verified
+top-scale + internally consistent (ascon 1789/1801, aes 10100/10139, sha512 3984/3968, kmac 13353,
+prim 70/66, async_fifo 120/121) → submission UNAFFECTED.**
+
+**Phase 2 source contract (empirically proven, `NVIDIA_NVDLA_PHASE2_SOURCE_CONTRACT.md`):**
+`vmod/nvdla/**` (266 .v + 9 .h, #include templates) is the EDITABLE source-of-truth; `tmake -clean
+-build vmod` (Perl, **24 s**) expands #includes → `outdir/nv_small/vmod/nvdla/**` (same relative
+paths) which synth+LEC consume; the gate rebuilds vmod→outdir every run. **Candidate-survival tests
+in iclad-dev:v1: (1) a vmod-source marker PROPAGATES into regenerated outdir (RC=0); (2) an
+outdir-only marker is WIPED by the gate's tmake (count 0) while the vmod marker SURVIVES (count 1).**
+⇒ edit `vmod/nvdla` (never `outdir`). Workspace must copy the FULL NVDLA tree (~743 MB) — tmake needs
+tools/vmod/spec/tree.make/Makefile; a minimal outdir+syn copy FAILS (spec/defs/project.h). Pipeline:
+overlay vmod → tmake regenerate → proxy/synth/LEC/gate read regenerated outdir → tripwire asserts the
+candidate marker/hash survives + golden≠gate generated hashes. Per-candidate compute ≈ 24 s regen +
+~600 s synth + ~758 s LEC + trace-gate. NEXT: Phase 3 (timing/constraint intent audit — reset
+false-path — + proxy fix + pick ONE safe leaf using corrected area) then Phase 4.
+
+## 2026-07-20 (rev10) — kmac LEC control matrix: the equiv_make assert is OUR recipe (fixable), not a yosys/kmac limit
+
+Motivated by the NVDLA whole-design LEC PROVING with a proper recipe: re-tested whether kmac's
+whole-design `equiv_make` assert (`count_id(wire->name)==0`, rtlil.cc:2961) is really an unfixable
+tool bug (as `NVIDIA_KMAC_LEC_DIAGNOSTIC.md` §2.1 claimed) or **our LEC recipe**. Control matrix
+(`kmac_lec_diag/CONTROL_MATRIX_RESULTS.txt`, evidence + .ys saved), all in iclad-dev:v1, 65 generated
+.v, top=kmac:
+- v0 baseline (proc/memory/async2sync/flatten/opt_clean → equiv_make): **ASSERT** (reproduced).
+- v1 `uniquify`-before-flatten: ASSERT. v2 no-flatten (hierarchical): ASSERT. → flatten/uniquify are
+  NOT the fix; the collision is inherent to combining two kmac copies in equiv_make.
+- v3 add **`rename -hide`** (hide internal public wires) before stash: **assert CLEARED — equiv_make
+  PASSES.** Then whole-design equiv **OOMs in equiv_induct (~490s) at the 7.65 GB Docker-VM cap** (a
+  RESOURCE wall, not a tool bug; may clear on a bigger machine).
+- module-level (hierarchy -top <module>) + rename -hide: pristine → **PROVEN** (231 MB, fast);
+  **negative control** (mutated tlul_socket_1n: `hold_all_requests` `!=`→`==`) → **NON-PROVEN, 498
+  unproven $equiv** (66s). So the module-level gate **catches inequivalence** — real gate, not a
+  rubber stamp.
+**CONCLUSION (corrects rev-earlier + `NVIDIA_KMAC_LEC_DIAGNOSTIC.md`): the equiv_make assert is
+OUR-recipe-fixable via `rename -hide`, NOT a "pre-existing unfixable yosys bug", and "kmac can NEVER
+reach whole-design PROVEN" was WRONG.** kmac IS formally checkable (module-level, both-way validated).
+The kmac LEC blocker is REMOVED; kmac stays operationally closed only on HEADROOM grounds (no
+ADP-improving candidate found), not on LEC. **Fix for `verify.py::lec`:** add `rename -hide` to the
+read stanza (generic — also unblocks NVDLA candidate LEC), and for IPs whose whole-design equiv OOMs,
+run module-level LEC on the CHANGED module (proves + fits memory + catches errors). This is exactly
+the NVDLA Phase-4 assurance work — one fix serves kmac + NVDLA. NOTE: this does NOT reopen kmac by
+itself (headroom unchanged), but it retires the "LEC is our code" concern the user raised.
+
+## 2026-07-20 (rev11) — RETRACTION: `rename -hide` is a FALSE FIX (rev10 was wrong); module-level LEC (no hide) is the valid route
+
+Tried to fold `rename -hide` into `verify.py::_read_stanza` (LEC path) per rev10. It REGRESSED every
+working IP: **sha512 baseline LEC PROVEN → INCONCLUSIVE (33 unproven); async_fifo → INCONCLUSIVE
+(12)**. Reverted immediately. Root cause + proof it's a false fix (`kmac_lec_diag/
+CONTROL_MATRIX_RESULTS.txt` rewritten):
+- module-level **pristine** (identical) + rename -hide → **502 unproven** (can't even prove identical
+  designs); module-level **mutated** + rename -hide → 498 unproven. Indistinguishable → rename -hide
+  hides the internal signals `equiv_induct` needs, so it proves NOTHING. It clears the assert but is
+  worthless — exactly the "stops the assert but proves nothing" trap.
+- My rev10 negative control (498 unproven on the mutated module) was therefore INVALID — that number
+  was the rename -hide breakage, not the mutation.
+- **VALID control matrix (module-level, NO rename -hide):** pristine → **PROVEN (0 unproven)**;
+  mutated (tlul_socket_1n `hold_all_requests` `!=`→`==`) → **NON-PROVEN, exactly 1 unproven $equiv**
+  (`neg_modlevel_nohide.log`). So module-level LEC proves identical designs AND precisely detects the
+  bug. This is the real, both-way-validated gate.
+**CORRECTED CONCLUSION (supersedes rev10):** the whole-design kmac `equiv_make` assert has **NO valid
+workaround found** in pinned Yosys 0.63 (uniquify/no-flatten don't clear it; rename -hide clears it
+but false-proves). Whole-design kmac LEC stays BLOCKED. **The valid route is a MODULE-LEVEL LEC
+FALLBACK** (prove each CHANGED module via `hierarchy -top <module>`, no rename -hide) — proves + catches
+inequivalence + fits memory. That is the correct `verify.py::lec` enhancement (Phase-4 work), NOT
+rename -hide. `verify.py` is REVERTED/unchanged; agent tests still valid. kmac still closed on headroom
+regardless. LESSON: a prep pass that clears an assert MUST be validated with a positive control
+(pristine must still PROVE) before trusting any negative — I skipped that in rev10 and it was wrong.
+
+## 2026-07-21 (rev12) — acting on Codex postpreflight review: closed P0-1/P0-2/P0-3 (P0-4 = design, remains)
+
+Codex `NVIDIA_POSTPREFLIGHT_WORK_REVIEW.md` = conditional GO + 4 P0s. Closed three:
+- **P0-1 measurement FAIL-CLOSED end-to-end.** New `harness/_metrics.sh` (single sourceable
+  production helpers: `extract_top_area`, `is_number`, `is_pos_number`). `measure.sh` sources it and
+  **exits 3** if any mandatory metric (area/cells/ff/power > 0; setup/hold finite) is missing/`?`.
+  `evaluate.measure()` now checks the return code + requires finite metrics → returns **None** (never a
+  partial dict) on any failure; `baseline()` **raises rather than caching** an invalid record (won't
+  overwrite a good cache with nulls) + writes `schema="top-area-v2"` + `image` provenance. Tests:
+  `harness/test_measure_area.sh` **16/16** (now exercises the REAL sourced helper, not a copy — Codex
+  P1), new `agent/test_measure_failclosed.py` **13/13** (real `measure()`: rc≠0/`?`/nan/inf/neg/0/empty
+  all → None). Existing suites still green (selection 4/4, emit 2/2, model-iface 13/13, **cold-start
+  6/6** incl. a real baseline through the new path).
+- **P0-2 kmac control matrix PRESERVED** (`kmac_lec_diag/preserved/`): reran module-level pos/neg with
+  **`equiv_status -assert`** (process-level signal, not a bare print). **pos_ctrl (pristine) rc=0
+  "Equivalence successfully proven!"; neg_ctrl (mutated tlul_socket_1n !=->==) rc=1 "Found 1 unproven
+  $equiv" + assert ERROR;** noninterference **sha512 baseline LEC = PROVEN** (reverted recipe). Bundle:
+  ENV (image sha256:e258fff6, arm64), mutation patch, source hashes, both .ys, both raw logs, RESULTS,
+  README. Fixes the missing-log gap Codex flagged.
+- **P0-3 NVDLA source-contract EVIDENCE** (`nvdla_phase2_evidence/EVIDENCE.txt` + tmake logs): fresh
+  tree, full hash chain + a **logic-bearing structural control** (appended `& 1'b1`, LEC-equivalent).
+  Proven with sha256: vmod edit → generated hash 7d0f8b65→60d80cfe (`& 1'b1` visible in generated RTL
+  line 105, not just a comment); outdir-only tamper 5895c05f → after `tmake` back to 60d80cfe (wiped,
+  count 0) while the vmod edit survives (count 1); regen deterministic (after-gate == candidate hash).
+  All tmake rc=0.
+STILL OPEN — **P0-4: explicit NVDLA source/generated/regeneration ABSTRACTION** (editable_sources/
+generated_sources/regenerate() hook/reverse-map/full-tree copy/tripwire — NOT just an IPSpec; the
+current `Workspace.overlay`/`candidate_from_dir` can't express it). Plus Codex's other preflight
+blockers (timing/reset false-path audit, NVDLA proxy null, assurance-aware parent/plateau, model-iface
+migration + provenance, campaign budget) and the P1s (cache schema/provenance done partially; one-leaf
+`.v` scope; whole-design LEC timeout → max(1800, 2×pristine); curated sync file-list). verify.py area
+path + baseline now schema-versioned. Repo submission still 1997ed4 untouched; agent working-tree
+changes: measure.sh, _metrics.sh, test_measure_area.sh, test_measure_failclosed.py, evaluate.py,
+NVDLA_baseline.json.
+
+## 2026-07-22 (rev13) — P0-4: Codex-revised design (rev2) + vertical slice implemented, 37/37 + all suites green
+
+Codex design review (`NVIDIA_NVDLA_P04_DESIGN_REVIEW.md`) = architecture GO, revise-before-
+implementing. Actions:
+- **Design rev2** (`NVIDIA_NVDLA_P04_DESIGN_REV2_FOR_REVIEW.md`, supersedes rev1 — banner added):
+  adopts ALL corrections — immutable `CampaignScope` (two-layer overlay validation), candidate-state
+  invariant (pool/parents/prompt/emit = editable sources ONLY), corrected cheap-first pipeline with
+  **H5 (post-gate) as the canonical effective input** (H5==H4 required), corrected fingerprint
+  definition (323 = 321 outdir + NV_DW_lsd.v + nvdla_ram_blackbox.v; .vh included; 3 manifests +
+  root hash), golden at workspace-root `.golden/NVDLA` (7 Codex conditions), gate = runtime
+  evidence (run_gate.sh `|| true` rc-swallow to be fixed), **eligibility decision: NVDLA v1 =
+  candidate-aware gate PASS + whole-design LEC PROVEN; dualsim diagnostic-only until separately
+  validated**, AES/prim/kmac corrected to Sv2vContract, discovery capability FULL/BASELINE_ONLY/
+  UNSUPPORTED, expanded touchpoints (pool/diagnose/sta_feedback/CLI/gate/emitter), 20-case sandbox
+  + host test plan. §12 addendum (flagged external, from vibeic/vibe-ic review): LEC vacuous-PROVEN
+  guard (success line + total $equiv>0 + counts in ledger + plausibility band), equiv_induct -seq
+  4/16/64 escalation, INCONCLUSIVE sub-classification, provenance JSONL schema.
+- **Vertical slice implemented** (Codex checkpoint 1 scope; NO consumer migration yet):
+  `ppa/contract.py` (SourceContract + Direct/Sv2v/Tmake, CampaignScope, DesignInputs w/ per-tool
+  yosys adapter, manifest/root-hash fingerprints, materialization classification §6.3,
+  check_gate_stability H5==H4, validate_candidate two-layer + symlink-escape/canonical-path,
+  get_contract resolution — contract imports config, never the reverse; regenerate takes an
+  injected runner, no docker assumption). `IPSpec.contract: str = ""` (one field). `workspace.py`
+  overlay delegates validation to contract+scope (direct/sv2v semantics preserved verbatim).
+- **Tests: `test_contract.py` 37/37 PASS** on a fake-tmake tree mirroring the real layout
+  (determinism ×2, golden survives -clean, include-leak guard, digest sensitivity, outdir/.h/
+  scope/symlink rejections, no-effective-change vs proceed vs collateral-drift vs flow-error,
+  H5!=H4 reject, editable-only seeding, sv2v both modes, family resolution). Regressions all
+  green: selection 4/4, emit 2/2, **model-iface 13/13** (fixed the env-sensitive "missing key"
+  test — now pops all candidate key names), fail-closed 13/13, area 16/16. NOTE: this sandbox has
+  no Docker — cold-start 6/6 + host sentinels still pending on the macOS host.
+- OPEN (host, before strict collateral-drift enforcement + campaign): H-1 two-run full
+  generated-manifest determinism, H-2 evidence fixups (relative patch, full digest), H-3 second
+  pristine LEC wall measurement. Next: Codex code review of the slice, then consumer migration
+  (§11 touchpoints).
+
+## 2026-07-22 (rev14) — Rev2 review: conditional GO for checkpoint-1; Rev2.1 addendum written; slice aligned, 49/49
+
+Codex `NVIDIA_NVDLA_P04_DESIGN_REV2_REVIEW.md`: rev2 = "implementable design with a bounded
+correction list"; GO conditionally for the vertical slice; NO-GO unchanged for campaign/emission.
+Notable CORRECTION accepted: my §12.1 zero-cell claim was wrong — standard yosys `equiv_status`
+does NOT print the success line for a 0-cell miter (it reports no cells found); the defensive
+count-binding parser stays, with corrected rationale (Rev2.1 §A.1). Induction -seq escalation
+DEFERRED from v1 (weak-induction semantics; pinned recipe = equiv_simple -short + equiv_induct
+-seq 4); induction counterexamples classed UNCONFIRMED until reset-reachable (§A.3).
+- Wrote `NVIDIA_NVDLA_P04_DESIGN_REV21_ADDENDUM.md` resolving all §4 P0s + §5 P1s: exhaustive
+  15-condition eligibility predicate (one policy object), evaluation ID includes
+  design_inputs_manifest_digest, pinned LEC semantic template w/ 5 substitutions, gate CLEAN
+  REBUILD from H5 + stale-binary negative control, portable copy strategy, 4 path classes,
+  mechanical manifest universe (.v+.vh, membership counts), worker authority, kw-only scope,
+  fail-closed registry, CONTRACT_VALIDATION_PENDING until host H-1, test 19/20 splits, count
+  bands = anomaly only, provenance schema strengthened.
+- Slice code aligned (contract.py/workspace.py/test_contract.py): kw-only CampaignScope w/
+  construction validation + canonical scope_id; effective_workers(min of requested/contract-cap/
+  global); TmakeContract.worker_cap()=1; unknown contract key → structured ContractError;
+  DesignInputs side/absolute-path guards; portable `_clone_tree` (darwin -Rc → GNU --reflink=auto
+  → copytree) wired into Workspace.create, method recorded for provenance.
+- **test_contract.py 49/49** (12 new checks incl. membership-change flow-error, non-outdir-input
+  digest sensitivity, statelessness across workspaces, Linux copy fallback). Regressions green:
+  4/4, 2/2, 13/13, 13/13, 16/16. Slice handoff updated (`NVIDIA_P04_SLICE_FOR_REVIEW.md` UPDATE 2)
+  with the invariant→implementation→test map per review §8.4. Submission repo untouched @1997ed4.
+Next: Codex checkpoint-1 CODE review of the slice; then consumer migration (§11); host H-1..H-3.
+
+## 2026-07-22 (rev15) — Rev2.1 ACCEPTED by Codex; checkpoint-1 GO; §H (Rev2.1a) frozen + slice at 59/59
+
+`NVIDIA_NVDLA_P04_DESIGN_REV21_ADDENDUM_REVIEW.md`: addendum accepted as governing design; no
+further architectural revision; 3 normative clarifications → appended as §H to the addendum:
+H.1 versioned LEC recipes (nvdla-lec-diag-v1 retained/historical vs nvdla-lec-contract-v2 =
++explicit `-seq 4` +`equiv_status -assert`, controls required before eligibility, template guard
+targets v2), H.2 proof result algebra (verdict+reason; timeout et al = INCONCLUSIVE reasons;
+only PROVEN eligible), H.3 checkpoint-1 vs migration test ownership (deferred ≠ waived),
+H.4 = review §4 items (mechanical .vh include universe, validation-profile DIGEST not boolean,
+ephemeral vs retained logs, copy INDEPENDENCE test + hardlink rejection, structural gate phases
+CLEAN→…→PARSE_RESULTS, 15-condition predicate as named per-condition evidence).
+Slice coded for the in-scope pieces: ProofResult algebra w/ pair validation, recipe-ID constants,
+ValidationProfile + validation_state() (tmake PENDING by default; direct/sv2v VALIDATED).
+**test_contract.py 59/59**; regressions 4/4·2/2·13/13·13/13·16/16. Model campaign: NO-GO
+(unchanged). Next: hand the slice package to Codex for checkpoint-1 CODE review; then consumer
+migration; host H-1..H-3 unchanged.
+
+## 2026-07-22 (rev16) — checkpoint-1b: all 12 Codex code-review corrections implemented; 94/94 + 18/18 real-material
+
+Codex `NVIDIA_P04_SLICE_CODE_REVIEW.md` held checkpoint-1: decisive finding = TmakeContract
+conflated the mapping root (outdir/nv_small/vmod/nvdla) with the COMPLETE generated root
+(outdir/nv_small/vmod) → real tree saw only 268/323 sources, 1/22 -I, 0/4 .vh. All verified
+against the tree (4 -D, 22 -I, 323 = 266+55+2, 528 .v + 4 .vh = 532). Checkpoint-1b patch:
+- contract.py REWRITTEN: explicit `TmakeLayout` (complete generated_root ≠ mapping_root; declared
+  filelist required); strict `filelist_model()` (exact order, ../..//. resolution, fail-closed on
+  missing/dup/escape — no silent .exists() filtering); complete-root fingerprints (fail-closed on
+  missing/empty); mechanical `.vh` include_universe; symmetric golden/candidate `design_inputs`
+  from ONE model (side digests cover every source+include; both non-outdir inputs bound);
+  snapshot_golden = FULL golden universe manifest, verify_golden = exact membership; scope
+  authority (requires_scope for tmake, scope.ip check, canonical-stored targets, overlay override
+  REMOVED, no asserts); ProofResult PROVEN unconstructible without rc0/total>0/proven==total/
+  unproven0/v2-recipe; ValidationProfile full fields + VALIDATED only on bound-digest match;
+  tree_manifest/manifest_root/clone fail closed on symlinks/dups/escapes; H1/H2-aware
+  classification (derived edits; H1==H2 + generated change = collateral-drift; partial closure =
+  flow-error); real Sv2v forward/reverse mappings (both modes); path_classes() 4-class API;
+  full-sha256 IDs; Python >=3.10 import guard (host 3.9.6 → structured error; use python3.12).
+  Documented amendment per review §3.3 opt-2: requested_workers = provenance-only, out of scope_id.
+- config.py: import-time repo assert → require_repo() at execution boundaries (workspace/docker).
+- **Tests: test_contract.py 94/94** (real-topology fixture: vlibs+include+syn-dir non-outdir
+  inputs, filelist with -I./traversal entries) + **test_contract_real.py 18/18** (Codex's exact
+  323/266/55/2/22/4/4/532 characterization vs the real contest tree, read-only, no Docker).
+  Regressions 4/4·2/2·13/13·13/13·16/16. Handoff UPDATE 4; COPY_TO_CODEX.md refreshed for the
+  checkpoint-1b re-review. Submission repo untouched @1997ed4. Campaign NO-GO unchanged.
+
+## 2026-07-22 (rev17) — checkpoint-1c: all 10 re-review corrections + 7 adversarial regressions; 111/111 + 18/18 + charact 5/5
+
+Codex re-review (`NVIDIA_P04_SLICE_CODE_REREVIEW.md`): HOLD w/ focused 1c list; requested_workers
+amendment accepted-in-principle. All closed:
+- Shared `_assert_unaliased` component-walk validator (candidate/filelist/manifest/golden) —
+  internal-symlink redirection into immutable/out-of-scope files now impossible (ADV-1/1b tests).
+- Validation binding contract-OWNED: caller digest param deleted; TmakeContract carries
+  bound_validation_digest from the registry (None until H-1 ⇒ PENDING); evidence_root required.
+- ProofResult.lec_eligible REMOVED (diagnostic record only; policy object owns eligibility).
+- `check_scope_compat` shared everywhere; classifier: complete scoped H1/H2 membership,
+  max_changed_files, hash-format checks, drift label gated on VALIDATED determinism (PENDING ⇒
+  flow-error "campaign must be refused").
+- `validate_manifest` for deserialized evidence; parent-symlink rejection in tree_manifest;
+  verify_golden reconstructs via followlinks=False walk (golden→candidate alias fails) + size.
+- Strict filelist: dup defines/-I/empty tokens rejected; include-token ambiguity table (two
+  physical files for one token ⇒ error). Real tree unchanged: 323/266/55/2/22/4/4/532.
+- TMAKE_LAYOUTS explicit registry (unregistered tmake fails closed); TmakeLayout field
+  validation; real test declares the NVDLA layout as literals + independent order re-parse +
+  PREREQ-MISSING exit 3.
+- _clone_tree rejects source-hardlink aliases; _validate_copy checks required roots post-clone;
+  effective_workers fails closed on invalid caps; docker_run calls require_repo(); DesignInputs
+  dup-roots/defines/top guards; 5th explicit `golden` path class.
+- Addendum **H.5** (normative): semantic vs execution limits; worker counts provenance-only,
+  persisted, result-neutral.
+- NEW `test_workspace_charact.py` (permanent Direct/Sv2v characterizations vs real tree): 5/5 in
+  sandbox; sv2v source-edit leg PREREQ-gated (host sv2v) — run on macOS host for full green.
+**Tests: contract 111/111 · real 18/18 · charact 5/5(+prereq) · regressions 4/4·2/2·13/13·13/13·
+16/16.** COPY_TO_CODEX refreshed (reply → NVIDIA_P04_SLICE_CODE_REREVIEW2.md). Submission repo
+untouched @1997ed4. Host H-1..H-3 + checkpoint-2 open; campaign NO-GO.
+
+## 2026-07-22 (rev18) — checkpoint-1d: 4 P0s + P1s closed; exact patch supplied; 129/129
+
+Codex re-review2 (`NVIDIA_P04_SLICE_CODE_REREVIEW2.md`): HOLD w/ 4 P0s. §H.5 ACCEPTED; macOS
+charact 7/7 (incl. host sv2v). Notable: default macOS core suite crashed in _clone_tree
+(/var vs /private/var — lexical child vs resolved root). All fixed:
+- _clone_tree: ONE path domain (p.relative_to(dst), lexical-vs-lexical; resolved only vs
+  resolved) + internal-destination-hardlink rejection (cp -a can preserve pairs); regression
+  clones through a symlink-aliased ancestor. Codex asked to re-run default macOS suite w/o
+  TMPDIR override.
+- Validation authority now immutable: frozen TmakeRegistration(layout, bound_digest);
+  TMAKE_REGISTRY rejects duplicate/late registration (test-only _reset); bound_validation_digest
+  = read-only property (public assignment raises AttributeError); classifier's raw
+  validation_state text param DELETED — takes ValidationProfile|None and derives via
+  contract.validation_state(); unbound contract provably cannot reach the drift branch.
+- Golden root path _assert_unaliased before snapshot writes AND verify (symlink at .golden /
+  .golden/<root> / alias-into-candidate snapshot-refusal regressions).
+- Filelist validated unaliased BEFORE is_file/read (identical-bytes external symlink rejected).
+- _validate_copy: unaliased + real-type required roots (fake tree gained spec/rams/tree.make/
+  Makefile to exercise it); TmakeLayout containment (filelist_base/generator_cwd/filelist);
+  FilelistModel self-validating; manifest '.'-rel rejected.
+- **Exact 1c→1d patch** (632 lines, 4 files) at nvidia_work/agent/P04_CHECKPOINT_1D.patch
+  (1c snapshot taken pre-edit) — closes the §5.6 diff-evidence gap.
+Tests: contract **129/129** · real 18/18 · charact 5/5(+sv2v prereq-gated; host re-run
+requested) · regressions all green · no opentitan hardlink false-positives. COPY_TO_CODEX
+refreshed (reply → NVIDIA_P04_SLICE_CODE_REREVIEW3.md). Submission repo untouched @1997ed4;
+campaign NO-GO unchanged.
+
+## 2026-07-22 (rev19) — checkpoint-1e: validation authority SEALED + invariant-based hardlink evidence; 136/136
+
+Codex re-review3: HOLD on exactly 2 items (3 of 4 prior P0s clean; macOS default suite 128/129 —
+the hardlink test wrongly demanded rejection when APFS safely de-links; authority still mutable
+via _bound_validation_digest + direct TMAKE_REGISTRY dict replacement). Fixed:
+- Registry private (_TMAKE_REGISTRY) + read-only MappingProxyType public view (assignment raises
+  through the container); TmakeContract retains ONLY the frozen TmakeRegistration — layout +
+  bound digest are derived properties (no writable scalar); sealed __setattr__ post-construction
+  (private backing assignment raises, state stays PENDING); constructor bypass REMOVED (registry
+  = the sole production authority; tests use register_tmake + test-only reset); frozen-retention
+  verified (private-dict mutation cannot affect an existing contract); malformed digests rejected
+  at registration; legacy string profile → structured ContractError; stale 1b header fixed.
+- _scan_dest_aliases factored out of _clone_tree: deterministic unit (dst tree WITH a hardlink
+  pair must be rejected) + invariant-based end-to-end (source pair ⇒ rejection OR verified
+  independent isolated destination — APFS de-link passes, cp -a preservation rejected).
+**Tests: contract 136/136 · real 18/18 (production-path resolution) · charact 5/5(+sv2v prereq)
+· regressions 4/4·2/2·13/13·13/13·16/16.** Exact 1d→1e patch (317 lines, 4 files) at
+nvidia_work/agent/P04_CHECKPOINT_1E.patch. COPY_TO_CODEX refreshed (reply →
+NVIDIA_P04_SLICE_CODE_REREVIEW4.md); host re-runs requested (default no-TMPDIR core suite
+expected green). Submission repo untouched @1997ed4; H-1..H-3/checkpoint-2/campaign unchanged.
+
+## 2026-07-22 (rev20) — checkpoint-1f: deletion sealed (the sole 1e blocker); 142/142
+
+Codex re-review4: HOLD on ONE item — inherited permissive __delattr__ let `del contract._sealed`
+re-enable assignment (unbound → VALIDATED). Hardlink correction ACCEPTED; all host suites had
+passed (core 136/136 default no-TMPDIR, real 18/18, charact 7/7, legacy green). Fixed:
+- TmakeContract.__delattr__ mirrors the __setattr__ seal (any attr deletion raises post-
+  construction; contract stays usable + PENDING). Six required deletion regressions added.
+- §5.1: shared _is_sha256() exact-fullmatch + typed helper across ALL evidence validators
+  (trailing-newline 64-hex rejected; non-string digest → ContractError not TypeError).
+- §5.2: symmetric end-to-end hardlink isolation (mutate db in a fresh copy; da + both sources
+  proven unchanged).
+**Tests: contract 142/142 · real 18/18 · charact 5/5(+sv2v prereq) · regressions green.** Exact
+1e→1f patch (158 lines, 2 files) at nvidia_work/agent/P04_CHECKPOINT_1F.patch. COPY_TO_CODEX
+refreshed (reply → NVIDIA_P04_SLICE_CODE_REREVIEW5.md); host re-runs requested. Submission repo
+untouched @1997ed4; H-1..H-3/checkpoint-2/campaign unchanged NO-GO.
+
+## 2026-07-22 (rev21) — ✅ P0-4 CHECKPOINT 1 ACCEPTED by Codex; §11 consumer migration GO
+
+`NVIDIA_P04_SLICE_CODE_REREVIEW5.md`: **ACCEPTED / GO** after 6 review cycles (design rev1→rev2→
+rev2.1→§H; code 1b→1c→1d→1e→1f). Final host matrix all green: core 142/142 (default, no TMPDIR),
+real 18/18 (323/266/55/2/22/4/4/532), workspace charact 7/7 incl. host sv2v, legacy suites green,
+submission clean @1997ed4. Deletion exploit closed (symmetric __setattr__/__delattr__ seal);
+digest validation exact+typed; hardlink evidence symmetric + copy-method-independent. Authority
+boundary accepted for the normal-operation threat model (hostile reflection explicitly out of
+scope). Acceptance boundaries: H-1..H-3, checkpoint-2, and the campaign remain OPEN/NO-GO;
+carry-forward guardrails (review §8) become regression gates for the migration. Approved §7
+order; first slice = literal NVDLA registration + immutable run context + capability gate +
+mandatory PENDING refusal (no model-call path while pending).
+
+## 2026-07-22 (rev22) — §11 migration slice 1 delivered: NVDLA registration + RunContext + PENDING gate; 16/16
+
+Per re-review5 §7.1-2/§10 (checkpoint-1 ACCEPTED, migration GO, first slice scoped):
+- NEW ppa/registry.py: literal NVDLA_SPEC (NV_nvdla; 30/60ns clocks; dla_reset_rstn +
+  direct_reset_ active-low, verified vs real top ports; explicit filelist) + literal
+  NVDLA_LAYOUT; ensure_registered() idempotent via sealed registry; H-1 digest UNBOUND
+  (production stays PENDING); IPS entry keeps NVDLA out of discovery. controller.main() registers
+  before IP resolution.
+- contract.py: frozen RunContext + build_run_context (derived validation state; §H.5 worker
+  provenance requested/contract-cap/global-cap/effective resolved once); pure campaign_refusal()
+  (structured CONTRACT_VALIDATION_PENDING record w/ expected/current digests).
+- controller._campaign_gate at top of run(): persists refusal to ledger/refusals.jsonl + raises
+  BEFORE any model call for real models on PENDING contracts; stub/keyless allowed (E.4).
+- test_migration1.py **16/16** (zero-model-calls-while-pending proof; persisted refusal;
+  idempotency; real-tree literal-layout characterization 323/22/4; RunContext provenance +
+  immutability). All prior suites green (142/142, 18/18, 5/5+prereq, legacy). Patch:
+  P04_MIGRATION_SLICE1.patch (330 lines). COPY_TO_CODEX refreshed (reply →
+  NVIDIA_P04_MIGRATION1_REVIEW.md). Submission untouched @1997ed4; campaign NO-GO.
+
+## 2026-07-22 (rev23) — §11 migration slice 2: H1–H5 materialization path; 20/20 (user: "crank through it")
+
+User directive: push for wins on all IPs, time no constraint. Plan: NVDLA pipeline first (slices
+2-7 + host evidence + checkpoint-2 + bounded campaign), then reopen aes/prim with the same
+machinery; kmac stays closed (headroom, 2× Codex-confirmed). Slice 2 (re-review5 §7 step 3):
+- NEW ppa/materialize.py: frozen steps 3-7 orchestrator (pristine regen → golden+H3 pre-overlay →
+  validated overlay → candidate regen → H1/H2/H4 + scope-authoritative classification);
+  mutation-class guard per generator invocation (immutable file deps + editable sources + golden
+  re-verified — any non-tool-writable drift = flow-error); post_gate() steps 9-10 (H5==H4 +
+  golden); **effective_inputs() = the sole path to candidate tool inputs** (refuses non-proceed /
+  non-gate-stable); golden_inputs() re-verifies at use. Runner-injected, Docker-free.
+- evaluate._clamped_workers: contract hard cap consumed at evaluate_many (nvdla 4→1, logged).
+- test_materialize.py **20/20** incl. 3 evil-generator guards (candidate-invocation-only side
+  effects caught), effective-input refusal matrix, worker clamp. Full battery green: 16/16 ·
+  142/142 · 18/18 · 5/5+prereq · legacy. Patch: P04_MIGRATION_SLICE2.patch. COPY_TO_CODEX now
+  requests slices 1+2 together (reply → NVIDIA_P04_MIGRATION1_REVIEW.md). Submission untouched
+  @1997ed4; campaign NO-GO. Next: slice 3 = §7 step 4 (gate/proof adapters + policy result — the
+  v2 LEC recipe with vacuous-proof guards lands here).
+
+## 2026-07-22 (rev24) — slices 3+4: LEC v2 for ALL IPs + structural gate adapter + policy result + evaluation identity; 26/26. Campaign runbook written (user-directed 5-IP × 2-model rerun)
+
+User directive: finish remaining dev, then re-campaign sha512/ascon/aes/prim/kmac (+NVDLA
+wanted; stays gated) with HACKATHON_AISTUDIO_KEY on gemini-3.1-pro + gemini-3.5-flash.
+- verify.py: canonical nvdla-lec-contract-v2 recipe for ALL IPs (equiv_simple -short →
+  equiv_induct -seq 4 explicit → equiv_status -assert); lec_verdict() H.2 normalization —
+  PROVEN = rc0+success+total>0+proven==total+unproven==0 TOGETHER (vacuous + success-string
+  traps closed); unproven → INCONCLUSIVE/nonconvergent; counts in ledger notes; lec_v2_script()
+  two-sided pinned template from side-bound DesignInputs; timeout tmake 1800s / legacy 900s.
+  ⚠️ HOST POSITIVE CONTROLS REQUIRED pre-campaign (recipe changed for legacy too — runbook §2).
+- NEW ppa/gate.py: structural phases w/ real rc; banner≠rc; zero-tests rejected; clean-dirs
+  class-checked; candidate_aware = runtime H5==H4+tests evidence. run_gate.sh now RECORDS real
+  rc (GATE-RC line; legacy semantics unchanged).
+- NEW ppa/policy.py: single nvdla-eligibility-v1 result — 15 named conditions, deterministic
+  reduction, composite assurance label, per-condition evidence record.
+- contract.evaluation_id(): full B.2 identity (incl. design_inputs digest, recipes, container).
+- test_migration3.py **26/26**; full battery green (20/20·16/16·142/142·18/18·legacy).
+- NVIDIA_CAMPAIGN_RUNBOOK_JULY22.md: pre-flight, MANDATORY LEC-v2 pristine controls, 5-IP×2-model
+  commands (unset EXPRESS_MODE_KEY; organizer key; flash→pro; aes/prim first, kmac bounded 10
+  calls), quota ceilings ~280 calls, scratch-only emit, banking rules, H-1 recipe (scratch-copy
+  caveat). NVDLA campaign NO-GO unchanged. COPY_TO_CODEX → slices 1–4 + campaign-state signoff
+  request. Patches: SLICE2 (401), SLICE34 (716). Submission untouched @1997ed4.
+
+## 2026-07-22 (rev25) — corrective slice: all 8 fail-open gaps closed; production authority chain wired; 34/34 + 27/27 + 19/19
+
+Codex migration review (`NVIDIA_P04_MIGRATION1_REVIEW.md`): checkpoint-1 foundation stands;
+slices 1-4 HELD (8 adversarial fail-open gaps — the assurance chain was library-only, stub
+identity spoofable by class NAME, pristine-invocation + immutable-DIR mutations unguarded, H5
+TOCTOU, print-only gate "candidate-aware", contradictory LEC logs → PROVEN, caller-asserted
+policy, legacy gate rc fail-open); legacy campaigns NO-GO. Corrective slice per its §8 order:
+- NEW ppa/orchestrate.py: THE production tmake path (RunContext→materialize→gate→H5 receipt→
+  receipt-revalidated proof/measure→frozen EvaluationEvidence→policy→evaluation_identity→ledger;
+  cached_evaluation = exact-id or MISS). ADV-26 end-to-end green on the fake tree.
+- isinstance stub identity (name spoof REFUSED, ADV-1); run(profile=); workers resolved once.
+- materialize: recursive immutable manifests (dirs incl. tools/spec/vlibs/rams) before pristine
+  + after both invocations + on nonzero exit (ADV-5..8); frozen EffectiveDesign receipt;
+  effective_inputs revalidates LIVE fingerprint + inputs digest at use (ADV-9/10).
+- gate: full 5-phase machine; GatePlan mandatory clean dirs + exe binding (absent-after-clean /
+  hashed-after-build / identical-after-tests); ADV-11..14 + stale-binary green.
+- LEC: all-blocks parser (contradictory/late-unproven never PROVEN, ADV-16/16b); production
+  lec_tmake() → frozen ProofEvidence w/ top/side-digests/script/log/H5 bindings (ADV-18/20).
+- policy: evidence-derived 15 conditions, no caller booleans, evidence_root-validated results
+  (ADV-21/22/24); evaluation_identity from the aggregate w/ typed digests (old free-string
+  helper REMOVED); cache exact-or-miss (ADV-25).
+- run_gate.sh: underlying rc wins (TEST PASSED+exit 7 → rc 7 FAIL, ADV-27); tb_gate requires
+  rc0+GATE-RC:0+banner. P1s: mixed-IP refusal, ensure_registered verifies, runbook updated
+  (campaigns NO-GO pending re-review; kmac REMOVED per SS5.9; scratch-safe H-1 SS5.8).
+Patch: P04_CORRECTIVE_SLICE.patch (2181 lines). Tests: 34/34·27/27·19/19·142/142·18/18·charact·
+legacy ALL GREEN. COPY_TO_CODEX → corrective re-review (reply NVIDIA_P04_CORRECTIVE_REVIEW.md).
+Submission untouched @1997ed4. Campaigns + NVDLA remain NO-GO pending Codex §7.2 release.
+
+## 2026-07-22 (rev26) — corrective slice 2: causality/containment/freezing/identity/cache/legacy-parser; 47/47 + 29/29
+
+Codex corrective review: HOLD w/ 10 items (gate causality via arbitrary plans; clean-dir
+traversal could delete editable RTL; immutable symlink targets invisible; shallow freezing;
+correct-root forgery; -inf measurements; plan-invariant identity; tampered cache rows; 3 more
+legacy-parser holes; orchestrator still not the enforced path). All ten closed:
+- GatePlan canonical at construction (.. /absolute rejected; exe inside a clean root; full
+  digest; per-IP registry); CLEAN = validated rmtree (no rm -rf strings); REGENERATE must BE
+  the contract generator recipe; separate LINK; test phase derived from the declared artifact;
+  gate-invocation immutable/editable/golden audit; self-validating GateEvidence (ref covers
+  plan+phases+counts+H4/H5 → any command change ⇒ new identity).
+- Symlinks under immutable roots structurally forbidden (leaf + dir; SS8.7 regressions).
+- freeze_receipt() → transitively frozen self-validating MaterializationReceipt; policy consumes
+  ONLY frozen exact types; builder mutation after freeze provably inert (SS8.8b).
+- MeasurementEvidence rejects NaN/±inf/neg; ALL refs 64-hex; EligibilityResult FACTORY-GUARDED
+  (correct-root manual construction refused, SS8.10); proof bindings complete (top + both side
+  digests incl. new golden_inputs_digest + script/log/H5; ProofEvidence self-validates).
+- evaluation_identity includes plan digest + gate ref + receipt ref + RECOMPUTED source CID;
+  registration digest includes IPSpec facts; cache rows VALIDATED (tampered ⇒ MISS, SS8.15).
+- run_gate.sh: contradictory summaries FAIL; FAIL markers override banners; uncounted banners
+  FAIL; functional failure exits nonzero (4 shell probes green). evaluate_many REFUSES tmake
+  (SS8.17); orchestrator finally-destroys workspaces.
+Deferred honestly (UPDATE 13): raw-log store, pre-equiv interface sigs (yosys), executor-wide
+worker consumption, CLI profile, controller/pool consumption (= the migration itself).
+**Tests: 47/47 · 29/29 · 19/19 · 142/142 · 18/18 · charact · legacy ALL GREEN.** Patch:
+P04_CORRECTIVE2_SLICE.patch (1718). COPY_TO_CODEX → corrective-2 re-review (reply
+NVIDIA_P04_CORRECTIVE2_REVIEW.md). Submission untouched @1997ed4. Campaigns/NVDLA NO-GO.
+
+## 2026-07-23 (rev27) — four in-scope corrective-2 fixes + SCOPING MEMO (user-directed stopping rule)
+
+User: worried the Codex loop is going off-track (late rounds increasingly probe in-process
+self-forgery, which 1f ruled OUT). Directed: fix the 4 load-bearing items, then send a scoping
+memo instead of another full self-adversarial slice.
+- FIX-1: both gate parsers (run_gate.sh + gate.parse_test_results) scan FAIL evidence over the
+  COMPLETE output — only the summary PATTERN text stripped, never whole lines; case-insensitive.
+  A line with summary/banner + [FAIL] now FAILS (corrective2 SS4.6). 6 shell probes verified.
+- FIX-2: GatePlan.test_args = validated argv tuple, shlex-quoted; `; echo` token inert on an
+  exit-7 artifact → gate FAILS (SS4.1 injection). Free-form string refused.
+- FIX-3: clean-path alias validation UNCONDITIONAL (nonexistent leaf under symlinked parent
+  rejected; SS4.7).
+- FIX-4: validate_cached_row requires every condition exactly once (15-copy forgery MISS; SS4.5).
+- NVIDIA_P04_SCOPING_MEMO.md: proposes adopting the 1f threat model boundary-wide (honest-mistake
+  + untrusted-input IN [parser/cache/symlink/manifest stay strict — logs & ledger rows are DATA];
+  in-process self-forgery OUT), deciding legacy campaign release by REAL-tool per-family pos+neg
+  gate controls (rev11 epistemology) not code inspection, and re-classing the open §4 items
+  (IN-fixed / checkpoint-2-host / deferred-infra / out-1f). Banking stays per-candidate
+  manifest-gated (waste quota at worst, never corrupt the submission).
+Tests: 51/51 · 29/29 · 19/19 · 142/142 · 18/18 · charact · legacy ALL GREEN. Patch
+P04_FOCUSED_FIXES.patch (223). COPY_TO_CODEX → scoping request (reply NVIDIA_P04_SCOPING_REVIEW.md).
+Submission untouched @1997ed4. Campaigns/NVDLA NO-GO pending the scoping decision.
+
+## 2026-07-23 (rev28) — ✅ SCOPING ACCEPTED: legacy campaigns conditional per-IP GO; NVDLA finite 12-item checkpoint-2; stopping rule set
+
+`NVIDIA_P04_SCOPING_REVIEW.md`: threat model ACCEPTED (in-process self-forgery OUT, consistent
+with 1f; honest-mistake + untrusted-input + persisted-rows IN); four focused fixes ACCEPTED;
+legacy campaigns CONDITIONAL per-IP GO after a real-tool release packet; NVDLA NO-GO on a finite
+12-item checkpoint-2. **No more speculative code cycles** — a blocking finding now requires a
+production/public-path or untrusted-input route with a reproducible control.
+- Built `ppa/release_control.py` (HOST): produces Codex's 6-item packet per IP — gate pos+neg +
+  LEC-v2 pos+neg on disposable Workspaces, full provenance to /private/tmp/nvdla_release_evidence,
+  FAIL-SAFE (negative must fire or IP is NOT-RELEASED). Mutation = invert an `assign <output>`
+  RHS in an editable source both gate+LEC see (dual-rep → sv_source). Static-verified mutation
+  sites resolve for all 4 IPs (sha512 read_data, ascon idle_o, aes idle_o, prim alert_ack_o).
+- Runbook updated: status → CONDITIONAL per-IP GO; new §2 = the release-packet gate (must show
+  RELEASED:True before campaigning that IP); reset rule (§3.3); stale counts fixed (materialize
+  29, migration3 51, migration1 19).
+- `NVIDIA_NVDLA_CHECKPOINT2_CHECKLIST.md`: the 12 items (mixed code+host). 2 CONFIRMED real bugs:
+  #9 eval-identity omits measurement/policy (Codex repro'd same-ID improving-vs-regressing via
+  the public orchestrator); #6 per-invocation mutation audit → build/link/test.
+- Memory: new nvdla-p04-status.md (boundary + release procedure + checkpoint-2).
+NEXT (user's Mac session): run the 4 release packets → campaign each RELEASED IP (flash then
+3.1-pro, aes/prim first) → bring results back for banking review. Submission untouched @1997ed4.
+
+## 2026-07-23 (rev29) — wrote CLAUDE_TO_RUN.md execution handoff for the unsandboxed host Claude
+
+This sandbox confirmed to have NO Docker/EDA toolchain (yosys/OpenSTA/sv2v/iverilog all MISSING);
+release controls + campaigns can only run on the host. User has a separate unsandboxed Claude
+Opus 4.8 with Docker; wrote `CLAUDE_TO_RUN.md` as its ordered, safety-first execution handoff:
+§0 SAFETY (unset EXPRESS_MODE_KEY every shell / organizer key only / never touch submission /
+never bank / kmac+nvdla excluded / quota ceilings), §1 verify state (submission clean @1997ed4,
+suites at expected counts, cold-start 6/6), §2 release packets per IP (release_control, with
+--mut-file/--mut-signal fallback guidance + per-IP default targets), §3 campaigns per RELEASED IP
+(flash then pro, scratch-only emit, ceilings+early-stop), §4 collect evidence + hand back (NO
+autonomous banking), §5 decision latitude, §6 failure handling. NOTE: shared mount confirmed (user
+reads sandbox-written files on the host), so release_control.py + all fixes are already present
+host-side. Submission untouched @1997ed4.
+
+## 2026-07-22 — ran CLAUDE_TO_RUN.md release packets (host, Docker): 0 released, 0 quota, LEC-v2 verdict bug found
+
+Executed the sandbox handoff `CLAUDE_TO_RUN.md` §1–§4. §1 state green (submission clean @1997ed4;
+no-Docker suite exact: contract 142/142, contract_real 18/18, workspace_charact 7/7, migration1 19/19,
+materialize 29/29, migration3 51/51, + selection/emit/model-iface/failclosed/area; cold-start 6/6
+Docker; verify.py `rename -hide`=0). §2 release packets **ALL NOT-RELEASED**: aes/prim/ascon gate+=FAIL,
+sha512 gate+=PASS; **LEC+ = INCONCLUSIVE for ALL 4**; every negative control fired correctly. §3 NO
+campaigns (nothing released) → **0 organizer quota spent** (no new ledger/raw for the campaign IPs).
+**BLOCKING FINDING: `verify.py::lec_verdict` misclassifies every real proof as INCONCLUSIVE/
+nonconvergent.** sha512 note: rc=0 total=12775 proven=12775 unproven=0 — a full proof — but the
+`any_unproven` guard (lines ~248-249) matches the INITIAL "Found N unproven $equiv cells" progress line
+present in EVERY successful equiv run (incl. NVDLA's own PROVEN run), so PROVEN is unreachable for all
+designs. Reproduced deterministically no-Docker: `lec_verdict(0, <proven log>)` -> INCONCLUSIVE. I did
+NOT patch it (runbook §5 — don't code around a control). Secondary: OpenTitan pristine gate FAIL
+(aes/prim/ascon) vs sha512 PASS = a separate runner/flow issue, moot until LEC-v2 verdict fixed.
+Evidence preserved in `nvdla_release_evidence/` (4 packets + logs) + `NVIDIA_CAMPAIGN_RESULTS_2026-07-22.md`.
+Nothing banked, no submission/canonical/paid-key change. Next: sandbox Claude fixes lec_verdict
+(+ fixture: proven-log->PROVEN, unproven-log->INCONCLUSIVE), re-run release packets, then campaign only
+RELEASED IPs.
+
+## 2026-07-23 (rev30) — host release-control caught TWO real regressions of mine; both FIXED + verified
+
+The unsandboxed host Claude ran the release packets: 0 released, 0 quota spent — the control gate
+worked. It surfaced two blocking bugs I introduced, both now fixed in the sandbox:
+1. **LEC verdict made PROVEN unreachable** (blocked EVERY IP incl. NVDLA). `lec_verdict`'s
+   any_unproven guard used `_RE_UNPROVEN = "Found N unproven $equiv cells"`, which matches the
+   yosys `equiv_simple` ENTRY line (cells QUEUED for proving — present in every real proof;
+   NVDLA logged "Found 381209 unproven"). Fixed: anchor to the `equiv_induct` RESIDUAL
+   ("... unproven $equiv cells in module equiv"); final counts still from equiv_status + rc.
+   Root cause was an UNREALISTIC test fixture (OK_OUT lacked the entry line) — replaced with a
+   realistic yosys log + a dedicated regression. Reproduced INCONCLUSIVE on a 12775/12775/0
+   proof, now PROVEN.
+2. **run_gate.sh rejected the OpenTitan Verilator success format** (aes/prim/ascon gate+ FAIL,
+   sha512 passed). The verilator TBs print "Simulation passed!" (single-verdict, no per-test
+   count); my FIX-1 hardening's "banner with zero counted tests -> FAIL" over-rejected it.
+   Fixed: a recognized sim-success banner + rc0 + zero fail markers = PASS (gate_cmd is fixed
+   per-IP, not agent-injected -> uncounted banner isn't a production-reachable gaming vector
+   under the agreed threat model; rc/fail-markers/contradictions still gate). 7-case shell matrix
+   + a persisted regression ("Simulation passed!"->PASS, "Simulation failed!"->FAIL).
+Both are correctness-on-real-tool-output fixes (in-scope). Tests: migration3 54/54, all suites
+green. Expectation on re-run: pristine self-equiv LEC+ now PROVEN for all IPs; verilator gate+
+now PASS -> all four IPs should RELEASE (unless the FuseSoC/verilator BUILD genuinely fails in
+the container, which the packet gate_detail would show as a build error rather than "Simulation
+passed!"). Submission untouched @1997ed4.
+
+## 2026-07-23 — re-ran release packets after sandbox's 2 fixes + sha512 flash campaign (host, Docker)
+
+Per CLAUDE_RERUN_NOTE.md. Both fixes VERIFIED (LEC-v2 verdict: real proven-log->PROVEN, residual->
+INCONCLUSIVE; run_gate.sh "Simulation passed!"->PASS; migration3 54/54). RELEASE PACKETS:
+**sha512 RELEASED** (4/4 clean); **ascon RELEASED** (auto-pick idle_o didn't fire the negative GATE —
+status flag not KAT-checked; retried --mut-file prim_ascon_sbox.sv --mut-signal state_o (S-box, feeds
+every KAT vector) -> gate- FAIL, RELEASED); **prim NOT-RELEASED** (pristine gate+ FAIL "banner+1 FAIL
+marker" — likely a 2nd parser over-reject like the banner fix, prim has a banked win; + negatives
+under-fire, alert_ack_o is a no-op under top prim_crc32 — see NVIDIA_PRIM_GATE_FINDING.md); **aes
+INCOMPLETE** (killed for memory, re-run serially). **sha512 FLASH CAMPAIGN** (organizer key, ai-studio
+free path, gemini-3.5-flash, 3 rounds, **13 calls ~471k tok**, 5 accepted): per-round frontier ADP
+0.787->0.735->0.7216. **Canonical LEC-PROVEN best = 0.787 (WORSE than banked 0.7266); frontier 0.7216
+was LEC-INCONCLUSIVE -> assurance selector correctly refused it -> NO bankable improvement, nothing
+banked, banked 0.7266 stays.** SAFETY: paid EXPRESS_MODE_KEY never used (unset+pinned key-env, inline
+gate); no submission/canonical change; submission clean @1997ed4; emits to scratch. HOST GOTCHAS:
+(1) google-genai missing for py3.12 (PEP668) -> venv /private/tmp/campaign_venv w/ google-genai 1.47.0;
+(2) macOS TCC blocks rmtree of workspace techlib dirs under Documents -> Workspace.create crashes on
+reuse -> mv-aside workaround (crashed aes first); (3) Docker VM 7.65GB -> 3+ concurrent yosys LEC
+thrash -> 40-60min zombie containers (LEC subprocess timeout doesn't docker-kill the container) ->
+SERIALIZE heavy jobs. Full writeup: NVIDIA_CAMPAIGN_FINAL_REPORT_2026-07-22.md. Evidence:
+nvidia_campaign_evidence/. NEXT: prim triage, aes serial re-run, ascon campaign (released, awaiting
+go-ahead), optional sha512 pro run for a provable 0.7216-class candidate.
+
+## 2026-07-23 (rev31) — host run assessed; 3 follow-up fixes landed; 3.1-pro full-run handoff written
+
+Read the host Claude's NVIDIA_CAMPAIGN_FINAL_REPORT (both my fixes verified on REAL yosys/verilator;
+sha512/ascon RELEASED, prim NOT, aes INCOMPLETE; sha512 flash = textbook assurance outcome — 0.7216
+found but LEC-INCONCLUSIVE → correctly refused, nothing banked; safety held). Corrections + fixes:
+- **prim analysis corrected:** banked prim manifest says gate=SKIP-preexisting (verilator gate NEVER
+  ran for prim's banking) + run_verilator_tb.sh "all" runs 5 sub-TBs → the pristine-gate FAIL is
+  AMBIGUOUS, not clearly a parser over-reject. Did NOT patch speculatively; decisive raw-line
+  diagnostic + decision tree handed to the host.
+- **Fix 1 (aes crash):** Workspace.create now always-unique dirs (macOS TCC rmtree crash gone).
+- **Fix 2 (auto-picker):** release_control.mutate prefers datapath signals, penalizes status flags
+  + tie-offs/unused (the ascon idle_o lesson); explicit override still wins. Verified per-IP.
+- **Fix 3 (NEW ppa/lec_diagnostic.py, host-only):** classifies WHY a candidate is INCONCLUSIVE —
+  COMBINATIONALLY_PROVABLE / SEQUENTIALLY_PROVABLE@seqN / INEQUIVALENT / TRULY_NONCONVERGENT.
+  Evidence-only, never changes the shipping recipe. Reuses verify._read_stanza. This is the tool
+  to classify sha512's 0.7216 for FREE (no model call) before spending 3.1-pro quota.
+- Full battery green (contract 142/142, migration3 54/54, materialize 29/29, ...).
+- **NVIDIA_RUN2_31PRO.md** handoff written: verify state → finish aes/prim packets → classify the
+  0.7216 for free → campaign released IPs with gemini-3.1-pro-preview (organizer key, ~25 calls/IP,
+  serialize) → lec_diagnostic any near-miss → collect for banking review. kmac/nvdla excluded;
+  no auto-banking. Submission untouched @1997ed4.
+
+## 2026-07-23 (rev32) — reviewed NXP + ASU tracks; wrote NXP_ASU_REVIEW_FOR_CODEX.md (P0 found)
+
+While the host Claude runs the 3.1-pro campaigns, reviewed the two under-reviewed tracks. Key:
+- **NXP P0 (reproduced here, rc=1):** organizer rtl_gen_lib/_load_yaml_minimal is unconditionally
+  broken (`result, stack = {}, [(0, result)]` → UnboundLocalError) and is the intended no-PyYAML
+  path. Our 30/30 validation had PyYAML; eval-env PyYAML is CONTRADICTORY in the organizer's own
+  docs (DEPENDENCIES.md: stdlib-only; README:99: optional; on_prem reqs: PyYAML==6.0.3). If the
+  runner env lacks PyYAML → rtl_gen crashes → no .v → RUNNER exits 1 → score 0. Agent doesn't
+  defend against it (also makes test_ip_models 0/12 here). Proposed fix: ship a correct pure-Python
+  yaml shim + prepend to the rtl_gen subprocess PYTHONPATH (keeps stdlib-only, robust either way).
+- NXP runner-mode key safety CONFIRMED: RUNNER uses info[model_endpoint], never EXPRESS_MODE_KEY.
+- NXP validated EASY only (contest ships only easy); anticipatory medium/hard modeling exists but a
+  contest library bug (dma_engine non-compiling RTL) would fail hidden medium dma cases.
+- ASU: deterministic via-bar, stdlib-only, self-guarding (no-op floor), 5 artifacts byte-committed
+  + independently re-scored FVR 0.68-0.76. Low risk. Open question A1: is no-op == eligibility floor
+  on hidden blocks? (needs the scoring policy read).
+Doc NXP_ASU_REVIEW_FOR_CODEX.md written (P0/P1/P2 ranked + 4 questions for Codex). No code changed;
+submissions untouched (NVIDIA @1997ed4). Next: review with Codex, then implement the NXP shim if
+confirmed.
+
+## 2026-07-23 (rev33) — acted on Codex NXP/ASU review: NXP P0 shim + endpoint hardening FIXED; ASU wording corrected
+
+Codex verdicts: NXP HOLD (fix P0 no-PyYAML + cold-test), ASU GO (wording only), defer medium/hard.
+Implemented + offline-verified:
+- **NXP P0 FIXED**: NEW _yaml_compat/yaml.py fail-closed shim (flat subset the agent emits; raises on
+  lists/tags/dups/non-mapping; no organizer walrus bug). _rtl_gen_env() prefers installed PyYAML,
+  injects shim on the rtl_gen subprocess PYTHONPATH only when absent; wired into generate_ip +
+  test_ip_models. VERIFIED: organizer rtl_gen crashes w/o PyYAML, generates 8/8 easy specs WITH the
+  shim; ip_models no longer crashes (only iverilog remains, host-only).
+- **NXP P1 FIXED**: EndpointModel.generate() typed + deadline-bounded — malformed JSON / bad UTF-8 /
+  non-mapping body / missing-empty-nonstring text are typed transient (were uncaught JSONDecodeError/
+  AttributeError); monotonic total_deadline_s caps retries; no content/secret leak. NEW test_endpoint
+  .py 12/12.
+- **NXP corrections**: dma_engine is ALREADY mitigated (validators.patch_library_rtl + 12-IP diff
+  covers it) — I was wrong; medium/hard deferred (runner exposes only easy); DEV paid-key guard
+  (P2) noted not applied (RUNNER already safe).
+- **ASU wording corrected** (no geometry change, PROVEN emission-neutral — via_bar_snippet SHA
+  d0591819 unchanged, banked artifact SHAs intact): README + agent.py docstring now say no-op =
+  ELIGIBLE FALLBACK not FVR 1.0 (public no-op ~1.25-1.32), net-win not "never worse", connectivity
+  = official(source-parser)+rendered-proxy. Geometry/predicate/manifests untouched.
+Docs: NXP_ASU_ACTIONS_2026-07-23.md (actions + remaining HOST §6.1 matrix). Submission repos
+untouched; NVIDIA @1997ed4. NXP working-copy → submission sync only after the host forced-no-PyYAML
+cold matrix is green.
+
+## 2026-07-23 — run 2: Gemini 3.1-pro on released IPs + aes/prim finish (per NVIDIA_RUN2_31PRO.md)
+
+State verified (migration3 54/54, contract 142/142, cold_start 6/6, submission clean @1997ed4).
+**NO BANKABLE IMPROVEMENTS — assurance gates worked perfectly.** sha512 3.1-pro: 3 rounds, **accepted 0**,
+~15 calls/337k tok; canonical stays 0.787 PROVEN, banked 0.7266 best; the 0.7216 flash near-miss
+classified **TRULY_NONCONVERGENT** (free lec_diagnostic). ascon 3.1-pro: round2 accepted a frontier
+0.9546 (beats banked 0.97918) BUT lec_diagnostic = **INEQUIVALENT (real counterexample @seq4) — WRONG,
+dropped**; canonical stays banked 0.9792; ~15 calls/804k tok. **Headline safety win: the LEC gate caught
+a better-ADP-but-functionally-broken ascon candidate — ADP-alone would have banked a regression.**
+aes: crash FIXED (unique dirs), ran to completion but NOT-RELEASED — gate+ FAIL (`Failed: 0` zero-count
+matched by \bFAILED\b = parser over-reject) + lec+ INCONCLUSIVE (LEC **timeout 900s**, slow-not-crashed
+→ needs raised timeout max(1800,2xpristine)). prim: raw-TB triage DEFINITIVE — all 5 sub-TBs
+SIMULATION PASSED, rc 0, the "1 FAIL marker" is literally `Failed: 0` → same parser over-reject as aes;
+LEC+ already PROVEN so prim should release after the zero-count fix. **ONE gate fix (strip zero-count
+Failed:0) unblocks BOTH aes+prim.** QUOTA: ~30 3.1-pro calls/~1.14M tok organizer key (ai-studio free);
+release+diagnostics 0 model calls; paid EXPRESS never used; nothing banked; submission clean @1997ed4.
+ENV: aes unique-dirs fix confirmed; 3.1-pro candidates have slow/non-convergent LEC that burns 900s
+timeout + orphans containers (killed stuck>15min to unblock — recommend docker-kill on TimeoutExpired).
+Full report: NVIDIA_CAMPAIGN_RESULTS_2026-07-23.md; evidence nvidia_campaign_evidence/run2_31pro/.
+NEXT (sandbox): zero-count gate strip + raised LEC timeout -> re-run aes/prim -> campaign if released.
+
+## 2026-07-23 rev34 — sandbox fixes for aes/prim release (acting on run-2 report)
+
+Implemented the exact three fixes the run-2 host report called for; all offline-verified,
+submission untouched (@1997ed4), no model calls, no banking.
+
+**Fix 1 — zero-count gate strip (unblocks BOTH aes + prim).** The single "FAIL marker" that
+FAILed pristine aes/prim gate+ was literally the benign counter `Failed: 0`, which
+`\bFAILED\b` (case-insensitive) matched. Stripped exact-zero fail/failure/error counters
+(`Failed: 0`, `0 FAILED`, `Failures: 0`, `errors: 0`) before counting FAIL markers — in BOTH
+parsers for consistency: `harness/run_gate.sh` (legacy shell gate) and
+`ppa/gate.py::parse_test_results` (tmake structural gate, new `_RE_ZEROFAIL`). A zero count is
+definitionally not a failure, so the strip can never mask a real one (mirrors the existing
+"N PASS, M FAIL" summary strip). Verified 8-case matrix on each parser: aes/prim banner+`Failed: 0`
+→ PASS; real `Failed: 3`/`Failed: 10`/`[FAIL]` → FAIL; `Failed: 0` AND a real `[FAIL]` → FAIL;
+bare uncounted `0 FAILED` with no pass evidence → still FAIL (fail-closed uncounted rule intact).
+
+**Fix 2 — size-tiered legacy LEC timeout (unblocks aes).** aes LEC was slow-not-stuck, exceeding
+the flat 900 s on pristine self-equivalence. `ppa/verify.py::_lec_timeout` now gives legacy IPs with
+>=40 sources the 2400 s cap (aes ~75 srcs); smaller legacy IPs keep the proven 900 s (a genuinely
+non-convergent small candidate should not burn 40 min/attempt). tmake path unchanged (1800 s).
+
+**Fix 3 — reap orphaned container on timeout (VM thrash).** `ppa/config.py::docker_run` now names
+the container (`iclad_<uuid>`) and `docker kill`s it on `TimeoutExpired` (best-effort, never masks
+the original timeout). Fixes the orphaned slow-yosys container that thrashed the 7.65 GB VM; the
+host previously had to manually kill stuck >15 min containers.
+
+Regression battery green: migration3 54/54, contract 142/142, selection 4/4, materialize 29/29,
+measure_failclosed 13/13, emit_replace 2/2; all three edited files parse. cold_start still 1/5 —
+FileNotFoundError on the `docker` binary only (sandbox has no Docker; my `except TimeoutExpired`
+correctly does NOT swallow it, so behavior is unchanged for the no-docker path). Handoff
+NVIDIA_RUN2_31PRO.md refreshed with the re-run instructions. NEXT (host): re-run aes + prim release
+packets → campaign any that RELEASE (prim− control still needs a prim_crc32-datapath mutation like
+`crc_out_o`).
+
+## 2026-07-23 (run 2b) — rev34 re-run of aes+prim: zero-count fix works; both blocked by deeper issues
+
+Applied sandbox rev34 (zero-count `Failed: 0` strip both parsers; legacy LEC 2400s for >=40-src;
+docker_run container reap). State green (54/54, 142/142, cold_start 6/6, clean @1997ed4). **prim:**
+gate+ now PASS (zero-count fix works), lec+ PROVEN; retried negative with `prim_crc32.sv crc_out_o`
+(real datapath) — mutation applied (sha differs), **LEC caught it (32 unproven) but the verilator gate
+PASSED the mutant** => prim gate is **CANDIDATE-BLIND** (doesn't exercise the mutated .sv); NOT-RELEASED;
+no mut-signal fixes it (ascon-class candidate-blind gate; sandbox must make prim gate compile the
+candidate). **aes:** gate+ PASS (zero-count) + unique-dirs crash fix confirmed, but **pristine
+whole-design LEC TIMES OUT even at 2400s** (positive stage ran ~45min = gate + full 2400s LEC timeout);
+NOT-RELEASED; aes too big for whole-design LEC in the 7.65GB VM (not a crash like kmac — just scale);
+sandbox: candidate-aware/module LEC for aes or exclude it. NET run2: only sha512+ascon released+
+campaigned (no bankable win); prim+aes blocked by deeper issues rev34's parser fix uncovered. Nothing
+banked; submission clean @1997ed4; paid key never used. NOTE: host session pauses on permission prompts
+— ~4h idle gap mid-run (user away); I mis-killed aes's idle LEC container thinking it an orphan, cleaned
+up + re-ran aes. Evidence: nvidia_campaign_evidence/run2_31pro/ (+ prim 0723 packets). Report:
+NVIDIA_CAMPAIGN_RESULTS_2026-07-23.md (RUN 2b section).
+
+## 2026-07-23 (rev35, host/Fable-5) — prim gate mystery SOLVED (mechanism B, source-level); Codex research ask drafted
+
+State verified (54/54, 142/142, clean @1997ed4). **prim clean-cache control matrix:** pristine+purged
+caches -> 5/5 PASS 37s; MUTANT (crc_out_o inversion, verified present in workspace .sv)+purged caches
+-> STILL 5/5 PASS. Then read the TB source: `prim_crc32_sim.sv` is a **print-only smoke TB** ($display
++ $finish, NO expected-value comparison; C++ success = reached $finish). **The prim gate cannot catch
+functional corruption BY CONSTRUCTION — not stale cache.** prim stays NOT-RELEASED; banked prim win
+unaffected (banked via LEC PROVEN + dualsim, the stronger path). Policy question handed to sandbox/
+Codex: substitute dualsim-negative for gate-negative on smoke-only-TB IPs? Also: **drafted the Codex
+research consultation** (`COPY_TO_CODEX.md`): 5 asks — new timing-targeted LEC-safe rungs
+(late-arrival-shannon, arrival-aware and-or, fanout-duplicate, onehot-select, unshare-timing),
+tag→rung mapping critique, technique EV ranking under yosys+ABC (evidence: area-motivated restructure
+keeps worsening slack), prompt guardrails vs broken candidates, bounded pipelining-policy verdict
+(sha512 handshake TB). Literature scan sourced (ASPEN, POET, 2009.08844, 2507.16808, PipeRTL). No
+model calls today yet; no code changes; submission clean @1997ed4.
+
+## 2026-07-24 (host) — campaigns done (2 banking candidates!); NVDLA packet first real run: STOPPED on trace-runtime finding
+
+CAMPAIGNS (ladder v2+v3, organizer key, ~60/80 calls): **async_fifo 0.9099 FULL-5-LAYER PROVEN**
+(balanced-tree; −8 redundant FFs = gray-deregister class; CDC aspect flagged) and **prim 0.5824 vs
+banked 0.6045, LEC PROVEN+dualsim** (late-input-cofactor — first v2-rung proven win) → BOTH packaged
+for Codex banking review (COPY_TO_CODEX.md). sha512 0.6546 near-miss = TRULY_NONCONVERGENT; ascon
+0.9129 = INEQUIVALENT (refused); **kmac: right-strategies rerun (xor/sum-cluster/templates leading,
+keccak fence held) = 0 accepted/ADP 1.0 → bounded-negative CONFIRMED at high confidence** (only
+remaining headroom is inside the masked core, off-limits by design). kmac keccak masking fence added
+to FENCE (blocks keccak_2share/keccak_round/prim_dom_and; verified both ways).
+NVDLA BUILDOUT (Codex implemented): battery independently verified (25/25 buildout + full matrix
+green). First real-tool release packet run: Verilator build SUCCEEDED; tmake/hash chain clean; traces
+scoped correctly; traces are SELF-CHECKING (CHECK_CRC). **STOPPED at trace 2: each trace ≈ 59 min CPU;
+suite = 85 traces (15 pdp) → ~30 h/packet as configured → infeasible.** Finding + revision options
+(single shortest scope-matched trace / --trace-tests override / timeout margin) handed to Codex
+(COPY_TO_CODEX addendum). Partial evidence: nvidia_campaign_evidence/nvdla_packet_partial_0724/.
+Next: aes real-flow campaign (user-directed, overnight); NXP/ASU host matrix pending (user: tomorrow).
+Submission clean @1997ed4 throughout; paid key never used; nothing banked.
+
+## 2026-07-24 (host, day close) — real-flow sweep COMPLETE; aes closed; LEC-timeout regression found+worked around
+
+aes (workers 4, 23GB VM): rounds 1-2 accepted 0 -> early-stop verdict, baseline stands. During the
+run: **REGRESSION — campaign LEC path lost timeout enforcement post-buildout** (2 LEC jobs ran 5h at
+100% CPU vs the 2400s cap; external container kill unwedged instantly; both candidates recorded
+lec ERROR fail-closed — no unsound result, wall-clock only). aes process later died silently pre-emit
+(rounds ledger intact; outcome unaffected). Both filed as COPY_TO_CODEX Addendum 2 with fix asks.
+Docker VM raised 7.65->23.19GB mid-day (claude-sandbox containers lost as expected). SWEEP TOTALS:
+2 banking candidates (async_fifo 0.9099 full-5-layer; prim 0.5824 late-input-cofactor), 3 correct
+refusals, kmac closed high-confidence, aes closed, NVDLA buildout at first-real-contact with 2
+findings for revision. ~78/80 calls. Consolidated report: NVIDIA_CAMPAIGN_RESULTS_2026-07-24.md.
+Submission clean @1997ed4; nothing banked; paid key never used.
+
+## 2026-07-24 (host, late) — NVDLA release packet: 5/6, holdout = pristine trace failure; banking A/B executed; NXP matrix GREEN
+
+NVDLA packet rerun (`pdp_1x3x8_8x8_ave_int8_0`, TEST_TIMEOUT_SEC=4500) COMPLETED — release_nvdla_0724_144931.json:
+LEC POSITIVE **PROVEN 381209/381209** through the production recipe; LEC NEGATIVE INCONCLUSIVE (mutant,
+80 unproven) — correct; tripwire candidate_aware=True, generated roots match pristine/candidate,
+mutation_audit_ok; determinism 2x PASS; gate NEGATIVE fires (1 pass/4 fail). The lone holdout: gate
+POSITIVE = FAIL because the tmake-regenerated PRISTINE tree fails 1 of 3 pdp_1x3x8 traces (2 pass/1 fail).
+KEY RUNTIME FINDING: even the second-smallest trace sims ~73 min — trace cost is dominated by whole-design
+init, NOT data volume; the "single small trace" speedup only helped via the degenerate 1x1x1 (which fails
+pristine for lack of PDP data). So per-candidate trace gating remains expensive; the pristine-trace-failure
+is a build-config/golden-reference mismatch to diagnose (NOT a contract-machinery fault — hashes + PROVEN
+LEC confirm the candidate pipeline is exact). NVDLA stays NO-GO (unchanged; checkpoint-2 + this diag).
+BANKING (user-directed, Codex-reviewed): (A) prim d17234c34395 0.5824 BANKED into nvidia_work/submission/prim
+(old 0.6045 archived; Codex evidence JSON attached); (B) async_fifo REVERTED to pristine baseline —
+Codex DENIED the 0.961 banked candidate as a CDC glitch hazard (combinational gray at the crossing);
+host safe-rebuild (registered crossing retained) verified 5-layer PROVEN but measured ADP 0.9984 (noise) —
+the gains WERE the unsafe FF removal; async_fifo ships baseline. Playbook p1-gray-deregister RETRACTED→UNSAFE.
+NXP §6.1 host acceptance matrix GREEN (30/30, 79/79 golden+model, ip_models/runner/structural/endpoint all
+pass in BOTH normal-PyYAML and forced-no-PyYAML; shim conditional + byte-identical on 8 real specs + tag =
+inert string). NXP working copy eligible to sync (pending user commit). Docker VM now 23.19GB/12CPU.
+Submission: chip-convergence-iclad26 git still clean @1997ed4 (0 changes); nvidia_work/submission staging
+holds today's user-directed banking. Paid key never used; excluded IPs untouched.

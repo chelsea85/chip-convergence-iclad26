@@ -1,0 +1,3 @@
+The strategy `sum-cluster-expose` requires finding a critical chain of two or more additions separated only by a one-use combinational intermediate. However, the only modifiable file in this attempt is `prim_subreg_shadow.v`, which contains no addition operations (`+`) or arithmetic operators. 
+
+Therefore, the preconditions for this strategy are **NOT** present in the provided modifiable file, and no edits have been made.

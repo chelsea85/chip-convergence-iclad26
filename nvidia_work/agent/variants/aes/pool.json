@@ -12,8 +12,8 @@
   },
   "parent": null,
   "strategy": "baseline",
-  "wins": 5.8,
-  "losses": 7.2
+  "wins": 6.9058433415180485,
+  "losses": 9.094156658481952
  },
  {
   "cid": "ef6802dbb301",
@@ -28,7 +28,7 @@
   },
   "parent": "baseline",
   "strategy": "arith-arch",
-  "wins": 2.8,
-  "losses": 3.2
+  "wins": 5.011686683036094,
+  "losses": 6.988313316963906
  }
 ]

@@ -1,0 +1,74 @@
+// distributed under the mit license
+// https://opensource.org/licenses/mit-license.php
+
+`timescale 1 ns / 1 ps
+`default_nettype none
+
+module fifomem
+
+    #(
+        parameter  DATASIZE = 8,    // Memory data word width
+        parameter  ADDRSIZE = 4,    // Number of mem address bits
+        parameter  FALLTHROUGH = "TRUE" // First word fall-through
+    ) (
+        input  wire                wclk,
+        input  wire                wclken,
+        input  wire [ADDRSIZE-1:0] waddr,
+        input  wire [DATASIZE-1:0] wdata,
+        input  wire                wfull,
+        input  wire                rclk,
+        input  wire                rclken,
+        input  wire [ADDRSIZE-1:0] raddr,
+        output wire [DATASIZE-1:0] rdata
+    );
+
+    localparam DEPTH = 1<<ADDRSIZE;
+
+    reg [DATASIZE-1:0] mem [0:DEPTH-1];
+    reg [DATASIZE-1:0] rdata_r;
+
+    always @(posedge wclk) begin
+        if (wclken && !wfull)
+            mem[waddr] <= wdata;
+    end
+
+    generate
+        if (FALLTHROUGH == "TRUE")
+        begin : fallthrough
+            if (ADDRSIZE == 4) begin : mux4
+                wire [DATASIZE-1:0] m01 = raddr[0] ? mem[1] : mem[0];
+                wire [DATASIZE-1:0] m23 = raddr[0] ? mem[3] : mem[2];
+                wire [DATASIZE-1:0] m45 = raddr[0] ? mem[5] : mem[4];
+                wire [DATASIZE-1:0] m67 = raddr[0] ? mem[7] : mem[6];
+                wire [DATASIZE-1:0] m89 = raddr[0] ? mem[9] : mem[8];
+                wire [DATASIZE-1:0] mAB = raddr[0] ? mem[11] : mem[10];
+                wire [DATASIZE-1:0] mCD = raddr[0] ? mem[13] : mem[12];
+                wire [DATASIZE-1:0] mEF = raddr[0] ? mem[15] : mem[14];
+
+                wire [DATASIZE-1:0] m03 = raddr[1] ? m23 : m01;
+                wire [DATASIZE-1:0] m47 = raddr[1] ? m67 : m45;
+                wire [DATASIZE-1:0] m8B = raddr[1] ? mAB : m89;
+                wire [DATASIZE-1:0] mCF = raddr[1] ? mEF : mCD;
+
+                wire [DATASIZE-1:0] m07 = raddr[2] ? m47 : m03;
+                wire [DATASIZE-1:0] m8F = raddr[2] ? mCF : m8B;
+
+                assign rdata = raddr[3] ? m8F : m07;
+            end
+            else begin : mux_generic
+                assign rdata = mem[raddr];
+            end
+        end
+        else
+        begin : registered_read
+            always @(posedge rclk) begin
+                if (rclken)
+                    rdata_r <= mem[raddr];
+            end
+            assign rdata = rdata_r;
+        end
+    endgenerate
+
+endmodule
+
+`resetall

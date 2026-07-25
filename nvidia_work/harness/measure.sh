@@ -40,7 +40,14 @@ STAT=$(pick "$S" synth_stat.txt)
 FINAL=$(pick "$S" synth_final_report.txt)
 STA_T=$(pick "$R" sta_timing_report.txt)
 STA_P=$(pick "$R" sta_power_report.txt)
-area=$(grep -m1 "Chip area for module" "$STAT" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+# area: extract the TOP-module chip area (see _metrics.sh::extract_top_area). The
+# old `grep -m1 "Chip area for module"` took the FIRST per-module line, which for a
+# HIERARCHICAL design (FLATTEN=0, e.g. NVDLA) is an early SUBMODULE, not the top —
+# it cached NVDLA area as 0.75816 (an SDP submodule) instead of 78346.60. The
+# extractor returns EMPTY rather than a wrong value; the check below then fails
+# closed (exit nonzero) so evaluate.py never records a bogus metric.
+source "$(dirname "${BASH_SOURCE[0]}")/_metrics.sh"
+area=$(extract_top_area "$STAT" "$FINAL" "$TOP")
 cells=$(grep -m1 "Total Cell Count" "$FINAL" 2>/dev/null | grep -oE '[0-9]+' | head -1)
 ff=$(grep -m1 "Flip-Flops" "$FINAL" 2>/dev/null | grep -oE '[0-9]+' | head -1)
 sslk=$(grep -m1 "Worst Slack" "$STA_T" 2>/dev/null | grep -oE '[-0-9]+\.[0-9]+' | head -1)
@@ -50,3 +57,21 @@ pwr=$(grep -m1 "^Total" "$STA_P" 2>/dev/null | grep -oE '[0-9]\.[0-9]+e-[0-9]+' 
 met="MET"; case "$sslk" in -*) met="VIOLATED";; esac
 printf "%-20s | VT=%-4s C=%-2s ABC=%s | area=%-10s cells=%-6s ff=%-5s | setup=%-9s hold=%-9s [%s] | pwr=%s\n" \
     "$LABEL" "$VT" "$CORNER" "$ABC" "${area:-?}" "${cells:-?}" "${ff:-?}" "${sslk:-?}ps" "${hslk:-?}ps" "$met" "${pwr:-?}W"
+
+# ── fail closed: every mandatory scoring metric must be a valid number ─────────
+# area/cells/ff/power must be finite and > 0; setup/hold must be finite (may be
+# <=0). Any missing/nonnumeric field means the report was malformed or the parser
+# could not locate the TOP metric -> exit nonzero so the Python consumer rejects
+# this measurement rather than caching a null. (Report paths printed for triage.)
+_bad=""
+is_pos_number "$area"  || _bad="$_bad area=${area:-?}"
+is_pos_number "$cells" || _bad="$_bad cells=${cells:-?}"
+is_pos_number "$ff"    || _bad="$_bad ff=${ff:-?}"
+is_pos_number "$pwr"   || _bad="$_bad pwr=${pwr:-?}"
+is_number "$sslk"      || _bad="$_bad setup=${sslk:-?}"
+is_number "$hslk"      || _bad="$_bad hold=${hslk:-?}"
+if [ -n "$_bad" ]; then
+    echo "MEASURE-FAIL [$LABEL]: missing/invalid metric(s):$_bad" >&2
+    echo "  STAT=$STAT FINAL=$FINAL STA_T=$STA_T STA_P=$STA_P" >&2
+    exit 3
+fi

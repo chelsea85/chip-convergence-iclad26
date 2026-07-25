@@ -1,0 +1,37 @@
+{
+  "ip": "prim",
+  "cid": "d17234c34395",
+  "review_date": "2026-07-24",
+  "purpose": "independent banking-review reproduction of missing LEC counts and dualsim result",
+  "command": "python3.12 -m ppa.verify --ip prim --variant-dir /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/nvidia_campaign_evidence/run3_timingv2/emit_prim_timingv2/opentitan/hw/ip/prim/yosys_syn/generated --layers lec,dualsim --keep",
+  "container_image": "sha256:e258fff66f93fee9531c0ca934ca437edc2f036f8d0c32678570f8ace572d0a5",
+  "result": {
+    "summary": "OK [lec=PROVEN, dualsim=PASS]",
+    "lec": {
+      "recipe": "nvdla-lec-contract-v2",
+      "rc": 0,
+      "total": 65,
+      "proven": 65,
+      "unproven": 0,
+      "reason": "fully_proven"
+    },
+    "dualsim": {
+      "seed1_errors": 0,
+      "seed1_xdiff": 0,
+      "seed2_errors": 0,
+      "seed2_xdiff": 0
+    }
+  },
+  "sha256": {
+    "candidate_prim_crc32_v": "f48eaee4ba154ab69530a04457b64b6e500d968d854d66044146c69bb32cf009",
+    "lec_script": "2e9c12abef589fe17182ff18bea5961b8f062f5ea8324ffe290c7299cc872aa4",
+    "dualsim_gold_flat_v": "ec3d2909455739c1eb50cbf028bc74bc9b65773b4a729b0406c373a632941d8c",
+    "dualsim_cand_flat_v": "55e40a4fec530031e6c8f2f1c11ff41135f2eae4910d732ae3c934599a461bce",
+    "dualsim_tb_v": "617bc6be03dff87519380aa53de3135bce059c1b65b0a5ab55064d3bb28ea048"
+  },
+  "retained_workspace": "nvidia_work/agent/work/prim/0724_104547_verify",
+  "notes": [
+    "The candidate-aware organizer gate remains unavailable for prim because the gate consumes pristine SystemVerilog; this is the same explicitly labeled assurance class as the currently banked prim result.",
+    "This reproduction independently closes the status-only manifest's missing proof-count evidence. It does not relabel the candidate-blind gate as candidate-aware."
+  ]
+}

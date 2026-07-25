@@ -11,7 +11,9 @@ DESIGN DECISION (why this agent does not render/DRC internally):
   Our development agent (asu_work/agent/asu_agent.py) measures every candidate
   with the official evaluator's render+DRC to keep-best. That REQUIRES KLayout at
   agent runtime, which the official image does not provide — there the dev agent
-  can measure nothing and falls back to the untouched original (FVR 1.0).
+  can measure nothing and falls back to the untouched original (no-op FVR is the
+  evaluator's fresh-DRC ratio, ~1.25-1.32 on the public blocks — NOT 1.0; see
+  SAFETY below).
 
   The winning repair, however, is DETERMINISTIC and needs no measurement to APPLY:
   replace each flagged multi-cut via array with one continuous via BAR. We proved
@@ -22,12 +24,20 @@ DESIGN DECISION (why this agent does not render/DRC internally):
   KLayout code in the appended snippet runs later, inside the organizer's
   evaluator, exactly as it does for the dev agent's kept candidate.
 
-SAFETY (hidden cases): the via-bar transform is self-guarding at execution time —
+SAFETY (hidden cases) — stated precisely (per Codex review 2026-07-23):
   `_asu_bar_pair` only reshapes vias whose perpendicular dimension is smaller than
-  the interacting metal's (the flagged wide-metal/min-via pattern); a block with
-  no such landing is a no-op (0 bars, geometry unchanged), so the emitted script
-  is never worse than the original on the eligibility floor. If the layout script
-  does not look like a KLayout `pya` layout builder at all, we emit it untouched.
+  the interacting metal's; a block with no such landing selects 0 bars and leaves
+  the rendered geometry unchanged (the per-layer `flatten` still runs, so it is a
+  geometric no-op, not a literal structural no-op). On a valid benchmark case
+  whose original script renders and whose original connectivity matches its
+  reference, emitting the original is an ELIGIBLE FALLBACK — eligibility requires
+  render + DRC + connectivity_preserved, NOT improvement — but its numerical FVR
+  is the evaluator's fresh-DRC total over the supplied reference-report total and
+  is NOT assumed to be 1.0 (public no-op FVR is ~1.25-1.32). The transform was a
+  net scoring WIN on all five public blocks; it is not a "cannot make anything
+  worse" transform (manifests show some V4.AUX.1/V5.AUX.1 appear while the total
+  falls). If the layout script does not look like a KLayout `pya` layout builder,
+  we emit it untouched (a false-negative here is safe — original is emitted).
 """
 from __future__ import annotations
 

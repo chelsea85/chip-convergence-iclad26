@@ -79,8 +79,19 @@ def classify(cells: list) -> tuple[str, dict]:
     mix = {k: v / n for k, v in sorted(mix.items(), key=lambda kv: -kv[1])}
 
     # ABC maps adder carry logic to AOI/OA/MAJ mixes, so the XOR fraction is
-    # the reliable arithmetic signature (control logic is rarely >10% XOR)
-    if mix.get("xor", 0) + mix.get("carry", 0) >= 0.20:
+    # the reliable arithmetic signature (control logic is rarely >10% XOR).
+    # xor-linear-network split (2026-07-23, Codex expanded lit review §3.6):
+    # an XOR-DOMINANT cone with negligible carry cells is a GF(2) linear
+    # layer (crypto theta/mixcolumns-class), NOT an adder chain — XOR count
+    # and XOR depth are distinct objectives there and adder strategies are
+    # inert. Calibrated on saved baselines: kmac (xor .40 top, carry 0)
+    # flips; sha512 (aoi .45 top, xor .24, carry .02 — real adders) stays
+    # arith. Heuristic gate only — the xor rung's per-output support-set
+    # witness is what actually guarantees linearity of the edited cone.
+    if (mix.get("xor", 0) >= 0.35 and mix.get("carry", 0) < 0.05
+            and max(mix, key=mix.get) == "xor"):
+        tag = "xor-linear-network"
+    elif mix.get("xor", 0) + mix.get("carry", 0) >= 0.20:
         tag = "arith-carry-chain"
     elif mix.get("mux", 0) >= 0.25:
         tag = "mux-select"

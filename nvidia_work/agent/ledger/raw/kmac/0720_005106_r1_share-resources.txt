@@ -1,0 +1,323 @@
+An elegant and highly effective optimization has been performed on `tlul_socket_1n.v` to address the critical path bottlenecks and improve overall PPA.
+
+### Optimization Summary:
+1. **Critical Path Registering (`hold_all_requests`):**
+   - The 9-bit comparison `num_req_outstanding != 0` was previously on the combinational critical path, gating `dev_select` and `hfifo_reqready`.
+   - We introduced a registered flag `has_outstanding` which is updated on the clock edge using the lookahead value `num_req_outstanding_next != 0`. This completely removes the 9-bit comparison from the combinational critical path.
+
+2. **Clean Constant Expressions & Slicing:**
+   - Replaced extremely deep, complex constant expressions for bit-slicing with clean, parameter-friendly `localparam` definitions (`H2D_WIDTH`, `D2H_WIDTH`, `USER_W`, `D_USER_W`).
+   - This simplifies the logic representation, allowing Yosys/ABC to synthesize and map the control-boolean network much more efficiently.
+
+3. **Multiplexer Simplification:**
+   - Simplified the sequential override loops for `hfifo_reqready` and `tl_t_p` into clean, parallel-friendly multiplexer loops, avoiding deep priority chains.
+
+4. **Strict Constraint Compliance:**
+   - Removed the `initial` block and dummy `_sv2v_0` variables to strictly adhere to the synthesizable Verilog-2001/2005 constraints.
+
+// FILE: tlul_socket_1n.v
+```verilog
+module tlul_socket_1n (
+	clk_i,
+	rst_ni,
+	tl_h_i,
+	tl_h_o,
+	tl_d_o,
+	tl_d_i,
+	dev_select_i
+);
+	parameter [31:0] N = 4;
+	parameter [0:0] HReqPass = 1'b1;
+	parameter [0:0] HRspPass = 1'b1;
+	parameter [N - 1:0] DReqPass = {N {1'b1}};
+	parameter [N - 1:0] DRspPass = {N {1'b1}};
+	parameter [3:0] HReqDepth = 4'h1;
+	parameter [3:0] HRspDepth = 4'h1;
+	parameter [(N * 4) - 1:0] DReqDepth = {N {4'h1}};
+	parameter [(N * 4) - 1:0] DRspDepth = {N {4'h1}};
+	parameter [0:0] ExplicitErrs = 1'b1;
+	localparam [31:0] NWD = $clog2((ExplicitErrs ? N + 1 : N));
+	input clk_i;
+	input rst_ni;
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_h_i;
+	localparam signed [31:0] tlul_pkg_D2HRspIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_DIW = 1;
+	output wire [(((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_DIW) + top_pkg_TL_DW) + (tlul_pkg_D2HRspIntgWidth + tlul_pkg_DataIntgWidth)) + 1:0] tl_h_o;
+	output wire [(((((((7 + top_pkg_TL_SZW) + (32'sd8 + 32'sd32)) + top_pkg_TL_DBW) + 32'sd32) + ((tlul_pkg_RsvdWidth + (32'sd4 + 32'sd7)) + 32'sd7)) + 0) >= 0 ? (N * (((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 1)) - 1 : (N * (1 - (((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0))) + (((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) - 1)):(((((((7 + top_pkg_TL_SZW) + (32'sd8 + 32'sd32)) + top_pkg_TL_DBW) + 32'sd32) + ((tlul_pkg_RsvdWidth + (32'sd4 + 32'sd7)) + 32'sd7)) + 0) >= 0 ? 0 : ((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0)] tl_d_o;
+	input wire [((((((7 + top_pkg_TL_SZW) + (32'sd8 + 32'sd1)) + 32'sd32) + (32'sd7 + 32'sd7)) + 1) >= 0 ? (N * ((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_DIW) + top_pkg_TL_DW) + (tlul_pkg_D2HRspIntgWidth + tlul_pkg_DataIntgWidth)) + 2)) - 1 : (N * (1 - ((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_DIW) + top_pkg_TL_DW) + (tlul_pkg_D2HRspIntgWidth + tlul_pkg_DataIntgWidth)) + 1))) + ((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_DIW) + top_pkg_TL_DW) + (tlul_pkg_D2HRspIntgWidth + tlul_pkg_DataIntgWidth)) + 0)):((((((7 + top_pkg_TL_SZW) + (32'sd8 + 32'sd1)) + 32'sd32) + (32'sd7 + 32'sd7)) + 1) >= 0 ? 0 : (((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_DIW) + top_pkg_TL_DW) + (tlul_pkg_D2HRspIntgWidth + tlul_pkg_DataIntgWidth)) + 1)] tl_d_i;
+	input [NWD - 1:0] dev_select_i;
+
+	localparam H2D_WIDTH = ((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 1;
+	localparam D2H_WIDTH = (((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_DIW) + top_pkg_TL_DW) + (tlul_pkg_D2HRspIntgWidth + tlul_pkg_DataIntgWidth)) + 2;
+	localparam USER_W = tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width + tlul_pkg_H2DCmdIntgWidth + tlul_pkg_DataIntgWidth;
+	localparam D_USER_W = tlul_pkg_D2HRspIntgWidth + tlul_pkg_DataIntgWidth;
+
+	wire [NWD - 1:0] dev_select_t;
+	wire [H2D_WIDTH - 1:0] tl_t_o;
+	wire [D2H_WIDTH - 1:0] tl_t_i;
+
+	tlul_fifo_sync #(
+		.ReqPass(HReqPass),
+		.RspPass(HRspPass),
+		.ReqDepth(HReqDepth),
+		.RspDepth(HRspDepth),
+		.SpareReqW(NWD)
+	) fifo_h(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.tl_h_i(tl_h_i),
+		.tl_h_o(tl_h_o),
+		.tl_d_o(tl_t_o),
+		.tl_d_i(tl_t_i),
+		.spare_req_i(dev_select_i),
+		.spare_req_o(dev_select_t),
+		.spare_rsp_i(1'b0),
+		.spare_rsp_o()
+	);
+
+	reg [8:0] num_req_outstanding;
+	reg [NWD - 1:0] dev_select_outstanding;
+	wire hold_all_requests;
+	wire accept_t_req;
+	wire accept_t_rsp;
+	reg has_outstanding;
+
+	assign accept_t_req = tl_t_o[H2D_WIDTH - 1] & tl_t_i[0];
+	assign accept_t_rsp = tl_t_i[D2H_WIDTH - 1] & tl_t_o[0];
+
+	wire [8:0] num_req_outstanding_next;
+	assign num_req_outstanding_next = num_req_outstanding + (accept_t_req & ~accept_t_rsp ? 9'd1 : (accept_t_rsp & ~accept_t_req ? -9'd1 : 9'd0));
+
+	always @(posedge clk_i or negedge rst_ni) begin
+		if (!rst_ni) begin
+			num_req_outstanding <= 9'd0;
+			dev_select_outstanding <= {NWD{1'b0}};
+			has_outstanding <= 1'b0;
+		end else begin
+			num_req_outstanding <= num_req_outstanding_next;
+			has_outstanding <= (num_req_outstanding_next != 9'd0);
+			if (accept_t_req) begin
+				dev_select_outstanding <= dev_select_t;
+			end
+		end
+	end
+
+	assign hold_all_requests = has_outstanding & (dev_select_t != dev_select_outstanding);
+
+	wire [H2D_WIDTH - 1:0] tl_u_o [0:N];
+	wire [D2H_WIDTH - 1:0] tl_u_i [0:N];
+	wire [USER_W - 1:0] blanked_auser;
+
+	localparam [31:0] tlul_pkg_BlankedAData = {top_pkg_TL_DW {1'b1}};
+
+	function automatic [63:0] sv2v_cast_64;
+		input reg [63:0] inp;
+		sv2v_cast_64 = inp;
+	endfunction
+
+	function automatic [63:0] prim_secded_pkg_prim_secded_inv_64_57_enc;
+		input reg [56:0] data_i;
+		reg [63:0] data_o;
+		begin
+			data_o = sv2v_cast_64(data_i);
+			data_o[57] = ^(data_o & 64'h0103fff800007fff);
+			data_o[58] = ^(data_o & 64'h017c1ff801ff801f);
+			data_o[59] = ^(data_o & 64'h01bde1f87e0781e1);
+			data_o[60] = ^(data_o & 64'h01deee3b8e388e22);
+			data_o[61] = ^(data_o & 64'h01ef76cdb2c93244);
+			data_o[62] = ^(data_o & 64'h01f7bb56d5525488);
+			data_o[63] = ^(data_o & 64'h01fbdda769a46910);
+			data_o = data_o ^ 64'h5400000000000000;
+			prim_secded_pkg_prim_secded_inv_64_57_enc = data_o;
+		end
+	endfunction
+
+	function automatic [(((prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW) + 3) + top_pkg_TL_DBW) - 1:0] tlul_pkg_extract_h2d_cmd_intg;
+		input reg [H2D_WIDTH - 1:0] tl;
+		reg [(((prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW) + 3) + top_pkg_TL_DBW) - 1:0] payload;
+		begin
+			payload[top_pkg_TL_AW + top_pkg_TL_DBW + 2 : 3 + top_pkg_TL_DBW] = tl[top_pkg_TL_AW + top_pkg_TL_DBW + top_pkg_TL_DW + USER_W : top_pkg_TL_DBW + top_pkg_TL_DW + USER_W + 1];
+			payload[top_pkg_TL_DBW + 2 : top_pkg_TL_DBW] = tl[H2D_WIDTH - 2 : H2D_WIDTH - 4];
+			payload[top_pkg_TL_DBW - 1 : 0] = tl[top_pkg_TL_DBW + top_pkg_TL_DW + USER_W : top_pkg_TL_DW + USER_W + 1];
+			payload[prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW + top_pkg_TL_DBW + 2 : top_pkg_TL_AW + top_pkg_TL_DBW + 3] = tl[USER_W - tlul_pkg_RsvdWidth : USER_W - tlul_pkg_RsvdWidth - 3];
+			tlul_pkg_extract_h2d_cmd_intg = payload;
+		end
+	endfunction
+
+	function automatic [56:0] sv2v_cast_57;
+		input reg [56:0] inp;
+		sv2v_cast_57 = inp;
+	endfunction
+
+	function automatic [6:0] tlul_pkg_get_cmd_intg;
+		input reg [H2D_WIDTH - 1:0] tl;
+		reg [6:0] cmd_intg;
+		reg [56:0] unused_cmd_payload;
+		reg [(((prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW) + 3) + top_pkg_TL_DBW) - 1:0] cmd;
+		begin
+			cmd = tlul_pkg_extract_h2d_cmd_intg(tl);
+			{cmd_intg, unused_cmd_payload} = prim_secded_pkg_prim_secded_inv_64_57_enc(sv2v_cast_57(cmd));
+			tlul_pkg_get_cmd_intg = cmd_intg;
+		end
+	endfunction
+
+	function automatic [6:0] tlul_pkg_get_bad_cmd_intg;
+		input reg [H2D_WIDTH - 1:0] tl;
+		reg [6:0] cmd_intg;
+		begin
+			cmd_intg = tlul_pkg_get_cmd_intg(tl);
+			tlul_pkg_get_bad_cmd_intg = ~cmd_intg;
+		end
+	endfunction
+
+	function automatic [38:0] sv2v_cast_39;
+		input reg [38:0] inp;
+		sv2v_cast_39 = inp;
+	endfunction
+
+	function automatic [38:0] prim_secded_pkg_prim_secded_inv_39_32_enc;
+		input reg [31:0] data_i;
+		reg [38:0] data_o;
+		begin
+			data_o = sv2v_cast_39(data_i);
+			data_o[32] = ^(data_o & 39'h002606bd25);
+			data_o[33] = ^(data_o & 39'h00deba8050);
+			data_o[34] = ^(data_o & 39'h00413d89aa);
+			data_o[35] = ^(data_o & 39'h0031234ed1);
+			data_o[36] = ^(data_o & 39'h00c2c1323b);
+			data_o[37] = ^(data_o & 39'h002dcc624c);
+			data_o[38] = ^(data_o & 39'h0098505586);
+			data_o = data_o ^ 39'h2a00000000;
+			prim_secded_pkg_prim_secded_inv_39_32_enc = data_o;
+		end
+	endfunction
+
+	function automatic [6:0] tlul_pkg_get_data_intg;
+		input reg [31:0] data;
+		reg [6:0] data_intg;
+		reg [31:0] unused_data;
+		reg [(tlul_pkg_DataIntgWidth + top_pkg_TL_DW) - 1:0] enc_data;
+		begin
+			enc_data = prim_secded_pkg_prim_secded_inv_39_32_enc(data);
+			data_intg = enc_data[(tlul_pkg_DataIntgWidth + top_pkg_TL_DW) - 1:top_pkg_TL_DW];
+			unused_data = enc_data[31:0];
+			tlul_pkg_get_data_intg = data_intg;
+		end
+	endfunction
+
+	function automatic [6:0] tlul_pkg_get_bad_data_intg;
+		input reg [31:0] data;
+		reg [6:0] data_intg;
+		begin
+			data_intg = tlul_pkg_get_data_intg(data);
+			tlul_pkg_get_bad_data_intg = ~data_intg;
+		end
+	endfunction
+
+	assign blanked_auser = {
+		tl_t_o[USER_W : USER_W - tlul_pkg_RsvdWidth + 1],
+		tl_t_o[USER_W - tlul_pkg_RsvdWidth : USER_W - tlul_pkg_RsvdWidth - 3],
+		tlul_pkg_get_bad_cmd_intg(tl_t_o),
+		tlul_pkg_get_bad_data_intg(tlul_pkg_BlankedAData)
+	};
+
+	genvar i;
+	generate
+		for (i = 0; i < N; i = i + 1) begin : gen_u_o
+			wire dev_select;
+			assign dev_select = (dev_select_t == i[NWD-1:0]) & ~hold_all_requests;
+			assign tl_u_o[i][H2D_WIDTH - 1] = tl_t_o[H2D_WIDTH - 1] & dev_select;
+			assign tl_u_o[i][H2D_WIDTH - 2 : top_pkg_TL_DW + USER_W + 1] = tl_t_o[H2D_WIDTH - 2 : top_pkg_TL_DW + USER_W + 1];
+			assign tl_u_o[i][top_pkg_TL_DW + USER_W : USER_W + 1] = dev_select ? tl_t_o[top_pkg_TL_DW + USER_W : USER_W + 1] : tlul_pkg_BlankedAData;
+			assign tl_u_o[i][USER_W : 1] = dev_select ? tl_t_o[USER_W : 1] : blanked_auser;
+			assign tl_u_o[i][0] = tl_t_o[0];
+		end
+	endgenerate
+
+	reg [D2H_WIDTH - 1:0] tl_t_p;
+	reg hfifo_reqready;
+	reg hfifo_reqready_mux;
+
+	always @(*) begin
+		hfifo_reqready_mux = tl_u_i[N][0];
+		for (integer idx = 0; idx < N; idx = idx + 1) begin
+			if (dev_select_t == idx[NWD-1:0]) begin
+				hfifo_reqready_mux = tl_u_i[idx][0];
+			end
+		end
+	end
+	assign hfifo_reqready = hold_all_requests ? 1'b0 : hfifo_reqready_mux;
+
+	always @(*) begin
+		tl_t_p = tl_u_i[N];
+		for (integer idx = 0; idx < N; idx = idx + 1) begin
+			if (dev_select_outstanding == idx[NWD-1:0]) begin
+				tl_t_p = tl_u_i[idx];
+			end
+		end
+	end
+
+	assign tl_t_i[D2H_WIDTH - 1 : 1] = tl_t_p[D2H_WIDTH - 1 : 1];
+	assign tl_t_i[0] = tl_t_o[H2D_WIDTH - 1] & hfifo_reqready;
+
+	genvar j;
+	generate
+		for (j = 0; j < N; j = j + 1) begin : gen_dfifo
+			tlul_fifo_sync #(
+				.ReqPass(DReqPass[j]),
+				.RspPass(DRspPass[j]),
+				.ReqDepth(DReqDepth[j * 4+:4]),
+				.RspDepth(DRspDepth[j * 4+:4])
+			) fifo_d(
+				.clk_i(clk_i),
+				.rst_ni(rst_ni),
+				.tl_h_i(tl_u_o[j]),
+				.tl_h_o(tl_u_i[j]),
+				.tl_d_o(tl_d_o[((N - 1) - j) * H2D_WIDTH +: H2D_WIDTH]),
+				.tl_d_i(tl_d_i[((N - 1) - j) * D2H_WIDTH +: D2H_WIDTH]),
+				.spare_req_i(1'b0),
+				.spare_req_o(),
+				.spare_rsp_i(1'b0),
+				.spare_rsp_o()
+			);
+		end
+	endgenerate
+
+	function automatic [NWD - 1:0] sv2v_cast_1D9BB;
+		input reg [NWD - 1:0] inp;
+		sv2v_cast_1D9BB = inp;
+	endfunction
+
+	generate
+		if ($clog2(N + 1) <= NWD) begin : gen_err_resp
+			assign tl_u_o[N][0] = tl_t_o[0];
+			assign tl_u_o[N][H2D_WIDTH - 1] = (tl_t_o[H2D_WIDTH - 1] & (dev_select_t >= sv2v_cast_1D9BB(N))) & ~hold_all_requests;
+			assign tl_u_o[N][H2D_WIDTH - 2 : top_pkg_TL_DW + USER_W + 1] = tl_t_o[H2D_WIDTH - 2 : top_pkg_TL_DW + USER_W + 1];
+			assign tl_u_o[N][top_pkg_TL_DW + USER_W : USER_W + 1] = tl_t_o[top_pkg_TL_DW + USER_W : USER_W + 1];
+			assign tl_u_o[N][USER_W : 1] = tl_t_o[USER_W : 1];
+			tlul_err_resp err_resp(
+				.clk_i(clk_i),
+				.rst_ni(rst_ni),
+				.tl_h_i(tl_u_o[N]),
+				.tl_h_o(tl_u_i[N])
+			);
+		end
+		else begin : gen_no_err_resp
+			assign tl_u_o[N] = {H2D_WIDTH{1'b0}};
+			assign tl_u_i[N] = {D2H_WIDTH{1'b0}};
+			wire unused_sig;
+			assign unused_sig = ^tl_u_o[N];
+		end
+	endgenerate
+endmodule
+```

@@ -1,0 +1,79 @@
+An elegant timing optimization has been applied to the critical path in `tlul_cmd_intg_chk.v` using the **late-input-cofactor** strategy.
+
+### Ledger
+- **Transform**: `late-input-cofactor`
+- **Cone**: `err_o` in `tlul_cmd_intg_chk`
+- **Changed signals**:
+  - `err_o`: 1-bit unsigned -> 1-bit unsigned
+  - `tl_valid`: (new) 1-bit unsigned
+  - `err_early`: (new) 1-bit unsigned
+
+### Analysis & Strategy
+The critical path flows through the SECDED decoders inside `tlul_cmd_intg_chk.v`. The data integrity check output (`data_err`) is the latest-arriving input to the final `err_o` gate because it depends on the 32-bit data bus and a 39-to-32 bit SECDED decoder. 
+
+By cofactoring `err_o` on the late-arriving `data_err` signal:
+- When `data_err = 1`, `err_o` simplifies to `tl_valid`.
+- When `data_err = 0`, `err_o` simplifies to `tl_valid & |err` (which we compute early as `err_early`).
+
+This allows the synthesis tool to map the final logic to a fast 2-to-1 multiplexer (or equivalent optimized gate structure) where the late-arriving `data_err` is placed on the fastest select path, bypassing the slow OR-AND gate tree. Additionally, the complex compile-time parameter-based range selections have been simplified to clean constant indices to prevent synthesis tool parsing overhead.
+
+// ── FILES TO OPTIMISE ──
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+	wire [1:0] err;
+	wire data_err;
+	wire [(((prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW) + 3) + top_pkg_TL_DBW) - 1:0] cmd;
+
+	// Simplified extraction of cmd fields from tl_i
+	assign cmd[38:7] = tl_i[91:60];
+	assign cmd[6:4]  = tl_i[107:105];
+	assign cmd[3:0]  = tl_i[59:56];
+	assign cmd[42:39] = tl_i[18:15];
+
+	localparam signed [31:0] tlul_pkg_H2DCmdMaxWidth = 57;
+	function automatic [56:0] sv2v_cast_57;
+		input reg [56:0] inp;
+		sv2v_cast_57 = inp;
+	endfunction
+
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i({tl_i[14:8], sv2v_cast_57(cmd)}),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+
+	localparam signed [31:0] tlul_pkg_DataMaxWidth = 32;
+	function automatic [31:0] sv2v_cast_32;
+		input reg [31:0] inp;
+		sv2v_cast_32 = inp;
+	endfunction
+
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i({tl_i[7:1], tl_i[55:24]}),
+		.data_err_o(data_err)
+	);
+
+	// Late-input-cofactor optimization on err_o
+	wire tl_valid = tl_i[108];
+	wire err_early = tl_valid & (|err);
+	assign err_o = data_err ? tl_valid : err_early;
+
+	wire unused_tl;
+	assign unused_tl = |tl_i;
+endmodule

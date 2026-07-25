@@ -1,0 +1,5 @@
+The preconditions for the **sum-cluster-expose** strategy are NOT present in the provided file `tlul_socket_1n.v`. 
+
+There are no combinational addition chains (two or more additions separated by a one-use combinational intermediate) in the modifiable file. The only arithmetic operations are sequential register increments/decrements (`num_req_outstanding +/- 1`) and compile-time constant parameter/generate-loop calculations.
+
+As per the hard constraints, no edits have been made.

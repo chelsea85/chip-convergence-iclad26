@@ -1,0 +1,5 @@
+The requested strategy for this attempt is **sum-cluster-expose**, which requires identifying a critical chain of two or more additions separated only by a one-use combinational intermediate. 
+
+After analyzing the only modifiable file in the dossier (`aes_ctrl_gcm_reg_shadowed.v`), we find that it contains no arithmetic addition operators (`+`). The logic consists entirely of multiplexers, comparisons, and bitwise operations. 
+
+Since the preconditions for the **sum-cluster-expose** strategy are not present in the modifiable file, no edits have been made to preserve the integrity of the design.

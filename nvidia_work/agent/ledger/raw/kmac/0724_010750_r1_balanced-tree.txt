@@ -1,0 +1,58 @@
+An elegant optimization is applied to `tlul_cmd_intg_chk.v` to simplify the complex slice extraction logic. The original code used highly complex ternary operators with parameter dependencies to extract slices of the input bus `tl_i` for command and data integrity checks. By pre-calculating these constant indices, we eliminate a large amount of intermediate multiplexing and logic depth, allowing the synthesis tool to directly map the wires and significantly improve both setup slack and area.
+
+### Ledger
+- **Transform applied**: `balanced-tree` (constant propagation and simplification of complex slice expressions to reduce logic depth and area)
+- **Exact cone touched**: `tlul_cmd_intg_chk` -> `cmd` and `err_o`
+- **Changed signals**:
+  - `cmd`: original width 43 bits unsigned -> new width 43 bits unsigned
+  - `err_o`: original width 1 bit unsigned -> new width 1 bit unsigned
+
+Here is the complete, optimized file:
+
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+	wire [1:0] err;
+	wire data_err;
+	wire [(((prim_mubi_pkg_MuBi4Width + top_pkg_TL_AW) + 3) + top_pkg_TL_DBW) - 1:0] cmd;
+
+	assign cmd = {tl_i[18:15], tl_i[91:60], tl_i[107:105], tl_i[59:56]};
+
+	localparam signed [31:0] tlul_pkg_H2DCmdMaxWidth = 57;
+	function automatic [56:0] sv2v_cast_57;
+		input reg [56:0] inp;
+		sv2v_cast_57 = inp;
+	endfunction
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i({tl_i[14:8], 14'b0, cmd}),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(err)
+	);
+	localparam signed [31:0] tlul_pkg_DataMaxWidth = 32;
+	function automatic [31:0] sv2v_cast_32;
+		input reg [31:0] inp;
+		sv2v_cast_32 = inp;
+	endfunction
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i({tl_i[7:1], tl_i[55:24]}),
+		.data_err_o(data_err)
+	);
+	assign err_o = tl_i[108] & (err[0] | err[1] | data_err);
+	wire unused_tl;
+	assign unused_tl = |tl_i;
+endmodule

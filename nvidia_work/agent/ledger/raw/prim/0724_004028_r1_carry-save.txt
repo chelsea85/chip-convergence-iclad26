@@ -1,0 +1,5 @@
+The requested strategy is **carry-save** optimization, which targets 3+ operand arithmetic additions on the critical path. 
+
+Upon analyzing `prim_crc32.v`, the design performs CRC-32 calculations which consist entirely of GF(2) arithmetic (bitwise XOR operations and multiplexing). There are no arithmetic addition (`+`) operators on any signal paths (only constant index calculations and loop counters). 
+
+Since the preconditions for the carry-save compressor strategy are **NOT** present in the provided file, no edits have been made.

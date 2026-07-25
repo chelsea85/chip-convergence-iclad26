@@ -1,0 +1,96 @@
+An elegant and highly effective way to optimize the critical path in the write-clock domain is to apply **Shannon cofactoring** (`R-late-arrival-shannon`) on the late-arriving control signal `s = winc & ~wfull`. 
+
+In the original design, the late-arriving control signal `winc & ~wfull` determines whether the write pointer increments. This increment propagates through a 5-bit adder, a Gray-code converter (XOR gates), and finally a 5-bit equality comparator to produce `wfull_val` and `awfull_val`. This long sequential chain of operations on a late-arriving signal creates a severe timing bottleneck.
+
+By cofactoring the entire pointer increment, Gray-code conversion, and comparison logic on `s`, we can pre-compute the results for both possible outcomes (`s = 0` and `s = 1`) in parallel using early-arriving register outputs. The late-arriving signal `s` then only needs to drive a final 2-to-1 multiplexer to select the correct pre-computed result, reducing the critical path from `s` to exactly one multiplexer delay.
+
+### Ledger
+- **Transform**: `R-late-arrival-shannon` (Shannon cofactoring on late-arriving control signal)
+- **Cone**: `wptr_full` pointer and full flag generation logic
+- **Changed Signals**:
+  - `wbinnext`: `[ADDRSIZE:0]` unsigned -> `[ADDRSIZE:0]` unsigned
+  - `wgraynext`: `[ADDRSIZE:0]` unsigned -> `[ADDRSIZE:0]` unsigned
+  - `wgraynextp1`: `[ADDRSIZE:0]` unsigned -> `[ADDRSIZE:0]` unsigned
+  - `wfull_val`: `1` bit -> `1` bit
+  - `awfull_val`: `1` bit -> `1` bit
+
+Here is the complete, optimized file for `wptr_full.v`.
+
+// FILE: wptr_full.v
+// distributed under the mit license
+// https://opensource.org/licenses/mit-license.php
+
+`timescale 1 ns / 1 ps
+`default_nettype none
+
+module wptr_full
+
+	#(
+		parameter ADDRSIZE = 4
+	)(
+		input  wire                wclk,
+		input  wire                wrst_n,
+		input  wire                winc,
+		input  wire [ADDRSIZE  :0] wq2_rptr,
+		output reg                 wfull,
+		output reg                 awfull,
+		output wire [ADDRSIZE-1:0] waddr,
+		output reg  [ADDRSIZE  :0] wptr
+	);
+
+    reg  [ADDRSIZE:0] wbin;
+    wire [ADDRSIZE:0] wgraynext, wbinnext, wgraynextp1;
+    wire              awfull_val, wfull_val;
+
+	// GRAYSTYLE2 pointer
+	always @(posedge wclk or negedge wrst_n) begin
+
+		if (!wrst_n)
+			{wbin, wptr} <= 0;
+		else
+			{wbin, wptr} <= {wbinnext, wgraynext};
+
+	end
+
+    // Memory write-address pointer (okay to use binary to address memory)
+    assign waddr = wbin[ADDRSIZE-1:0];
+
+    // Shannon cofactoring on the late-arriving control signal 's'
+    wire s = winc & ~wfull;
+    wire [ADDRSIZE:0] wbin_plus_1 = wbin + 1'b1;
+    wire [ADDRSIZE:0] wbin_plus_2 = wbin + 2'b10;
+
+    // Pre-compute Gray codes for all possible pointer values
+    wire [ADDRSIZE:0] wgray_sel0 = (wbin >> 1) ^ wbin;
+    wire [ADDRSIZE:0] wgray_sel1 = (wbin_plus_1 >> 1) ^ wbin_plus_1;
+    wire [ADDRSIZE:0] wgray_sel2 = (wbin_plus_2 >> 1) ^ wbin_plus_2;
+
+    // Select the correct next pointer values
+    assign wbinnext    = s ? wbin_plus_1 : wbin;
+    assign wgraynext   = s ? wgray_sel1  : wgray_sel0;
+    assign wgraynextp1 = s ? wgray_sel2  : wgray_sel1;
+
+    // Pre-compute full comparisons
+    wire [ADDRSIZE:0] target = {~wq2_rptr[ADDRSIZE:ADDRSIZE-1], wq2_rptr[ADDRSIZE-2:0]};
+    wire wfull_val_sel0  = (wgray_sel0 == target);
+    wire wfull_val_sel1  = (wgray_sel1 == target);
+    wire awfull_val_sel2 = (wgray_sel2 == target);
+
+    // Select the final comparison results using the late-arriving control signal
+    assign wfull_val  = s ? wfull_val_sel1  : wfull_val_sel0;
+    assign awfull_val = s ? awfull_val_sel2 : wfull_val_sel1;
+
+     always @(posedge wclk or negedge wrst_n) begin
+
+        if (!wrst_n) begin
+            awfull <= 1'b0;
+            wfull  <= 1'b0;
+        end else begin
+            awfull <= awfull_val;
+            wfull  <= wfull_val;
+        end
+    end
+
+endmodule
+
+`resetall

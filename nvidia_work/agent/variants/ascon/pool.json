@@ -12,8 +12,8 @@
   },
   "parent": null,
   "strategy": "baseline",
-  "wins": 3.830030699597189,
-  "losses": 5.169969300402811
+  "wins": 5.59465172654699,
+  "losses": 7.905348273453009
  },
  {
   "cid": "b153b877f996",
@@ -44,8 +44,8 @@
   },
   "parent": "baseline",
   "strategy": "arith-arch",
-  "wins": 2.3659604976419506,
-  "losses": 3.6340395023580494
+  "wins": 7.6729914757592255,
+  "losses": 11.827008524240775
  },
  {
   "cid": "97a1a49cb6d5",
@@ -62,5 +62,37 @@
   "strategy": "micro-opt",
   "wins": 0.0,
   "losses": 0.0
+ },
+ {
+  "cid": "e35b01a0d0fb",
+  "ppa": {
+   "area": 1798.414,
+   "cells": 12334.0,
+   "ff": 1769.0,
+   "setup": -403.63,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.0185
+  },
+  "parent": "1b5c86d80918",
+  "strategy": "arith-arch",
+  "wins": 4.02918043760994,
+  "losses": 5.97081956239006
+ },
+ {
+  "cid": "c9ab4849f9fc",
+  "ppa": {
+   "area": 1777.958,
+   "cells": 11919.0,
+   "ff": 1769.0,
+   "setup": -387.19,
+   "hold": 9.62,
+   "timing_met": false,
+   "power": 0.0184
+  },
+  "parent": "e35b01a0d0fb",
+  "strategy": "late-input-cofactor",
+  "wins": 0.9472051783491886,
+  "losses": 1.0527948216508114
  }
 ]

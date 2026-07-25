@@ -1,0 +1,83 @@
+An elegant way to optimize the critical path on the `rdata` output (which is a combinational read from the `mem` register array when `FALLTHROUGH == "TRUE"`) is to apply Shannon cofactoring on the address bits of `raddr`. By splitting the wide $2^{ADDRSIZE}$-to-1 multiplexer into smaller, parallel multiplexers (e.g., four $2^{ADDRSIZE-2}$-to-1 multiplexers) and selecting between them using the highest bits of `raddr`, we significantly reduce the logic depth of the multiplexer tree.
+
+### Ledger
+- **Transform applied**: `[R-late-arrival-shannon]` (Shannon cofactoring on the address bits of the memory read multiplexer)
+- **Exact cone touched**: `fifomem.v` -> `rdata` multiplexer cone
+- **Changed signals**:
+  - `rdata` (original: `mem[raddr]`, width `DATASIZE`, unsigned -> new: 4-way Shannon cofactored multiplexer tree using `raddr[ADDRSIZE-1]` and `raddr[ADDRSIZE-2]`, width `DATASIZE`, unsigned)
+
+Here is the complete, modified `fifomem.v` file:
+
+// FILE: fifomem.v
+// distributed under the mit license
+// https://opensource.org/licenses/mit-license.php
+
+`timescale 1 ns / 1 ps
+`default_nettype none
+
+module fifomem
+
+    #(
+        parameter  DATASIZE = 8,    // Memory data word width
+        parameter  ADDRSIZE = 4,    // Number of mem address bits
+        parameter  FALLTHROUGH = "TRUE" // First word fall-through
+    ) (
+        input  wire                wclk,
+        input  wire                wclken,
+        input  wire [ADDRSIZE-1:0] waddr,
+        input  wire [DATASIZE-1:0] wdata,
+        input  wire                wfull,
+        input  wire                rclk,
+        input  wire                rclken,
+        input  wire [ADDRSIZE-1:0] raddr,
+        output wire [DATASIZE-1:0] rdata
+    );
+
+    localparam DEPTH = 1<<ADDRSIZE;
+
+    reg [DATASIZE-1:0] mem [0:DEPTH-1];
+    reg [DATASIZE-1:0] rdata_r;
+
+    always @(posedge wclk) begin
+        if (wclken && !wfull)
+            mem[waddr] <= wdata;
+    end
+
+    generate
+        if (FALLTHROUGH == "TRUE")
+        begin : fallthrough
+            if (ADDRSIZE > 2)
+            begin : split4
+                wire [DATASIZE-1:0] rdata_00 = mem[{2'b00, raddr[ADDRSIZE-3:0]}];
+                wire [DATASIZE-1:0] rdata_01 = mem[{2'b01, raddr[ADDRSIZE-3:0]}];
+                wire [DATASIZE-1:0] rdata_10 = mem[{2'b10, raddr[ADDRSIZE-3:0]}];
+                wire [DATASIZE-1:0] rdata_11 = mem[{2'b11, raddr[ADDRSIZE-3:0]}];
+                
+                wire [DATASIZE-1:0] rdata_low = raddr[ADDRSIZE-2] ? rdata_01 : rdata_00;
+                wire [DATASIZE-1:0] rdata_high = raddr[ADDRSIZE-2] ? rdata_11 : rdata_10;
+                assign rdata = raddr[ADDRSIZE-1] ? rdata_high : rdata_low;
+            end
+            else if (ADDRSIZE == 2)
+            begin : split2
+                wire [DATASIZE-1:0] rdata_0 = mem[{1'b0, raddr[0]}];
+                wire [DATASIZE-1:0] rdata_1 = mem[{1'b1, raddr[0]}];
+                assign rdata = raddr[1] ? rdata_1 : rdata_0;
+            end
+            else
+            begin : flat
+                assign rdata = mem[raddr];
+            end
+        end
+        else
+        begin : registered_read
+            always @(posedge rclk) begin
+                if (rclken)
+                    rdata_r <= mem[raddr];
+            end
+            assign rdata = rdata_r;
+        end
+    endgenerate
+
+endmodule
+
+`resetall

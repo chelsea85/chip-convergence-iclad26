@@ -1,0 +1,3 @@
+The strategy `sum-cluster-expose` requires finding a critical chain of two or more arithmetic additions separated only by a one-use combinational intermediate. However, `prim_crc32.v` is a CRC-32 calculation module that relies entirely on bitwise XOR operations and contains no runtime arithmetic additions (only compile-time constant arithmetic in generate loops and parameter calculations).
+
+Therefore, the preconditions for the `sum-cluster-expose` transform are not present in the provided file, and no edits are made.

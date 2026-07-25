@@ -49,6 +49,27 @@ Unlimited-Gemini GCP account from Jul 19 (else .env keys).
    for proposals; targeted tags via playbook.
 6. ALWAYS finish each IP with --emit-best so a submission artifact exists at any cutoff.
 
+## 2b. NVIDIA throughput tuning (added 2026-07-23 — wall-clock IS a scoring resource)
+
+Evidence from the 07-23 campaigns: provable candidates LEC-prove in ~1-3 min; UNPROVABLE ones burn
+their full in-loop cap (900 s small IPs / 2400 s big) before being marked INCONCLUSIVE — that is the
+dominant wall-clock sink (6 nonconvergent sha512 candidates ~= 90 min). Levers, safest first:
+
+1. **RAISE THE DOCKER VM MEMORY BEFORE DAC (pre-day checklist!).** The VM is 7.65 GB on a 48 GB
+   host; 3+ concurrent yosys jobs thrash at 7.65 GB (proven 07-22). Docker Desktop -> Settings ->
+   Resources -> Memory: set 20-24 GB. Then `--workers 4` is safe (vs today's 2) — candidate
+   evaluations parallelize linearly until memory binds.
+2. **--workers guidance:** 7.65 GB VM -> workers 2, NEVER 3+. 16 GB -> 3. 20-24 GB -> 4-6.
+   One extra rule regardless of memory: only ONE campaign (IP) at a time.
+3. **The lec_diagnostic ladder (30 min/level) is a POST-HOC analysis tool — never run it during
+   scoring hours.** It is not in the campaign path.
+4. **Kill-stale-container fallback** if anything wedges: `docker ps -q | xargs -r docker kill`
+   (rev34 auto-reaps on timeout, so this should rarely be needed).
+5. **Proposed (NOT yet landed — needs sandbox/Codex sign-off, see
+   NVIDIA_LEC_BUDGET_PROPOSAL_2026-07-23.md):** staged LEC budgeting — short in-loop proof budget as
+   a filter, full budget only for canonical finalists. Would cut the nonconvergent-burn ~5x with no
+   gate weakening. If it lands before DAC, prefer it.
+
 ## 3. Timeboxing (competition hours H0..H8, adjust to schedule)
 - H0-H1: pull, regressions, read ALL released testcases, rank by expected value
   (NXP easy-like first: fastest verified points; NVIDIA small IPs before big trees).

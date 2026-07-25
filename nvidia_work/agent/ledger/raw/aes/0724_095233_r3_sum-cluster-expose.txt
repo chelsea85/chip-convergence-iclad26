@@ -1,0 +1,1 @@
+The strategy's preconditions for `sum-cluster-expose` (which requires a critical chain of two or more additions separated only by a one-use combinational intermediate) are NOT present in the provided file `prim_onehot_check.v`, as it contains no addition operations. Therefore, no edits are made.

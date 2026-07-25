@@ -12,8 +12,8 @@
   },
   "parent": null,
   "strategy": "baseline",
-  "wins": 0.5771319556187733,
-  "losses": 0.4228680443812267
+  "wins": 3.1925237578717574,
+  "losses": 4.307476242128242
  },
  {
   "cid": "070ce7b90bd0",
@@ -28,6 +28,54 @@
   },
   "parent": "baseline",
   "strategy": "micro-opt",
+  "wins": 1.5915754558876876,
+  "losses": 1.4084245441123124
+ },
+ {
+  "cid": "6ac04361fb15",
+  "ppa": {
+   "area": 122.224,
+   "cells": 923.0,
+   "ff": 162.0,
+   "setup": 40.07,
+   "hold": 46.63,
+   "timing_met": true,
+   "power": 0.00303
+  },
+  "parent": "070ce7b90bd0",
+  "strategy": "small-cone-arrival-template",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "d8364e88b637",
+  "ppa": {
+   "area": 119.95,
+   "cells": 919.0,
+   "ff": 162.0,
+   "setup": 46.37,
+   "hold": 46.63,
+   "timing_met": true,
+   "power": 0.00298
+  },
+  "parent": "070ce7b90bd0",
+  "strategy": "balanced-tree",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "8c55c490f8f6",
+  "ppa": {
+   "area": 125.286,
+   "cells": 947.0,
+   "ff": 170.0,
+   "setup": 41.94,
+   "hold": 46.63,
+   "timing_met": true,
+   "power": 0.00297
+  },
+  "parent": "baseline",
+  "strategy": "small-cone-arrival-template",
   "wins": 0.0,
   "losses": 0.0
  }

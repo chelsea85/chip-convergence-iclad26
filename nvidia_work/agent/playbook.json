@@ -23,14 +23,14 @@
  },
  {
   "id": "p1-gray-deregister",
-  "section": "timing",
+  "section": "avoid",
   "tags": [
    "cdc",
    "mixed-comb-depth"
   ],
-  "content": "P1 (MEASURED, async_fifo): registered gray pointer equals gray(registered binary); replace duplicate gray register with combinational bin>>1 ^ bin. +13ps slack but +0.86% area (FF removal added comb cells). CDC-safe (single-bit change property preserved).",
+  "content": "UNSAFE \u2014 RETRACTED 2026-07-24 (Codex banking review, async_fifo d8364e88b637 DENIED): replacing a REGISTERED gray pointer with combinational gray(bin) is a CDC HAZARD \u2014 the combinational encoder GLITCHES during multi-bit binary transitions; the register is what guarantees the single-transition property AT THE CROSSING. RTL LEC and zero-delay dualsim CANNOT see this failure class. Never de-register a CDC-crossing signal. (The prior claim here that this was 'CDC-safe' was wrong and led to an unsafe banked candidate.)",
   "helpful": 0,
-  "harmful": 0,
+  "harmful": 1,
   "created": "2026-07-03"
  },
  {
@@ -188,8 +188,8 @@
    "avoid"
   ],
   "content": "AVOID re-balancing logic ABC already optimizes well (absorbed by synthesis, adds churn/risk for ~0 gain) \u2014 e.g. simple 2-3 operand expressions (Dr. RTL AVOID).",
-  "helpful": 18,
-  "harmful": 0,
+  "helpful": 33,
+  "harmful": 4,
   "created": "2026-07-03"
  },
  {
@@ -233,8 +233,8 @@
    "arith-carry-chain"
   ],
   "content": "P2 applicability (MEASURED, exp3): source-level balancing of a PURE N-operand sum (e.g. w_new = a+b+c+d) is a no-op \u2014 ABC's delay-aware mapping already rebalances clean sums (identical netlist). P2 pays when serial adds are ENTANGLED with nonlinear logic between terms (Ch/Maj/sigma in exp2: +332ps). Target entangled chains only.",
-  "helpful": 15,
-  "harmful": 0,
+  "helpful": 18,
+  "harmful": 2,
   "created": "2026-07-03"
  },
  {
@@ -405,7 +405,7 @@
    "adder"
   ],
   "content": "Wide carry-propagate add on the critical path -> parallel-prefix adder (Kogge-Stone / Brent-Kung / Sklansky): O(log n) carry depth vs O(n) ripple. Equivalence-safe (same sum). Trade area (KS) vs wires (BK).",
-  "helpful": 4,
+  "helpful": 5,
   "harmful": 2,
   "created": "2026-07-13",
   "seeded": true
@@ -1265,5 +1265,712 @@
   "helpful": 1,
   "harmful": 0,
   "created": "2026-07-19"
+ },
+ {
+  "id": "learned-106-26857",
+  "section": "area",
+  "tags": [
+   "share-resources-tradeoff",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Sharing resources (e.g., adders or incrementers) can successfully reduce area but may degrade setup time by adding multiplexing logic to the critical path.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-107-26857",
+  "section": "avoid",
+  "tags": [
+   "arith-arch-degradation",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Forcing specific arithmetic architectures (like prefix adders) on paths that synthesis already optimizes well can degrade both setup time and area.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-108-26857",
+  "section": "avoid",
+  "tags": [
+   "restructure-select-degradation",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Restructuring select logic or multiplexers can negatively impact both timing and area if the synthesis tool's default mapping is already optimal.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-19"
+ },
+ {
+  "id": "learned-109-34906",
+  "section": "avoid",
+  "tags": [
+   "restructure-select-dualsim",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Avoid restructuring multiplexer and select logic aggressively as it highly risks dual-simulation functional mismatches.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-20"
+ },
+ {
+  "id": "learned-110-34906",
+  "section": "pitfall",
+  "tags": [
+   "carry-save-synth",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Manual carry-save transformations often trigger synthesis compilation failures in standard RTL toolchains.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-20"
+ },
+ {
+  "id": "learned-111-78486",
+  "section": "timing",
+  "tags": [
+   "sha-balancing",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual tree balancing of SHA-512 round calculation logic provides massive setup time slack recovery.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-22"
+ },
+ {
+  "id": "learned-112-78486",
+  "section": "timing",
+  "tags": [
+   "carry-save",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Carry-save adder trees are highly effective for multi-operand additions in SHA-512, yielding significant timing improvements with minimal area overhead.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-22"
+ },
+ {
+  "id": "learned-113-80626",
+  "section": "timing",
+  "tags": [
+   "balanced-tree",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual tree-balancing of wide multi-operand additions (like SHA-512 step functions) can significantly reduce setup slack compared to relying on default synthesis compiler structuring.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-22"
+ },
+ {
+  "id": "learned-114-80626",
+  "section": "pitfall",
+  "tags": [
+   "carry-save",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual carry-save adder (CSA) decomposition can backfire and degrade timing if it disrupts the synthesis tool's ability to perform native arithmetic optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-22"
+ },
+ {
+  "id": "learned-115-81802",
+  "section": "pitfall",
+  "tags": [
+   "carry-save-fail",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual carry-save or tree-balancing transformations in complex datapath blocks like SHA512 often lead to synthesis failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-22"
+ },
+ {
+  "id": "learned-116-24278",
+  "section": "pitfall",
+  "tags": [
+   "manual-tree-degrades-timing",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual balancing of multi-operand additions (like in SHA512) can severely degrade setup timing compared to the synthesis tool's default optimization.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-117-24278",
+  "section": "pitfall",
+  "tags": [
+   "carry-save-gate-fail",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Implementing carry-save adders manually in RTL is highly prone to functional errors and gate-level simulation failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-118-26369",
+  "section": "pitfall",
+  "tags": [
+   "carry-save-bugs",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual implementation of carry-save arithmetic is highly prone to functional bugs (gate-fail) and should be verified extremely carefully.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-119-26369",
+  "section": "pitfall",
+  "tags": [
+   "balanced-tree-bugs",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual tree balancing is prone to functional bugs (gate-fail) and often redundant with synthesis optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-120-26521",
+  "section": "pitfall",
+  "tags": [
+   "manual-carry-save-risk",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manually implementing carry-save adders or balanced trees in cryptographic cores like SHA512 often breaks functional equivalence due to subtle truncation or carry-bit misalignment.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-121-26521",
+  "section": "avoid",
+  "tags": [
+   "manual-arith-arch",
+   "sha512"
+  ],
+  "content": "(sha512, agent) AVOID manually overriding arithmetic architectures (e.g., forcing specific adder topologies) in Yosys/ABC, as it often increases both cell count and logic depth compared to the synthesizer's default mapping.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-122-26918",
+  "section": "avoid",
+  "tags": [
+   "manual-arith-rebalance",
+   "ascon"
+  ],
+  "content": "(ascon, agent) AVOID manual carry-save or balanced-tree transformations on simple arithmetic, as synthesis tools already optimize these well and manual changes only add slight area overhead.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-123-27195",
+  "section": "pitfall",
+  "tags": [
+   "manual-rebalance-worsens-timing",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Manual balanced-tree and carry-save transformations can degrade setup time compared to the synthesizer's default optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-124-27195",
+  "section": "timing",
+  "tags": [
+   "arith-arch-improves-setup",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Arithmetic architecture optimizations can yield modest setup time improvements at the cost of a slight area increase.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-125-27384",
+  "section": "pitfall",
+  "tags": [
+   "balanced-tree-worsens-timing",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Manually balancing logic trees can significantly degrade setup time by interfering with the synthesis tool's own technology mapping and timing-driven structuring.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-late-arrival-shannon",
+  "section": "timing",
+  "tags": [
+   "mux-select",
+   "control-boolean-network",
+   "arith-carry-chain",
+   "mixed-comb-depth"
+  ],
+  "content": "R (2026-07-23, timing-lit): Shannon-cofactor the critical cone on its LATEST-ARRIVING signal s: build f(s=0) and f(s=1) from early signals in parallel, select with ONE final 2:1 mux driven by s. The late signal then crosses exactly one mux. Cost: the cofactored cone is duplicated \u2014 keep the cone small (<~200 cells) or area eats the ADP win. Cycle-exact, register-preserving -> LEC-provable.",
+  "helpful": 1,
+  "harmful": 1,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-fanout-duplicate",
+  "section": "avoid",
+  "tags": [
+   "mixed-comb-depth",
+   "wide-gate-decode",
+   "arith-carry-chain",
+   "mux-select"
+  ],
+  "content": "SUPERSEDED (2026-07-23 expanded lit review \u00a77.3): generic fanout duplication is REJECTED as a freehand rung \u2014 the backend already runs two buffering passes + sizing, and duplication needs measured fanout/load/criticality evidence the diagnosis does not provide. Do not apply freehand. (Evidence-gated critical-unshare remains a future experimental rung.)",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-arrival-aware-reorder",
+  "section": "avoid",
+  "tags": [
+   "arith-carry-chain",
+   "control-boolean-network"
+  ],
+  "content": "SUPERSEDED (2026-07-23 expanded lit review \u00a77.2): freehand arrival-aware reordering is REJECTED \u2014 the literature's gains come from dynamic programming / exact small-cone databases, not prose instructions, and ABC re-balances ordinary associative chains anyway. Route small cones to exact templates; do not reorder chains freehand.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-abc-rebalance-caution",
+  "section": "avoid",
+  "tags": [
+   "arith-carry-chain",
+   "avoid"
+  ],
+  "content": "EVIDENCE (kmac 2026-07-20, 14/14 measured candidates): source-level balanced-tree / carry-save rewrites of chains ABC can already see are RE-BALANCED AWAY at synthesis and typically land area -1% / slack WORSE -> ADP>=1. Prefer moves ABC cannot invent from a flat netlist view: late-arrival Shannon cofactoring, un-sharing/duplication across module boundaries, arrival-aware reordering that changes which signals feed the final operator. Pure tree re-association of an already-synthesized-optimal chain is usually a no-op or a regression.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-sum-cluster-expose",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain",
+   "multioperand-add-cluster",
+   "mixed-comb-depth"
+  ],
+  "content": "R#1 (2026-07-23 lit review; Zimmermann datapath synthesis, ROVER): remove an artificial arithmetic boundary \u2014 inline a ONE-USE combinational intermediate between chained additions so synthesis sees a single fixed-width multi-operand sum and can keep carry-save form with ONE final carry-propagate adder. Better-supported than manual CSA bit-slicing (which the backend re-canonicalizes). Never flatten across an observable truncation/carry/compare/second consumer; preserve modulo width + signedness.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-xor-depth-resynth",
+  "section": "timing",
+  "tags": [
+   "arith-carry-chain",
+   "xor-linear-network",
+   "crypto-linear-layer"
+  ],
+  "content": "R#3 (2026-07-23 lit review; NIST low-depth GF(2) circuits): XOR count and XOR DEPTH are distinct objectives \u2014 a strictly linear XOR cone can be re-shared/unshared under a depth constraint. MANDATORY witness: list every output bit's XOR-support set before and after (must be identical). Only strictly affine cones (XOR/XNOR/NOT/const); never mix in AND/OR/mux/carry. Directly relevant to sha512/ascon/crypto hidden cases.",
+  "helpful": 0,
+  "harmful": 2,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-late-input-cofactor",
+  "section": "timing",
+  "tags": [
+   "mux-select",
+   "control-boolean-network",
+   "late-control"
+  ],
+  "content": "R#4 (2026-07-23 lit review; Singh-Brown Shannon timing closure, Mishchenko structural choices): when ONE control bit is demonstrably late, precompute F(control=0) and F(control=1) from early inputs and select at the cone OUTPUT with the late bit. Needs a KNOWN late variable (from STA), not just negative WNS; bound the duplicated cone or area eats the win; preserve X/priority/default semantics exactly.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-priority-prefix",
+  "section": "timing",
+  "tags": [
+   "mux-select",
+   "wide-gate-decode",
+   "priority-mux"
+  ],
+  "content": "R#5 (2026-07-23 lit review; multi-level priority-encoder literature): rewrite long serial priority chains as exact prefix-priority (grant_i = cond_i AND no-earlier-cond). MUST preserve the winner for every simultaneous-condition pattern and the no-match default; never assume one-hotness without structural proof.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-compare-decode-prefix",
+  "section": "timing",
+  "tags": [
+   "wide-gate-decode",
+   "compare-reduction",
+   "bus-control"
+  ],
+  "content": "R#6 (2026-07-23 lit review): wide equality/magnitude/range/address-decode cones -> exact prefix comparison or high-bit aligned-range form; drop lower bits ONLY when constants prove irrelevance (power-of-2 alignment). Preserve ==/=== distinction and inclusive/exclusive boundaries. One of the best hidden bus/control strategies.",
+  "helpful": 0,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-135-57409",
+  "section": "timing",
+  "tags": [
+   "balanced-tree",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual tree balancing of multi-operand compression structures in SHA-512 can significantly improve setup slack where synthesis tools fail to optimize.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-136-57409",
+  "section": "timing",
+  "tags": [
+   "carry-save",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Converting multi-operand addition chains into carry-save adder trees effectively reduces critical path delay in hash cores.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-137-57409",
+  "section": "pitfall",
+  "tags": [
+   "late-arrival-shannon",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Shannon decomposition on late-arriving paths can cause gate-level simulation or synthesis failures if the logic transformation is too complex.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "R-small-cone-templates",
+  "section": "timing",
+  "tags": [
+   "control-boolean-network",
+   "mux-select",
+   "xor-linear-network",
+   "small-boolean-critical"
+  ],
+  "content": "R#2 (2026-07-23 lit review; EPFL exact delay synthesis): for a <=5-input critical Boolean cone with a KNOWN late input, use the audited arrival-aware template set (ppa/cone_templates.py \u2014 every entry exhaustively proven): the late input must touch only the FINAL gate/mux. Select+map, never invent. Physical-TNS evidence: exact small-cone databases cut post-implementation TNS ~12% at negligible area cost.",
+  "helpful": 0,
+  "harmful": 3,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-139-59493",
+  "section": "timing",
+  "tags": [
+   "balanced-tree",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Manual tree-balancing of multi-operand adder trees in SHA-512 can yield significant timing and area improvements over default synthesis.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-140-59493",
+  "section": "pitfall",
+  "tags": [
+   "carry-save-adder",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Avoid manual carry-save adder conversion for wide additions as it can severely degrade timing by preventing the synthesizer from utilizing optimized carry-propagate hardware.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-141-60765",
+  "section": "timing",
+  "tags": [
+   "shannon-decomposition",
+   "sha512"
+  ],
+  "content": "(sha512, agent) Apply Shannon decomposition to late-arriving critical-path signals to precompute alternative outcomes and drastically reduce setup delay.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-142-61123",
+  "section": "pitfall",
+  "tags": [
+   "late-input-cofactor",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Late-input cofactoring can degrade setup timing by introducing multiplexer delays on the critical path in exchange for minor area reductions.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-143-61123",
+  "section": "avoid",
+  "tags": [
+   "compare-decode-prefix",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Avoid manual prefix-tree restructuring for compare-decode logic as it often results in zero PPA change due to synthesis tool optimization.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-144-61362",
+  "section": "timing",
+  "tags": [
+   "late-input-cofactor",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Cofactoring or Shannon expansion on late-arriving inputs can significantly improve both setup slack and area by pulling critical signals closer to the outputs.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-145-61362",
+  "section": "avoid",
+  "tags": [
+   "manual-xor-rebalance",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Avoid manually restructuring XOR trees for depth reduction, as synthesis tools already optimize these structures optimally and manual intervention can degrade timing.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-146-61550",
+  "section": "pitfall",
+  "tags": [
+   "late-input-cofactor",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Cofactoring late inputs in dense symmetric cryptographic blocks like Ascon can backfire, degrading both setup slack and area due to logic replication.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-147-61550",
+  "section": "avoid",
+  "tags": [
+   "xor-rebalance",
+   "ascon"
+  ],
+  "content": "(ascon, agent) Avoid manual restructuring of XOR trees in cipher designs, as synthesis tools already optimize these structures optimally, yielding zero PPA impact.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-23"
+ },
+ {
+  "id": "learned-148-78228",
+  "section": "pitfall",
+  "tags": [
+   "compare-decode-prefix",
+   "async_fifo"
+  ],
+  "content": "(async_fifo, agent) Complex prefix-based decoding or comparison optimizations in asynchronous FIFOs are highly prone to functional equivalence (dualsim) failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-149-78228",
+  "section": "timing",
+  "tags": [
+   "balanced-tree",
+   "async_fifo"
+  ],
+  "content": "(async_fifo, agent) Manual tree-balancing of deep combinational paths in FIFO control logic can significantly improve setup slack at a modest area cost.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-150-78228",
+  "section": "pitfall",
+  "tags": [
+   "small-cone-arrival",
+   "async_fifo"
+  ],
+  "content": "(async_fifo, agent) Reducing logic cone size without considering actual arrival times can inadvertently degrade setup slack by exposing slower inputs.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-151-78311",
+  "section": "timing",
+  "tags": [
+   "compare-decode-prefix",
+   "async_fifo"
+  ],
+  "content": "(async_fifo, agent) Optimizing pointer comparison in async FIFOs using prefix-based decoding structures reduces critical path delay and area simultaneously.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-152-78311",
+  "section": "avoid",
+  "tags": [
+   "manual-tree-balancing",
+   "async_fifo"
+  ],
+  "content": "(async_fifo, agent) Avoid manual balancing of symmetric logic trees as it interferes with synthesis tool optimizations and degrades setup timing.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-153-78391",
+  "section": "timing",
+  "tags": [
+   "late-arrival",
+   "async_fifo"
+  ],
+  "content": "(async_fifo, agent) Shannon-cofactoring or isolating late-arriving signals in small logic cones significantly improves setup slack with minimal area overhead.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-154-82952",
+  "section": "pitfall",
+  "tags": [
+   "dualsim-fail",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Prefix-based comparison decoding optimizations are highly prone to simulation-synthesis mismatches and dualsim failures.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-155-82952",
+  "section": "timing",
+  "tags": [
+   "xor-depth",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Manual XOR depth resynthesis in cryptographic modules can degrade setup timing even if it reduces cell area.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-156-83813",
+  "section": "pitfall",
+  "tags": [
+   "[small-cone-templates]",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Manual optimization of small Boolean cones for late inputs can backfire and degrade setup slack due to synthesis tool restructuring.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-157-84130",
+  "section": "pitfall",
+  "tags": [
+   "xor-resynth-kmac",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Manual XOR depth resynthesis in Keccak-based designs like KMAC is highly prone to synthesis failures due to complex multi-operand expressions.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-158-84130",
+  "section": "avoid",
+  "tags": [
+   "manual-cone-templates",
+   "kmac"
+  ],
+  "content": "(kmac, agent) Avoid manually applying exact-delay templates to small Boolean cones as it frequently introduces syntax or elaboration errors in the synthesis toolchain.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-159-9244",
+  "section": "timing",
+  "tags": [
+   "late-input-cofactor",
+   "aes"
+  ],
+  "content": "(aes, agent) Shannon cofactoring on late-arriving paths can degrade setup slack due to increased logic duplication and load.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-160-9244",
+  "section": "timing",
+  "tags": [
+   "compare-decode-prefix",
+   "aes"
+  ],
+  "content": "(aes, agent) Prefix-based decoding or comparison restructuring can degrade timing compared to native synthesis optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-161-11923",
+  "section": "timing",
+  "tags": [
+   "late-input-cofactor",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual cofactoring of late-arriving inputs can worsen setup slack by introducing additional multiplexer delay on the critical path.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-162-11923",
+  "section": "pitfall",
+  "tags": [
+   "late-input-cofactor",
+   "aes"
+  ],
+  "content": "(aes, agent) Avoid manual Shannon expansion on late inputs as it often introduces structural overhead that degrades timing compared to synthesis tool optimizations.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
+ },
+ {
+  "id": "learned-163-13661",
+  "section": "pitfall",
+  "tags": [
+   "late-input-cofactoring",
+   "aes"
+  ],
+  "content": "(aes, agent) Manual late-input cofactoring can degrade setup timing in dense designs like AES by disrupting synthesis-level logic restructuring.",
+  "helpful": 1,
+  "harmful": 0,
+  "created": "2026-07-24"
  }
 ]

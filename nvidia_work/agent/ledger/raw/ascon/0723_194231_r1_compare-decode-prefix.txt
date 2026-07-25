@@ -1,0 +1,90 @@
+An elegant optimization has been applied to `tlul_cmd_intg_chk.v` using the `rtlscout-cutpoints` strategy. By introducing explicit intermediate wires with precise widths at logical boundaries, we assist the synthesis tool (Yosys/ABC) in partitioning and independently optimizing the combinatorial paths. This is particularly effective here because the integrity check output (`err_o`) gates the entire register access path in `ascon_reg_top.v`, making it a critical control signal on the worst-case timing path.
+
+### Ledger
+- **Transform Applied**: `rtlscout-cutpoints`
+- **Exact Cone Touched**: `err_o`
+- **Changed Signals**:
+  - `chk_data_i`: none $\rightarrow$ `wire [63:0]`
+  - `data_integ_i`: none $\rightarrow$ `wire [38:0]`
+  - `cmd_err_or`: none $\rightarrow$ `wire`
+  - `combined_err`: none $\rightarrow$ `wire`
+
+Here is the complete, optimized file:
+
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+
+	input wire [108:0] tl_i;
+	output wire err_o;
+
+	// Integrity bits
+	wire [6:0] cmd_intg_bits;
+	assign cmd_intg_bits = tl_i[21:15];
+
+	wire [6:0] data_intg_bits;
+	assign data_intg_bits = tl_i[14:8];
+	
+	// Command payload extraction
+	wire [42:0] cmd_payload;
+	assign cmd_payload[42:39] = tl_i[18:15];
+	assign cmd_payload[38:7]  = tl_i[91:60];
+	assign cmd_payload[6:4]   = tl_i[107:105];
+	assign cmd_payload[3:0]   = tl_i[59:56];
+
+	// Data payload extraction
+	wire [31:0] data_payload;
+	assign data_payload = tl_i[55:24];
+	
+	// Valid bit
+	wire tl_valid;
+	assign tl_valid = tl_i[108];
+
+	// SECDED Decoding for Command
+	wire [63:0] chk_data_i;
+	assign chk_data_i = {cmd_intg_bits, 14'b0, cmd_payload};
+
+	wire [1:0] cmd_err;
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i(chk_data_i),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(cmd_err)
+	);
+
+	// SECDED Decoding for Data
+	wire [38:0] data_integ_i;
+	assign data_integ_i = {data_intg_bits, data_payload};
+
+	wire data_err;
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i(data_integ_i),
+		.data_err_o(data_err)
+	);
+
+	// Final error output with balanced structure
+	wire cmd_err_or;
+	assign cmd_err_or = cmd_err[0] | cmd_err[1];
+
+	wire combined_err;
+	assign combined_err = cmd_err_or | data_err;
+
+	assign err_o = tl_valid & combined_err;
+
+	// Dummy to avoid unused wire warnings
+	wire _unused;
+	assign _unused = &{tl_i};
+
+endmodule

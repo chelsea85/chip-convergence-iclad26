@@ -1,0 +1,10 @@
+The requested strategy is **carry-save** (rewriting 3+ operand additions using 3:2 compressors). 
+
+After analyzing the only modifiable file, `tlul_cmd_intg_chk.v`, we find that there are no dynamic additions (3+ operand or otherwise) in this module. All additions present in the file are constant expressions used for parameter definitions, port widths, and bit-slicing indices, which are evaluated entirely at compile-time by the synthesizer.
+
+Since the preconditions for the carry-save strategy are **NOT** present in the provided file, we make no edits to preserve functional safety and avoid inapplicable transforms.
+
+### Ledger
+- **Transform applied**: None (Preconditions not met)
+- **Exact cone touched**: None
+- **Changed signals**: None

@@ -142,38 +142,75 @@ class EndpointModel(Model):
     {model, prompt, max_output_tokens}; success -> {"text": ...}; on
     retryable errors / 429/5xx back off exponentially. Token usage is logged
     by the service itself to usage_path — we only count calls."""
-    def __init__(self, endpoint: str, model_name: str, max_output_tokens=8192):
+    def __init__(self, endpoint: str, model_name: str, max_output_tokens=8192,
+                 total_deadline_s=900, per_attempt_timeout_s=600, _sleep=None):
         self.endpoint = endpoint.rstrip("/")
         self.model_name = model_name
         self.max_output_tokens = max_output_tokens
+        self.total_deadline_s = total_deadline_s      # monotonic budget/call
+        self.per_attempt_timeout_s = per_attempt_timeout_s
+        self._sleep = _sleep or time.sleep            # injectable for tests
 
     def generate(self, prompt: str, max_retries=6) -> str:
+        """Typed, deadline-bounded. MALFORMED RESPONSES (truncated/invalid-JSON,
+        bad UTF-8, non-mapping body, missing/empty/non-string text) are typed
+        transient failures that retry within budget — never uncaught
+        exceptions (Codex hardening §4.3). Retries obey one monotonic total
+        deadline; the last attempt caps its socket timeout to the remaining
+        budget. Failure reasons never include response content or secrets."""
         import urllib.request, urllib.error
         payload = json.dumps({"model": self.model_name, "prompt": prompt,
                               "max_output_tokens": self.max_output_tokens}
                              ).encode()
+        start = time.monotonic()
         delay, last = 2, "no attempt made"
         for attempt in range(max_retries):
+            remaining = self.total_deadline_s - (time.monotonic() - start)
+            if remaining <= 0:
+                last = f"total deadline {self.total_deadline_s}s exhausted"
+                break
             self.calls += 1
             retryable = False
             try:
                 req = urllib.request.Request(
                     self.endpoint + "/generate", data=payload,
                     headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req, timeout=600) as resp:
-                    body = json.loads(resp.read().decode())
-                if "text" in body and body["text"] is not None:
-                    return body["text"]
-                last = body.get("error", "no text in response")
-                retryable = bool(body.get("retryable")) or \
-                    body.get("provider_status") in (429, 500, 502, 503, 504)
+                timeout = min(self.per_attempt_timeout_s, remaining)
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    raw = resp.read()
+                # ── typed response-shape validation (was uncaught) ──────────
+                try:
+                    body = json.loads(raw.decode("utf-8"))
+                except UnicodeDecodeError:
+                    last, retryable = "invalid UTF-8 in response", True
+                    body = None
+                except json.JSONDecodeError:
+                    last, retryable = "malformed/truncated JSON response", True
+                    body = None
+                if body is not None:
+                    if not isinstance(body, dict):
+                        last, retryable = \
+                            f"response not a JSON object ({type(body).__name__})", True
+                    else:
+                        txt = body.get("text")
+                        if isinstance(txt, str) and txt != "":
+                            return txt
+                        if txt is not None and not isinstance(txt, str):
+                            last, retryable = "response 'text' not a string", True
+                        else:  # missing/null/empty text: default transient,
+                               # honor an explicit retryable=false
+                            last = body.get("error", "empty/missing text in response")
+                            rt = body.get("retryable")
+                            retryable = (rt if isinstance(rt, bool) else True) \
+                                or body.get("provider_status") in (429, 500, 502, 503, 504)
             except urllib.error.HTTPError as e:
                 last = f"HTTP {e.code}"
                 retryable = e.code in (429, 500, 502, 503, 504)
             except (urllib.error.URLError, TimeoutError, OSError) as e:
-                last, retryable = f"{type(e).__name__}: {e}", True
-            if retryable and attempt < max_retries - 1:
-                time.sleep(delay); delay = min(delay * 2, 60); continue
+                last, retryable = f"{type(e).__name__}", True
+            if retryable and attempt < max_retries - 1 and \
+                    (time.monotonic() - start) + delay < self.total_deadline_s:
+                self._sleep(delay); delay = min(delay * 2, 60); continue
             break
         raise RuntimeError(f"model endpoint failed ({last})")
 
@@ -279,6 +316,24 @@ def extract_blocks(text, kind):
                   if d.strip()]
     return blocks
 
+def _rtl_gen_env() -> dict:
+    """Env for the rtl_gen subprocess. The organizer's generator crashes
+    (UnboundLocalError) when PyYAML is absent because its `_load_yaml_minimal`
+    fallback is broken and PyYAML is documented as OPTIONAL. PREFER installed
+    PyYAML; only when it is absent, prepend our subprocess-local, fail-closed
+    `_yaml_compat` shim to PYTHONPATH so the generator's `import yaml` resolves
+    to it. Organizer sources are never modified. (Codex-approved, 2026-07-23.)"""
+    env = dict(os.environ)
+    try:
+        import yaml  # noqa: F401  (same interpreter as the subprocess)
+        return env
+    except ImportError:
+        shim = str(HERE / "_yaml_compat")
+        prev = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = shim + (os.pathsep + prev if prev else "")
+        return env
+
+
 def generate_ip(yaml_text, idx, P: Paths) -> tuple[list, str]:
     """Run the library generator; returns (files, error). The generator IS
     the ground-truth spec validator — its MissingParameter errors are typed
@@ -288,7 +343,8 @@ def generate_ip(yaml_text, idx, P: Paths) -> tuple[list, str]:
     P.out_dir.mkdir(parents=True, exist_ok=True)
     yp = P.tmp_dir/f"spec_{idx}.yaml"; yp.write_text(yaml_text)
     r = subprocess.run([sys.executable, str(P.rtl_gen), "--spec", str(yp),
-                        "--outdir", str(P.out_dir)], capture_output=True, text=True)
+                        "--outdir", str(P.out_dir)], capture_output=True,
+                       text=True, env=_rtl_gen_env())
     files = [l.split("]")[1].strip().split()[0] for l in r.stdout.splitlines()
              if l.startswith("[GEN]")]
     for f in files:                    # known library-bug fixups (see validators)

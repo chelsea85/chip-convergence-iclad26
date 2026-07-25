@@ -1,0 +1,196 @@
+An elegant and highly effective optimization is to transform the Gray-code pointer comparisons into binary-code pointer comparisons. 
+
+### Method Explanation
+In the original design, the empty and full conditions are computed by converting the next binary pointer (`rbinnext`/`wbinnext`) to Gray code combinationally, and then comparing it with the synchronized Gray pointer from the opposite clock domain. This introduces a deep combinational path:
+1. Increment the binary pointer (adder).
+2. Convert the result to Gray code (XOR gates).
+3. Compare the Gray code with the synchronized pointer (XNOR/AND reduction).
+
+Since Gray-to-binary conversion is a bijective mapping, comparing two Gray-coded values is mathematically identical to comparing their binary equivalents. Because the synchronized pointer is registered, we can convert it to binary at the very beginning of the cycle. This completely removes the Gray-code conversion step from the critical path.
+
+Furthermore, we apply **Shannon cofactoring** (`R-late-arrival-shannon`) on the late-arriving control signals (`rinc & ~rempty` and `winc & ~wfull`). We precompute the comparison results for the pointer values `bin`, `bin + 1`, and `bin + 2` in parallel, and then use a fast 2:1 multiplexer to select the correct comparison result.
+
+### Ledger
+- **Transform**: `compare-decode-prefix` (Gray-to-binary pointer comparison with Shannon cofactoring)
+- **Cone**: `rempty_val` and `arempty_val` in `rptr_empty.v`, and `wfull_val` and `awfull_val` in `wptr_full.v`.
+- **Changed signals**:
+  - `rptr_empty.v`:
+    - `rq2_wptr_bin`: new signal, width `ADDRSIZE+1` (5 bits), unsigned.
+    - `rbin_eq_wptr`: new signal, width 1, unsigned.
+    - `rbin_plus1_eq_wptr`: new signal, width 1, unsigned.
+    - `rbin_plus2_eq_wptr`: new signal, width 1, unsigned.
+  - `wptr_full.v`:
+    - `wq2_rptr_mod`: new signal, width `ADDRSIZE+1` (5 bits), unsigned.
+    - `wq2_rptr_mod_bin`: new signal, width `ADDRSIZE+1` (5 bits), unsigned.
+    - `wbin_eq_rptr`: new signal, width 1, unsigned.
+    - `wbin_plus1_eq_rptr`: new signal, width 1, unsigned.
+    - `wbin_plus2_eq_rptr`: new signal, width 1, unsigned.
+
+---
+
+// FILE: rptr_empty.v
+// distributed under the mit license
+// https://opensource.org/licenses/mit-license.php
+
+`timescale 1 ns / 1 ps
+`default_nettype none
+
+module rptr_empty
+
+    #(
+    parameter ADDRSIZE = 4
+    )(
+    input  wire                rclk,
+    input  wire                rrst_n,
+    input  wire                rinc,
+    input  wire [ADDRSIZE  :0] rq2_wptr,
+    output reg                 rempty,
+    output reg                 arempty,
+    output wire [ADDRSIZE-1:0] raddr,
+    output wire [ADDRSIZE  :0] rptr
+    );
+
+    reg  [ADDRSIZE:0] rbin;
+    wire [ADDRSIZE:0] rbinnext;
+    wire              arempty_val, rempty_val;
+
+    //-------------------
+    // GRAYSTYLE2 pointer — register only the binary counter; derive gray
+    // combinationally (rptr == gray(rbin)). Removes ADDRSIZE+1 flip-flops with
+    // identical value sequence and CDC behavior.
+    //-------------------
+    always @(posedge rclk or negedge rrst_n) begin
+
+        if (!rrst_n)
+            rbin <= 0;
+        else
+            rbin <= rbinnext;
+
+    end
+
+    assign rptr = (rbin >> 1) ^ rbin;   // gray(rbin) == previously-registered rptr
+
+    // Memory read-address pointer (okay to use binary to address memory)
+    assign raddr     = rbin[ADDRSIZE-1:0];
+    assign rbinnext  = rbin + ((rinc & ~rempty) ? 1'b1 : 1'b0);
+
+    // Convert synchronized Gray write pointer to binary
+    reg [ADDRSIZE:0] rq2_wptr_bin;
+    integer i;
+    always @(*) begin
+        rq2_wptr_bin[ADDRSIZE] = rq2_wptr[ADDRSIZE];
+        for (i = ADDRSIZE - 1; i >= 0; i = i - 1) begin
+            rq2_wptr_bin[i] = rq2_wptr_bin[i+1] ^ rq2_wptr[i];
+        end
+    end
+
+    // Precompute comparisons with binary write pointer
+    wire rbin_eq_wptr       = (rbin == rq2_wptr_bin);
+    wire rbin_plus1_eq_wptr = ((rbin + 1'b1) == rq2_wptr_bin);
+    wire rbin_plus2_eq_wptr = ((rbin + 2'b10) == rq2_wptr_bin);
+
+    // Shannon cofactor on the late-arriving control signal (rinc & ~rempty)
+    assign rempty_val  = (rinc & ~rempty) ? rbin_plus1_eq_wptr : rbin_eq_wptr;
+    assign arempty_val = (rinc & ~rempty) ? rbin_plus2_eq_wptr : rbin_plus1_eq_wptr;
+
+    always @ (posedge rclk or negedge rrst_n) begin
+
+        if (!rrst_n) begin
+            arempty <= 1'b0;
+            rempty <= 1'b1;
+        end
+        else begin
+            arempty <= arempty_val;
+            rempty <= rempty_val;
+        end
+
+    end
+
+endmodule
+
+`resetall
+
+
+// FILE: wptr_full.v
+// distributed under the mit license
+// https://opensource.org/licenses/mit-license.php
+
+`timescale 1 ns / 1 ps
+`default_nettype none
+
+module wptr_full
+
+	#(
+		parameter ADDRSIZE = 4
+	)(
+		input  wire                wclk,
+		input  wire                wrst_n,
+		input  wire                winc,
+		input  wire [ADDRSIZE  :0] wq2_rptr,
+		output reg                 wfull,
+		output reg                 awfull,
+		output wire [ADDRSIZE-1:0] waddr,
+		output wire [ADDRSIZE  :0] wptr
+	);
+
+    reg  [ADDRSIZE:0] wbin;
+    wire [ADDRSIZE:0] wbinnext;
+    wire              awfull_val, wfull_val;
+
+	// GRAYSTYLE2 pointer — register only the binary counter.
+	// The gray pointer is a pure function of the registered binary value
+	// (wptr == gray(wbin)), so storing it separately is redundant. Deriving it
+	// combinationally removes ADDRSIZE+1 flip-flops while keeping the exact same
+	// value sequence (1-bit-change CDC property preserved: wbin is stable between
+	// wclk edges, so wptr presented to the synchronizer is stable too).
+	always @(posedge wclk or negedge wrst_n) begin
+
+		if (!wrst_n)
+			wbin <= 0;
+		else
+			wbin <= wbinnext;
+
+	end
+
+	assign wptr = (wbin >> 1) ^ wbin;   // gray(wbin) == previously-registered wptr
+
+    // Memory write-address pointer (okay to use binary to address memory)
+    assign waddr = wbin[ADDRSIZE-1:0];
+    assign wbinnext  = wbin + ((winc & ~wfull) ? 1'b1 : 1'b0);
+
+    // Modify the synchronized Gray read pointer for full comparison
+    wire [ADDRSIZE:0] wq2_rptr_mod = {~wq2_rptr[ADDRSIZE:ADDRSIZE-1], wq2_rptr[ADDRSIZE-2:0]};
+
+    // Convert modified Gray read pointer to binary
+    reg [ADDRSIZE:0] wq2_rptr_mod_bin;
+    integer j;
+    always @(*) begin
+        wq2_rptr_mod_bin[ADDRSIZE] = wq2_rptr_mod[ADDRSIZE];
+        for (j = ADDRSIZE - 1; j >= 0; j = j - 1) begin
+            wq2_rptr_mod_bin[j] = wq2_rptr_mod_bin[j+1] ^ wq2_rptr_mod[j];
+        end
+    end
+
+    // Precompute comparisons with binary read pointer
+    wire wbin_eq_rptr       = (wbin == wq2_rptr_mod_bin);
+    wire wbin_plus1_eq_rptr = ((wbin + 1'b1) == wq2_rptr_mod_bin);
+    wire wbin_plus2_eq_rptr = ((wbin + 2'b10) == wq2_rptr_mod_bin);
+
+    // Shannon cofactor on the late-arriving control signal (winc & ~wfull)
+    assign wfull_val  = (winc & ~wfull) ? wbin_plus1_eq_rptr : wbin_eq_rptr;
+    assign awfull_val = (winc & ~wfull) ? wbin_plus2_eq_rptr : wbin_plus1_eq_rptr;
+
+     always @(posedge wclk or negedge wrst_n) begin
+
+        if (!wrst_n) begin
+            awfull <= 1'b0;
+            wfull  <= 1'b0;
+        end else begin
+            awfull <= awfull_val;
+            wfull  <= wfull_val;
+        end
+    end
+
+endmodule
+
+`resetall

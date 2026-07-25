@@ -46,15 +46,35 @@ appended `pya` code was always meant to run.
 Unaffected — the agent never calls KLayout. It reads the layout script, appends
 the via-bar `pya` snippet, and writes `output_path`.
 
-## Safety / fail-closed behavior
+## Safety / fail-closed behavior (stated precisely — Codex review 2026-07-23)
 
-- The via-bar transform is **self-guarding at execution time**: `_asu_bar_pair`
-  only reshapes vias whose perpendicular dimension is smaller than the interacting
-  metal's (the flagged wide-metal/min-via pattern). A block with no such landing
-  is a **no-op** (0 bars, geometry unchanged) → never worse than the original on
-  the eligibility floor.
+- `_asu_bar_pair` only reshapes vias whose perpendicular dimension is smaller than
+  the interacting metal's. A block with no such landing selects **0 bars** and
+  leaves the rendered geometry unchanged (the per-layer `flatten` still executes,
+  so it is a *geometric* no-op, not a literal structural one).
+- **No-op is an ELIGIBLE FALLBACK, not FVR 1.0.** Eligibility requires the emitted
+  script to render, DRC, and pass `connectivity_preserved` — it does NOT require
+  improvement. But FVR = the evaluator's *fresh* DRC total ÷ the *supplied
+  reference-report* total, and those are not count-identical: the public blocks'
+  no-op FVR is **~1.25–1.32**, not 1.0. "No-op" describes behavior, not a score.
+- **Net win, not "never worse."** The transform was render/DRC-tested as a net
+  scoring win on all five public blocks; it is not a "cannot make anything worse"
+  transform (manifests show some `V4.AUX.1`/`V5.AUX.1` appear while the total
+  falls).
 - If the input does not look like a `pya` layout builder, the original is emitted
-  untouched.
+  untouched (a false negative here is safe).
+
+## Connectivity evidence — labeled precisely
+
+- `official_connectivity: true` is exactly what the organizer's **source-parser**
+  connectivity checker reports; it parses explicit shape/instance declarations and
+  does not model the appended runtime `pya.Region` mutations, so it largely
+  reflects the original source-level topology.
+- `rendered_connectivity_proxy: pass` is our own component-count / conducting-area
+  **smoke check** (`asu_work/agent/verify.py`) — useful corroboration that catches
+  gross deletion/opens, but a 2D union/component count is a *proxy*, not layer-aware
+  net extraction/equivalence. We avoid the unqualified phrase "rendered connectivity
+  validated."
 - `usage_path` write is best-effort (the runner mounts the agent `--read-only`);
   a failed write never crashes the run.
 

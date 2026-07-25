@@ -23,6 +23,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import IPS
+from .cone_templates import catalog_text as _cone_catalog_text
+
+# audited template catalog for the small-cone-arrival-template rung (each
+# entry exhaustively verified by ppa/cone_templates.verify_all)
+_cone_catalog = _cone_catalog_text()
 
 # ── strategy ladder (v0..v6, axis-tagged) ─────────────────────────────────────
 LADDER = [
@@ -44,8 +49,8 @@ LADDER = [
                    "wide encoders, rebalanced mux trees."),
     dict(key="share-resources", axis="area",
          directive="Share mutually-exclusive arithmetic resources; derive "
-                   "redundant +/-1 or shifted values from one computation; "
-                   "re-encode FSMs appropriately for their state count."),
+                   "redundant +/-1 or shifted values from one computation. "
+                   "Keep every register and FSM encoding exactly as-is."),
     dict(key="arith-arch", axis="perf",
          directive="Swap the architecture of ONE critical-path arithmetic "
                    "operator (adder tree style: Kogge-Stone / Brent-Kung / "
@@ -55,6 +60,67 @@ LADDER = [
          directive="Reduce switching activity: operand isolation for unused "
                    "units, enable-gated registers, replace physically "
                    "shifting register banks with pointer-addressed buffers."),
+    # ── timing-targeted rungs v2 (2026-07-23, Codex expanded literature
+    #    review `NVIDIA_TIMING_STRATEGY_EXPANDED_LITERATURE_REVIEW.md` §5/§14:
+    #    the approved DAC-ready five). All cycle-exact, register-preserving,
+    #    combinational-only — the LEC-provable class. v1's fanout-duplicate
+    #    and arrival-aware-restructure were REJECTED by the review (generic
+    #    duplication needs load evidence; freehand arrival reordering is a
+    #    synthesis algorithm, not a prompt) and are removed. ──
+    dict(key="sum-cluster-expose", axis="perf",
+         directive="Find exactly ONE critical chain of two or more additions "
+                   "separated only by a one-use combinational intermediate. "
+                   "Inline that intermediate so synthesis sees one "
+                   "fixed-width multi-operand sum (letting it build a "
+                   "carry-save tree with a single final carry-propagate "
+                   "adder). Preserve signedness and modulo width; list every "
+                   "original and resulting width. Do NOT flatten across an "
+                   "observable truncation, carry, comparison, selector, "
+                   "address, saturation point, or a second consumer, and do "
+                   "NOT manually implement full-adder sum/carry bits."),
+    dict(key="xor-depth-resynthesize", axis="perf",
+         directive="Optimize exactly ONE strictly linear GF(2) cone "
+                   "(XOR/XNOR/NOT/constants only — no AND, OR, carry, mux, "
+                   "compare, or control). BEFORE changing RTL, list each "
+                   "output bit as the exact XOR-support set of input bits "
+                   "plus affine constant; the rewritten cone must have "
+                   "IDENTICAL support sets. Use arrival-aware XOR trees and "
+                   "share partial XORs only where sharing does not increase "
+                   "the critical output's depth. Bit order and widths "
+                   "untouched."),
+    dict(key="late-input-cofactor", axis="perf",
+         directive="Apply cofactor expansion to exactly ONE bounded "
+                   "combinational cone with ONE identified late-arriving "
+                   "1-bit control (from the timing-path report). Derive the "
+                   "control=0 and control=1 functions from the original "
+                   "expression, compute both early, and use the late control "
+                   "only at the cone output. Keep the duplicated cone small; "
+                   "preserve priority, defaults, X behavior, and widths. Do "
+                   "not convert if/case/?: into a different semantic form."),
+    dict(key="priority-prefix-select", axis="perf",
+         directive="Rewrite ONE wide priority chain using an exact "
+                   "prefix-priority form: each grant = its own condition AND "
+                   "no earlier condition. Preserve the original winner for "
+                   "EVERY simultaneous-condition combination and the "
+                   "no-match default. Do NOT assume one-hotness, full "
+                   "coverage, or two-state inputs."),
+    dict(key="compare-decode-prefix", axis="perf",
+         directive="Optimize ONE critical wide comparison, range check, or "
+                   "address decode. State the relation, signedness, width, "
+                   "constants and inclusive/exclusive boundaries, then use "
+                   "an exact prefix comparison or high-bit aligned-range "
+                   "form. Remove lower bits ONLY when the constants prove "
+                   "they cannot affect the result. Preserve == versus === "
+                   "and all defaults."),
+    dict(key="small-cone-arrival-template", axis="perf",
+         directive="Select exactly ONE combinational Boolean cone with at "
+                   "most five scalar inputs on the critical path. Reproduce "
+                   "its complete truth behavior from the source, identify "
+                   "the LATE input from the timing-path report, then apply "
+                   "ONE template from the verified set below — mapping your "
+                   "cone's signals onto it. Do NOT invent a new network "
+                   "shape; if no template matches, make no edit.\n"
+                   + _cone_catalog),
 ]
 
 
@@ -76,6 +142,15 @@ _HARD_RULES = """HARD CONSTRAINTS (violations are auto-rejected by tooling):
   acceptance.
 - Do NOT change any module's port list, name, or parameters.
 - Do NOT add or remove pipeline stages / change cycle-level latency{latency_note}.
+- Do NOT re-encode FSM state or merge/split/rename registers: equivalence is
+  certified register-to-register, so register-structure changes can never be
+  proven and will never ship, no matter how good their PPA looks.
+- ONE cone / ONE named transform per proposal. Begin your answer with a short
+  ledger: which transform you applied, the exact cone touched, and every
+  changed signal's original->new width and signedness (for XOR cones: the
+  per-output-bit XOR support sets, which must be identical before and after).
+- If the strategy's preconditions are NOT present in the provided files, say
+  so and make NO edit rather than forcing an inapplicable transform.
 - Synthesizable Verilog-2001/2005 only; no initial blocks, no latches.
 - Return COMPLETE file contents for every file you modify (and only those).{fence}"""
 
@@ -94,6 +169,43 @@ FENCE = {
                          "aes_sbox_canright_masked"),
         "forbid_substr": ("SecSBoxImpl =", "SecSBoxImpl=", "SecSBoxImpl  ="),
     },
+    # kmac (2026-07-24): the Keccak core is the DOM-MASKED (side-channel
+    # protected) implementation. XOR re-sharing there can be LOGICALLY
+    # equivalent yet merge the two shares and destroy the countermeasure —
+    # LEC proves logic, not masking. Same principle as the aes S-box fence:
+    # deleting a security property is not an RTL optimization.
+    "kmac": {
+        "prompt": ("\n- SCOPE FENCE (kmac): Do NOT modify the masked Keccak "
+                   "core: keccak_2share.v, keccak_round.v, or any prim_dom_* "
+                   "file. Their share-separation structure is a side-channel "
+                   "countermeasure; re-sharing XORs across shares breaks it "
+                   "even when logically equivalent. Optimize the application "
+                   "interface, TL-UL logic, padding, and FIFOs ONLY."),
+        "forbid_files": ("keccak_2share", "keccak_round", "prim_dom_and"),
+        "forbid_substr": (),
+    },
+    # NVDLA (2026-07-24 buildout): mandatory first-campaign fence. The
+    # measured worst paths are reset-distribution artifacts, and the first
+    # campaign is deliberately restricted to one ordinary datapath leaf.
+    # Path checks are tooling-enforced even when a caller omits --fence.
+    "nvdla": {
+        "mandatory": True,
+        "prompt": (
+            "\n- SCOPE FENCE (nvdla, mandatory): Edit exactly the selected "
+            "ordinary datapath leaf. Do NOT modify reset/synchronizer/CDC or "
+            "clock-and-reset (car) logic; RAM/vlibs/include/build sources; "
+            "partition tops; or APB/CSB/NOCIF/MCIF/CVIF bus interfaces. "
+            "Do not chase reset-distribution timing paths."),
+        "forbid_files": (),
+        "forbid_substr": (),
+        "forbid_path_regex": (
+            r"(?i)(?:^|/)(?:car|vlibs|rams|include)(?:/|$)",
+            r"(?i)(?:^|/)(?:apb2csb|csb_master|nocif)(?:/|$)",
+            r"(?i)(?:^|/)[^/]*(?:reset|cdc|ssync|sync\d*)[^/]*\.v$",
+            r"(?i)(?:^|/)top/NV_NVDLA_partition_[acmop]\.v$",
+            r"(?i)(?:^|/)[^/]*(?:mcif|cvif|dmaif|csb|apb2csb)[^/]*\.v$",
+        ),
+    },
 }
 
 
@@ -111,8 +223,11 @@ def fence_violation(ip: str, files: dict) -> str | None:
         return None
     for rel, text in files.items():
         stem = rel.rsplit("/", 1)[-1]
+        for pat in f.get("forbid_path_regex", ()):
+            if re.search(pat, rel):
+                return f"fence: forbidden path {rel}"
         if any(bad in stem for bad in f.get("forbid_files", ())):
-            return f"fence: modified S-box impl file {stem}"
+            return f"fence: modified protected implementation file {stem}"
         for sub in f.get("forbid_substr", ()):
             if sub not in text:
                 continue
@@ -217,7 +332,9 @@ def build_prompt(ctx: PromptContext, strategy: dict) -> str:
         hard_rules=_HARD_RULES.format(
             latency_note=latency_note,
             fence=(FENCE.get(ctx.ip, {}).get("prompt", "")
-                   if ctx.fence else "")),
+                   if (ctx.fence
+                       or FENCE.get(ctx.ip, {}).get("mandatory", False))
+                   else "")),
         dossier=ctx.dossier, playbook=ctx.playbook_block, ip=ctx.ip,
         area=ctx.ppa.get("area"), cells=ctx.ppa.get("cells"),
         setup=ctx.ppa.get("setup"), period=period or "?",

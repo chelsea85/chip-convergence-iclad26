@@ -1,0 +1,5 @@
+The preconditions for the **sum-cluster-expose** strategy (which requires a critical chain of two or more additions separated only by a one-use combinational intermediate) are **NOT present** in the provided file `prim_subreg_shadow.v`. 
+
+`prim_subreg_shadow.v` implements shadow register storage and update/storage error checking using bitwise inversions (`~`) and multiplexing, with no arithmetic additions or subtractions on any signal paths.
+
+Therefore, in accordance with the hard constraints, no edits have been made.

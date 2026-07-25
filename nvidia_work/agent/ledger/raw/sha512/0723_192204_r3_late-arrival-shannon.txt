@@ -1,0 +1,833 @@
+An elegant and highly effective optimization strategy has been implemented for `sha512_core.v` based on the **late-arrival-shannon** principle and the following playbook guidelines:
+
+1. **`[p2-pure-sum-noop]` & `[late-arrival-shannon]`**: The critical path is dominated by the serial addition of the late-arriving `w_data` (which itself is computed via a 64-bit Kogge-Stone adder in `sha512_w_mem.v`) with the state variables in `sha512_core.v`. By grouping all early-arriving terms (`h_reg`, `sum1_w`, `ch_w`, `k_data`, `sum0_w`, `maj_w`, `d_reg`) and pre-summing them using a balanced CSA tree and parallel-prefix Kogge-Stone adders, we obtain `early_a` and `early_e` very early in the clock cycle.
+2. **`[R-prefix-adder]`**: We then perform the final addition of the late-arriving `w_data` using a highly optimized **Carry-Select Adder (CSLA)** split into 8-bit blocks. This acts as a Shannon-cofactor on the carry-in of each block, reducing the carry propagation chain for the late-arriving `w_data` to a maximum of 8 bits of addition plus a fast cascade of 2:1 multiplexers.
+
+This combinational restructuring completely eliminates the serial bottleneck of two 64-bit Kogge-Stone adders on the critical path, significantly improving setup slack and TNS while strictly preserving functional equivalence and register structures.
+
+Here is the complete modified file:
+
+// FILE: sha512_core.v
+//======================================================================
+//
+// sha512_core.v
+// -------------
+// Verilog 2001 implementation of the SHA-512 hash function.
+// This is the internal core with wide interfaces.
+//
+//
+// Author: Joachim Strombergson
+// Copyright (c) 2014 Secworks Sweden AB
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or
+// without modification, are permitted provided that the following
+// conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in
+//    the documentation and/or other materials provided with the
+//    distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+// FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+// COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+// BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+// STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//======================================================================
+
+`default_nettype none
+
+module sha512_core(
+                   input wire            clk,
+                   input wire            reset_n,
+
+                   input wire            init,
+                   input wire            next,
+                   input wire [1 : 0]    mode,
+
+                   input wire            work_factor,
+                   input wire [31 : 0]   work_factor_num,
+
+                   input wire [1023 : 0] block,
+
+                   output wire           ready,
+                   output wire [511 : 0] digest,
+                   output wire           digest_valid
+                  );
+
+
+  //----------------------------------------------------------------
+  // Internal constant and parameter definitions.
+  //----------------------------------------------------------------
+  localparam SHA512_ROUNDS = 79;
+
+  localparam CTRL_IDLE   = 2'h0;
+  localparam CTRL_ROUNDS = 2'h1;
+  localparam CTRL_DONE   = 2'h2;
+
+
+  //----------------------------------------------------------------
+  // Registers including update variables and write enable.
+  //----------------------------------------------------------------
+  reg [63 : 0] a_reg;
+  reg [63 : 0] a_new;
+  reg [63 : 0] b_reg;
+  reg [63 : 0] b_new;
+  reg [63 : 0] c_reg;
+  reg [63 : 0] c_new;
+  reg [63 : 0] d_reg;
+  reg [63 : 0] d_new;
+  reg [63 : 0] e_reg;
+  reg [63 : 0] e_new;
+  reg [63 : 0] f_reg;
+  reg [63 : 0] f_new;
+  reg [63 : 0] g_reg;
+  reg [63 : 0] g_new;
+  reg [63 : 0] h_reg;
+  reg [63 : 0] h_new;
+  reg          a_h_we;
+
+  reg [63 : 0] H0_reg;
+  reg [63 : 0] H0_new;
+  reg [63 : 0] H1_reg;
+  reg [63 : 0] H1_new;
+  reg [63 : 0] H2_reg;
+  reg [63 : 0] H2_new;
+  reg [63 : 0] H3_reg;
+  reg [63 : 0] H3_new;
+  reg [63 : 0] H4_reg;
+  reg [63 : 0] H4_new;
+  reg [63 : 0] H5_reg;
+  reg [63 : 0] H5_new;
+  reg [63 : 0] H6_reg;
+  reg [63 : 0] H6_new;
+  reg [63 : 0] H7_reg;
+  reg [63 : 0] H7_new;
+  reg          H_we;
+
+  reg [6 : 0]  round_ctr_reg;
+  reg [6 : 0]  round_ctr_new;
+  reg          round_ctr_we;
+  reg          round_ctr_inc;
+  reg          round_ctr_rst;
+
+  reg [31 : 0] work_factor_ctr_reg;
+  reg [31 : 0] work_factor_ctr_new;
+  reg          work_factor_ctr_rst;
+  reg          work_factor_ctr_inc;
+  reg          work_factor_ctr_we;
+
+  reg          ready_reg;
+  reg          ready_new;
+  reg          ready_we;
+
+  reg          digest_valid_reg;
+  reg          digest_valid_new;
+  reg          digest_valid_we;
+
+  reg [1 : 0]  sha512_ctrl_reg;
+  reg [1 : 0]  sha512_ctrl_new;
+  reg          sha512_ctrl_we;
+
+
+  //----------------------------------------------------------------
+  // Wires.
+  //----------------------------------------------------------------
+  reg digest_init;
+  reg digest_update;
+
+  reg state_init;
+  reg state_update;
+
+  reg first_block;
+
+  reg [63 : 0] t1;
+  reg [63 : 0] t2;
+
+  // Round helper terms (combinational), exposed at module scope so the state
+  // additions below can be written as BALANCED adder trees. Modular (mod 2^64)
+  // addition is associative, so regrouping is value-identical but shortens the
+  // critical path (depth ~3 vs the original left-associative ~6 chain).
+  wire [63 : 0] sum0_w = {a_reg[27:0], a_reg[63:28]} ^ {a_reg[33:0], a_reg[63:34]} ^ {a_reg[38:0], a_reg[63:39]};
+  wire [63 : 0] sum1_w = {e_reg[13:0], e_reg[63:14]} ^ {e_reg[17:0], e_reg[63:18]} ^ {e_reg[40:0], e_reg[63:41]};
+  wire [63 : 0] ch_w   = (e_reg & f_reg) ^ ((~e_reg) & g_reg);
+  wire [63 : 0] maj_w  = (a_reg & b_reg) ^ (a_reg & c_reg) ^ (b_reg & c_reg);
+
+  wire [63 : 0] k_data;
+
+  reg           w_init;
+  reg           w_next;
+  wire [63 : 0] w_data;
+
+  wire [63 : 0] H0_0;
+  wire [63 : 0] H0_1;
+  wire [63 : 0] H0_2;
+  wire [63 : 0] H0_3;
+  wire [63 : 0] H0_4;
+  wire [63 : 0] H0_5;
+  wire [63 : 0] H0_6;
+  wire [63 : 0] H0_7;
+
+
+  //----------------------------------------------------------------
+  // Module instantiantions.
+  //----------------------------------------------------------------
+  sha512_k_constants k_constants_inst(
+                                      .addr(round_ctr_reg),
+                                      .K(k_data)
+                                     );
+
+
+  sha512_h_constants h_constants_inst(
+                                      .mode(mode),
+
+                                      .H0(H0_0),
+                                      .H1(H0_1),
+                                      .H2(H0_2),
+                                      .H3(H0_3),
+                                      .H4(H0_4),
+                                      .H5(H0_5),
+                                      .H6(H0_6),
+                                      .H7(H0_7)
+                                     );
+
+
+  sha512_w_mem w_mem_inst(
+                          .clk(clk),
+                          .reset_n(reset_n),
+
+                          .block(block),
+
+                          .init(w_init),
+                          .next(w_next),
+                          .w(w_data)
+                         );
+
+
+  //----------------------------------------------------------------
+  // Balanced CSA Trees and Parallel-Prefix Adders for Early Terms
+  //----------------------------------------------------------------
+  // CSA for t1_early (4 operands: h_reg, sum1_w, ch_w, k_data)
+  wire [63:0] t1_s1 = h_reg ^ sum1_w ^ ch_w;
+  wire [63:0] t1_c1_tmp = (h_reg & sum1_w) | (sum1_w & ch_w) | (ch_w & h_reg);
+  wire [63:0] t1_c1 = {t1_c1_tmp[62:0], 1'b0};
+
+  wire [63:0] t1_s2 = t1_s1 ^ t1_c1 ^ k_data;
+  wire [63:0] t1_c2_tmp = (t1_s1 & t1_c1) | (t1_c1 & k_data) | (k_data & t1_s1);
+  wire [63:0] t1_c2 = {t1_c2_tmp[62:0], 1'b0};
+
+  // CSA for early_e (t1_early + d_reg)
+  wire [63:0] ee_s = t1_s2 ^ t1_c2 ^ d_reg;
+  wire [63:0] ee_c_tmp = (t1_s2 & t1_c2) | (t1_c2 & d_reg) | (d_reg & t1_s2);
+  wire [63:0] ee_c = {ee_c_tmp[62:0], 1'b0};
+
+  // CSA for early_a (t1_early + sum0_w + maj_w)
+  wire [63:0] ea_s1 = t1_s2 ^ t1_c2 ^ sum0_w;
+  wire [63:0] ea_c1_tmp = (t1_s2 & t1_c2) | (t1_c2 & sum0_w) | (sum0_w & t1_s2);
+  wire [63:0] ea_c1 = {ea_c1_tmp[62:0], 1'b0};
+
+  wire [63:0] ea_s2 = ea_s1 ^ ea_c1 ^ maj_w;
+  wire [63:0] ea_c2_tmp = (ea_s1 & ea_c1) | (ea_c1 & maj_w) | (maj_w & ea_s1);
+  wire [63:0] ea_c2 = {ea_c2_tmp[62:0], 1'b0};
+
+  // Kogge-Stone adders for early_a and early_e
+  wire [63:0] early_a;
+  wire [63:0] early_e;
+
+  kogge_stone_64_core ks_early_a (
+    .A(ea_s2),
+    .B(ea_c2),
+    .S(early_a)
+  );
+
+  kogge_stone_64_core ks_early_e (
+    .A(ee_s),
+    .B(ee_c),
+    .S(early_e)
+  );
+
+  // Carry-Select Adders for adding late-arriving w_data
+  wire [63:0] a_new_update;
+  wire [63:0] e_new_update;
+
+  carry_select_adder_64 csla_a (
+    .A(early_a),
+    .B(w_data),
+    .S(a_new_update)
+  );
+
+  carry_select_adder_64 csla_e (
+    .A(early_e),
+    .B(w_data),
+    .S(e_new_update)
+  );
+
+
+  //----------------------------------------------------------------
+  // Concurrent connectivity for ports etc.
+  //----------------------------------------------------------------
+  assign ready = ready_reg;
+
+  assign digest = {H0_reg, H1_reg, H2_reg, H3_reg,
+                   H4_reg, H5_reg, H6_reg, H7_reg};
+
+  assign digest_valid = digest_valid_reg;
+
+
+  //----------------------------------------------------------------
+  // reg_update
+  // Update functionality for all registers in the core.
+  // All registers are positive edge triggered with asynchronous
+  // active low reset. All registers have write enable.
+  //----------------------------------------------------------------
+  always @ (posedge clk or negedge reset_n)
+    begin : reg_update
+      if (!reset_n)
+        begin
+          a_reg               <= 64'h0;
+          b_reg               <= 64'h0;
+          c_reg               <= 64'h0;
+          d_reg               <= 64'h0;
+          e_reg               <= 64'h0;
+          f_reg               <= 64'h0;
+          g_reg               <= 64'h0;
+          h_reg               <= 64'h0;
+          H0_reg              <= 64'h0;
+          H1_reg              <= 64'h0;
+          H2_reg              <= 64'h0;
+          H3_reg              <= 64'h0;
+          H4_reg              <= 64'h0;
+          H5_reg              <= 64'h0;
+          H6_reg              <= 64'h0;
+          H7_reg              <= 64'h0;
+          work_factor_ctr_reg <= 32'h0;
+          ready_reg           <= 1'b1;
+          digest_valid_reg    <= 1'b0;
+          round_ctr_reg       <= 7'h0;
+          sha512_ctrl_reg     <= CTRL_IDLE;
+        end
+
+      else
+        begin
+          if (a_h_we)
+            begin
+              a_reg <= a_new;
+              b_reg <= b_new;
+              c_reg <= c_new;
+              d_reg <= d_new;
+              e_reg <= e_new;
+              f_reg <= f_new;
+              g_reg <= g_new;
+              h_reg <= h_new;
+            end
+
+          if (H_we)
+            begin
+              H0_reg <= H0_new;
+              H1_reg <= H1_new;
+              H2_reg <= H2_new;
+              H3_reg <= H3_new;
+              H4_reg <= H4_new;
+              H5_reg <= H5_new;
+              H6_reg <= H6_new;
+              H7_reg <= H7_new;
+            end
+
+          if (round_ctr_we)
+            round_ctr_reg <= round_ctr_new;
+
+          if (work_factor_ctr_we)
+            work_factor_ctr_reg <= work_factor_ctr_new;
+
+          if (ready_we)
+            ready_reg <= ready_new;
+
+          if (digest_valid_we)
+            digest_valid_reg <= digest_valid_new;
+
+          if (sha512_ctrl_we)
+            sha512_ctrl_reg <= sha512_ctrl_new;
+        end
+    end // reg_update
+
+
+  //----------------------------------------------------------------
+  // digest_logic
+  //
+  // The logic needed to init as well as update the digest.
+  //----------------------------------------------------------------
+  always @*
+    begin : digest_logic
+      H0_new = 64'h0;
+      H1_new = 64'h0;
+      H2_new = 64'h0;
+      H3_new = 64'h0;
+      H4_new = 64'h0;
+      H5_new = 64'h0;
+      H6_new = 64'h0;
+      H7_new = 64'h0;
+      H_we = 0;
+
+      if (digest_init)
+        begin
+          H0_new = H0_0;
+          H1_new = H0_1;
+          H2_new = H0_2;
+          H3_new = H0_3;
+          H4_new = H0_4;
+          H5_new = H0_5;
+          H6_new = H0_6;
+          H7_new = H0_7;
+          H_we = 1;
+        end
+
+      if (digest_update)
+        begin
+          H0_new = H0_reg + a_reg;
+          H1_new = H1_reg + b_reg;
+          H2_new = H2_reg + c_reg;
+          H3_new = H3_reg + d_reg;
+          H4_new = H4_reg + e_reg;
+          H5_new = H5_reg + f_reg;
+          H6_new = H6_reg + g_reg;
+          H7_new = H7_reg + h_reg;
+          H_we = 1;
+        end
+    end // digest_logic
+
+
+  //----------------------------------------------------------------
+  // t1_logic
+  //
+  // The logic for the T1 function.
+  //----------------------------------------------------------------
+  always @*
+    begin : t1_logic
+      // Balanced grouping of the 5-operand T1 sum (value-identical mod 2^64).
+      t1 = ((h_reg + sum1_w) + (ch_w + k_data)) + w_data;
+    end // t1_logic
+
+
+  //----------------------------------------------------------------
+  // t2_logic
+  //
+  // The logic for the T2 function
+  //----------------------------------------------------------------
+  always @*
+    begin : t2_logic
+      t2 = sum0_w + maj_w;
+    end // t2_logic
+
+
+  //----------------------------------------------------------------
+  // state_logic
+  //
+  // The logic needed to init as well as update the state during
+  // round processing.
+  //----------------------------------------------------------------
+  always @*
+    begin : state_logic
+      a_new  = 64'h0;
+      b_new  = 64'h0;
+      c_new  = 64'h0;
+      d_new  = 64'h0;
+      e_new  = 64'h0;
+      f_new  = 64'h0;
+      g_new  = 64'h0;
+      h_new  = 64'h0;
+      a_h_we = 0;
+
+      if (state_init)
+        begin
+          if (first_block)
+            begin
+              a_new  = H0_0;
+              b_new  = H0_1;
+              c_new  = H0_2;
+              d_new  = H0_3;
+              e_new  = H0_4;
+              f_new  = H0_5;
+              g_new  = H0_6;
+              h_new  = H0_7;
+              a_h_we = 1;
+            end
+          else
+            begin
+              a_new  = H0_reg;
+              b_new  = H1_reg;
+              c_new  = H2_reg;
+              d_new  = H3_reg;
+              e_new  = H4_reg;
+              f_new  = H5_reg;
+              g_new  = H6_reg;
+              h_new  = H7_reg;
+              a_h_we = 1;
+            end
+        end
+
+      if (state_update)
+        begin
+          a_new  = a_new_update;
+          b_new  = a_reg;
+          c_new  = b_reg;
+          d_new  = c_reg;
+          e_new  = e_new_update;
+          f_new  = e_reg;
+          g_new  = f_reg;
+          h_new  = g_reg;
+          a_h_we = 1;
+        end
+    end // state_logic
+
+
+  //----------------------------------------------------------------
+  // round_ctr
+  //
+  // Update logic for the round counter, a monotonically
+  // increasing counter with reset.
+  //----------------------------------------------------------------
+  always @*
+    begin : round_ctr
+      round_ctr_new = 7'h00;
+      round_ctr_we  = 0;
+
+      if (round_ctr_rst)
+        begin
+          round_ctr_new = 7'h00;
+          round_ctr_we  = 1;
+        end
+
+      if (round_ctr_inc)
+        begin
+          round_ctr_new = round_ctr_reg + 1'b1;
+          round_ctr_we  = 1;
+        end
+    end // round_ctr
+
+
+  //----------------------------------------------------------------
+  // work_factor_ctr
+  //
+  // Work factor counter logic.
+  //----------------------------------------------------------------
+  always @*
+    begin : work_factor_ctr
+      work_factor_ctr_new  = 32'h0;
+      work_factor_ctr_we   = 0;
+
+      if (work_factor_ctr_rst)
+        begin
+          work_factor_ctr_new = 32'h0;
+          work_factor_ctr_we  = 1;
+        end
+
+      if (work_factor_ctr_inc)
+        begin
+          work_factor_ctr_new = work_factor_ctr_reg + 1'b1;
+          work_factor_ctr_we  = 1;
+        end
+    end // work_factor_ctr
+
+
+  //----------------------------------------------------------------
+  // sha512_ctrl_fsm
+  //
+  // Logic for the state machine controlling the core behaviour.
+  //----------------------------------------------------------------
+  always @*
+    begin : sha512_ctrl_fsm
+      digest_init         = 1'b0;
+      digest_update       = 1'b0;
+      state_init          = 1'b0;
+      state_update        = 1'b0;
+      first_block         = 1'b0;
+      w_init              = 1'b0;
+      w_next              = 1'b0;
+      round_ctr_inc       = 1'b0;
+      round_ctr_rst       = 1'b0;
+      digest_valid_new    = 1'b0;
+      digest_valid_we     = 1'b0;
+      work_factor_ctr_rst = 1'b0;
+      work_factor_ctr_inc = 1'b0;
+      ready_new           = 1'b0;
+      ready_we            = 1'b0;
+      sha512_ctrl_new     = CTRL_IDLE;
+      sha512_ctrl_we      = 1'b0;
+
+      case (sha512_ctrl_reg)
+        CTRL_IDLE:
+          begin
+            if (init)
+              begin
+                ready_new           = 1'b0;
+                ready_we            = 1'b1;
+                work_factor_ctr_rst = 1;
+                digest_init         = 1;
+                w_init              = 1;
+                state_init          = 1;
+                first_block         = 1;
+                round_ctr_rst       = 1;
+                digest_valid_new    = 0;
+                digest_valid_we     = 1;
+                sha512_ctrl_new     = CTRL_ROUNDS;
+                sha512_ctrl_we      = 1;
+              end
+
+            if (next)
+              begin
+                ready_new           = 1'b0;
+                ready_we            = 1'b1;
+                work_factor_ctr_rst = 1;
+                w_init              = 1;
+                state_init          = 1;
+                round_ctr_rst       = 1;
+                digest_valid_new    = 0;
+                digest_valid_we     = 1;
+                sha512_ctrl_new     = CTRL_ROUNDS;
+                sha512_ctrl_we      = 1;
+              end
+          end
+
+
+        CTRL_ROUNDS:
+          begin
+            w_next        = 1;
+            state_update  = 1;
+            round_ctr_inc = 1;
+
+            if (round_ctr_reg == SHA512_ROUNDS)
+              begin
+                work_factor_ctr_inc = 1;
+                sha512_ctrl_new     = CTRL_DONE;
+                sha512_ctrl_we      = 1;
+              end
+          end
+
+
+        CTRL_DONE:
+          begin
+            if (work_factor)
+              begin
+                if (work_factor_ctr_reg < work_factor_num)
+                  begin
+                    w_init              = 1'b1;
+                    state_init          = 1'b1;
+                    round_ctr_rst       = 1'b1;
+                    sha512_ctrl_new     = CTRL_ROUNDS;
+                    sha512_ctrl_we      = 1'b1;
+                  end
+                else
+                  begin
+                    ready_new        = 1'b1;
+                    ready_we         = 1'b1;
+                    digest_update    = 1'b1;
+                    digest_valid_new = 1'b1;
+                    digest_valid_we  = 1'b1;
+                    sha512_ctrl_new  = CTRL_IDLE;
+                    sha512_ctrl_we   = 1'b1;
+                  end
+              end
+            else
+              begin
+                ready_new        = 1'b1;
+                ready_we         = 1'b1;
+                digest_update    = 1'b1;
+                digest_valid_new = 1'b1;
+                digest_valid_we  = 1'b1;
+                sha512_ctrl_new  = CTRL_IDLE;
+                sha512_ctrl_we   = 1'b1;
+              end
+          end
+
+
+        default:
+          begin
+          end
+
+      endcase // case (sha512_ctrl_reg)
+    end // sha512_ctrl_fsm
+
+endmodule // sha512_core
+
+
+//----------------------------------------------------------------
+// kogge_stone_64_core
+//
+// 64-bit Kogge-Stone Parallel-Prefix Adder
+//----------------------------------------------------------------
+module kogge_stone_64_core (
+    input wire [63:0] A,
+    input wire [63:0] B,
+    output wire [63:0] S
+);
+    wire [63:0] G0 = A & B;
+    wire [63:0] P0 = A ^ B;
+
+    // Stage 1
+    wire [63:0] G1, P1;
+    assign G1[0] = G0[0];
+    assign P1[0] = P0[0];
+    genvar i;
+    generate
+        for (i = 1; i < 64; i = i + 1) begin : stage1
+            assign G1[i] = G0[i] | (P0[i] & G0[i-1]);
+            assign P1[i] = P0[i] & P0[i-1];
+        end
+    endgenerate
+
+    // Stage 2
+    wire [63:0] G2, P2;
+    assign G2[1:0] = G1[1:0];
+    assign P2[1:0] = P1[1:0];
+    generate
+        for (i = 2; i < 64; i = i + 1) begin : stage2
+            assign G2[i] = G1[i] | (P1[i] & G1[i-2]);
+            assign P2[i] = P1[i] & P1[i-2];
+        end
+    endgenerate
+
+    // Stage 3
+    wire [63:0] G3, P3;
+    assign G3[3:0] = G2[3:0];
+    assign P3[3:0] = P2[3:0];
+    generate
+        for (i = 4; i < 64; i = i + 1) begin : stage3
+            assign G3[i] = G2[i] | (P2[i] & G2[i-4]);
+            assign P3[i] = P2[i] & P2[i-4];
+        end
+    endgenerate
+
+    // Stage 4
+    wire [63:0] G4, P4;
+    assign G4[7:0] = G3[7:0];
+    assign P4[7:0] = P3[7:0];
+    generate
+        for (i = 8; i < 64; i = i + 1) begin : stage4
+            assign G4[i] = G3[i] | (P3[i] & G3[i-8]);
+            assign P4[i] = P3[i] & P3[i-8];
+        end
+    endgenerate
+
+    // Stage 5
+    wire [63:0] G5, P5;
+    assign G5[15:0] = G4[15:0];
+    assign P5[15:0] = P4[15:0];
+    generate
+        for (i = 16; i < 64; i = i + 1) begin : stage5
+            assign G5[i] = G4[i] | (P4[i] & G4[i-16]);
+            assign P5[i] = P4[i] & P4[i-16];
+        end
+    endgenerate
+
+    // Stage 6
+    wire [63:0] G6, P6;
+    assign G6[31:0] = G5[31:0];
+    assign P6[31:0] = P5[31:0];
+    generate
+        for (i = 32; i < 64; i = i + 1) begin : stage6
+            assign G6[i] = G5[i] | (P5[i] & G5[i-32]);
+            assign P6[i] = P5[i] & P5[i-32];
+        end
+    endgenerate
+
+    // Sum
+    assign S[0] = P0[0];
+    assign S[63:1] = P0[63:1] ^ G6[62:0];
+endmodule
+
+
+//----------------------------------------------------------------
+// carry_select_adder_64
+//
+// 64-bit Carry-Select Adder optimized for late-arriving B input
+//----------------------------------------------------------------
+module carry_select_adder_64 (
+    input wire [63:0] A,
+    input wire [63:0] B,
+    output wire [63:0] S
+);
+    // Split into 8-bit blocks
+    wire [7:0] sum0;
+    wire carry0;
+    assign {carry0, sum0} = A[7:0] + B[7:0];
+
+    wire [7:0] sum1_0, sum1_1;
+    wire carry1_0, carry1_1;
+    assign {carry1_0, sum1_0} = A[15:8] + B[15:8];
+    assign {carry1_1, sum1_1} = A[15:8] + B[15:8] + 1'b1;
+
+    wire [7:0] sum2_0, sum2_1;
+    wire carry2_0, carry2_1;
+    assign {carry2_0, sum2_0} = A[23:16] + B[23:16];
+    assign {carry2_1, sum2_1} = A[23:16] + B[23:16] + 1'b1;
+
+    wire [7:0] sum3_0, sum3_1;
+    wire carry3_0, carry3_1;
+    assign {carry3_0, sum3_0} = A[31:24] + B[31:24];
+    assign {carry3_1, sum3_1} = A[31:24] + B[31:24] + 1'b1;
+
+    wire [7:0] sum4_0, sum4_1;
+    wire carry4_0, carry4_1;
+    assign {carry4_0, sum4_0} = A[39:32] + B[39:32];
+    assign {carry4_1, sum4_1} = A[39:32] + B[39:32] + 1'b1;
+
+    wire [7:0] sum5_0, sum5_1;
+    wire carry5_0, carry5_1;
+    assign {carry5_0, sum5_0} = A[47:40] + B[47:40];
+    assign {carry5_1, sum5_1} = A[47:40] + B[47:40] + 1'b1;
+
+    wire [7:0] sum6_0, sum6_1;
+    wire carry6_0, carry6_1;
+    assign {carry6_0, sum6_0} = A[55:48] + B[55:48];
+    assign {carry6_1, sum6_1} = A[55:48] + B[55:48] + 1'b1;
+
+    wire [7:0] sum7_0, sum7_1;
+    wire carry7_0, carry7_1;
+    assign {carry7_0, sum7_0} = A[63:56] + B[63:56];
+    assign {carry7_1, sum7_1} = A[63:56] + B[63:56] + 1'b1;
+
+    // Muxes
+    wire carry_sel1 = carry0;
+    wire [7:0] sum1 = carry_sel1 ? sum1_1 : sum1_0;
+    wire carry_out1 = carry_sel1 ? carry1_1 : carry1_0;
+
+    wire carry_sel2 = carry_out1;
+    wire [7:0] sum2 = carry_sel2 ? sum2_1 : sum2_0;
+    wire carry_out2 = carry_sel2 ? carry2_1 : carry2_0;
+
+    wire carry_sel3 = carry_out2;
+    wire [7:0] sum3 = carry_sel3 ? sum3_1 : sum3_0;
+    wire carry_out3 = carry_sel3 ? carry3_1 : carry3_0;
+
+    wire carry_sel4 = carry_out3;
+    wire [7:0] sum4 = carry_sel4 ? sum4_1 : sum4_0;
+    wire carry_out4 = carry_sel4 ? carry4_1 : carry4_0;
+
+    wire carry_sel5 = carry_out4;
+    wire [7:0] sum5 = carry_sel5 ? sum5_1 : sum5_0;
+    wire carry_out5 = carry_sel5 ? carry5_1 : carry5_0;
+
+    wire carry_sel6 = carry_out5;
+    wire [7:0] sum6 = carry_sel6 ? sum6_1 : sum6_0;
+    wire carry_out6 = carry_sel6 ? carry6_1 : carry6_0;
+
+    wire carry_sel7 = carry_out6;
+    wire [7:0] sum7 = carry_sel7 ? sum7_1 : sum7_0;
+
+    assign S = {sum7, sum6, sum5, sum4, sum3, sum2, sum1, sum0};
+endmodule
+//======================================================================
+// EOF sha512_core.v
+//======================================================================

@@ -1,0 +1,9 @@
+The preconditions for the `xor-depth-resynthesize` strategy are **NOT present** in the modifiable file `prim_subreg_shadow.v`. 
+
+### Diagnostic Analysis
+- The `xor-depth-resynthesize` transform requires a strictly linear GF(2) cone consisting solely of XOR, XNOR, NOT, and constant operators.
+- The only modifiable file is `prim_subreg_shadow.v`.
+- `prim_subreg_shadow.v` contains only bitwise NOTs, control MUXes, and inequality comparisons (`!=`). Inequality comparisons are non-linear because they imply a reduction OR operation over the bitwise XOR results.
+- There are no multi-operand XOR/XNOR trees or strictly linear GF(2) cones available for depth optimization in this file.
+
+Following the hard constraints ("*If the strategy's preconditions are NOT present in the provided files, say so and make NO edit rather than forcing an inapplicable transform*"), we make **no edit** to the design.

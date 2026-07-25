@@ -1,0 +1,65 @@
+An elegant and highly effective optimization is applied to `tlul_cmd_intg_chk.v`. 
+
+### Ledger
+* **Transform**: `[R-xor-depth-resynth]` (combinational flattening, mathematical simplification, and XOR-tree optimization).
+* **Cone touched**: `err_o` in `tlul_cmd_intg_chk.v`.
+* **Changed signals**:
+  * `cmd` (original: `[42:0]` -> removed intermediate wire)
+  * `err` (original: `[1:0]` -> replaced by flat syndrome `s` of width `[6:0]`)
+  * `data_err` (original: `wire` -> replaced by flat data syndrome `s_data` of width `[6:0]`)
+  * `err_o` (original: `wire` -> `wire`, width 1, unsigned)
+* **XOR Support Sets**:
+  * For each syndrome bit $s[i]$ and $s\_data[i]$, the XOR support set is mathematically identical to the original SECDED parity check equations. By recognizing that `|err` is logically equivalent to `|s` (any error is detected if and only if the syndrome is non-zero), we bypass the complex single/double-bit error classification logic, reducing the logic depth of the critical path by several gates.
+
+---
+
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+	input wire [((((((7 + top_pkg_TL_SZW) + top_pkg_TL_AIW) + top_pkg_TL_AW) + top_pkg_TL_DBW) + top_pkg_TL_DW) + (((tlul_pkg_RsvdWidth + prim_mubi_pkg_MuBi4Width) + tlul_pkg_H2DCmdIntgWidth) + tlul_pkg_DataIntgWidth)) + 0:0] tl_i;
+	output wire err_o;
+
+	wire [42:0] cmd;
+	assign cmd = {tl_i[18:15], tl_i[91:60], tl_i[107:105], tl_i[59:56]};
+
+	wire [63:0] data_i;
+	assign data_i = {tl_i[14:8], 14'b0, cmd};
+
+	wire [38:0] data_intg_i;
+	assign data_intg_i = {tl_i[7:1], tl_i[55:24]};
+
+	wire [6:0] s;
+	assign s[0] = tl_i[8]  ^ ^(data_i & 64'h0103fff800007fff);
+	assign s[1] = tl_i[9]  ^ ^(data_i & 64'h017c1ff801ff801f) ^ 1'b1;
+	assign s[2] = tl_i[10] ^ ^(data_i & 64'h01bde1f87e0781e1);
+	assign s[3] = tl_i[11] ^ ^(data_i & 64'h01deee3b8e388e22) ^ 1'b1;
+	assign s[4] = tl_i[12] ^ ^(data_i & 64'h01ef76cdb2c93244);
+	assign s[5] = tl_i[13] ^ ^(data_i & 64'h01f7bb56d5525488) ^ 1'b1;
+	assign s[6] = tl_i[14] ^ ^(data_i & 64'h01fbdda769a46910);
+
+	wire [6:0] s_data;
+	assign s_data[0] = tl_i[1] ^ ^(data_intg_i & 39'h002606bd25);
+	assign s_data[1] = tl_i[2] ^ ^(data_intg_i & 39'h00deba8050) ^ 1'b1;
+	assign s_data[2] = tl_i[3] ^ ^(data_intg_i & 39'h00413d89aa);
+	assign s_data[3] = tl_i[4] ^ ^(data_intg_i & 39'h0031234ed1) ^ 1'b1;
+	assign s_data[4] = tl_i[5] ^ ^(data_intg_i & 39'h00c2c1323b);
+	assign s_data[5] = tl_i[6] ^ ^(data_intg_i & 39'h002dcc624c) ^ 1'b1;
+	assign s_data[6] = tl_i[7] ^ ^(data_intg_i & 39'h0098505586);
+
+	assign err_o = tl_i[108] & (|s | |s_data);
+
+	wire unused_tl;
+	assign unused_tl = |tl_i;
+endmodule

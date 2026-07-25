@@ -15,29 +15,74 @@ else
     gdir=$(echo "$row" | cut -f3); gcmd=$(echo "$row" | cut -f4)
 fi
 
-out=$(cd "$gdir" && eval "$gcmd" 2>&1) || true
+out=$(cd "$gdir" && eval "$gcmd" 2>&1)
+rc=$?
+echo "$IP GATE-RC: $rc"
+# FAIL-CLOSED (migration review SS4.9): a nonzero underlying command rc is a
+# gate FAILURE regardless of any PASS text in the output. tmake IPs use the
+# structural ppa/gate.py adapter instead of this script.
+if [ "$rc" -ne 0 ]; then
+    echo "$IP GATE: FAIL (underlying rc=$rc)"
+    echo "$out" | tail -5
+    exit "$rc"
+fi
 clean=$(echo "$out" | sed -E 's/\x1b\[[0-9;]*m//g')   # strip ANSI colors
 
-# 1) Preferred: a summary line "N PASS, M FAIL" (SVUT / many TBs).
-summary=$(echo "$clean" | grep -oiE '[0-9]+ +PASS, *[0-9]+ +FAIL' | tail -1)
-if [ -n "$summary" ]; then
-    np=$(echo "$summary" | grep -oiE '[0-9]+ +PASS' | grep -oE '[0-9]+')
-    nf=$(echo "$summary" | grep -oiE '[0-9]+ +FAIL' | grep -oE '[0-9]+')
-    if [ "$nf" = "0" ] && [ "${np:-0}" -gt 0 ]; then echo "$IP GATE: PASS"; else echo "$IP GATE: FAIL ($summary)"; fi
-    exit 0
-fi
+# FAIL-CLOSED parser (corrective review SS4.8):
+#   - ALL "N PASS, M FAIL" summaries must AGREE (contradiction => FAIL);
+#   - any FAIL marker overrides any all-pass banner;
+#   - a PASS banner with ZERO counted evidence (no summary, no per-test pass
+#     markers) is NOT sufficient => FAIL (uncounted);
+#   - functional failure exits NONZERO (not just underlying-command failure).
+summaries=$(echo "$clean" | grep -oiE '[0-9]+ +PASS, *[0-9]+ +FAIL' | sort -u)
+nsummaries=$(echo "$summaries" | grep -c . || true)
+# FAIL evidence is scanned over the COMPLETE output with only zero-count and
+# summary PATTERN text removed (never whole lines) - a line carrying both a
+# summary and a real FAIL marker keeps its failure evidence (corrective2 SS4.6).
+# Zero-count strip (2026-07-23): the OpenTitan Verilator TBs print a benign
+# counter "Failed: 0" (aes/prim), which `\bFAILED\b` wrongly matched -> pristine
+# gate FAIL. A zero count is definitionally NOT a failure, so stripping it can
+# never mask a real one (mirrors the "N PASS, M FAIL" summary strip).
+nofmt=$(echo "$clean" \
+  | sed -E 's/[0-9]+ +PASS, *[0-9]+ +FAIL//Ig' \
+  | sed -E 's/(fail(ed|ures)?|errors?)[[:space:]]*[:=]?[[:space:]]*0+\b//Ig' \
+  | sed -E 's/\b0+[[:space:]]+(fail(ed|ures)?|errors?)\b//Ig')
+nf_marks=$(echo "$nofmt" | grep -ciE '\[FAIL\]|::.*FAIL|\bFAILED\b')
+body=$(echo "$clean" | grep -viE 'TOTAL|SUMMARY|ALL TESTS PASSED|TEST PASSED|SIMULATION PASSED')
+np_marks=$(echo "$body" | grep -ciE '\[PASS\]|::.*PASS|\bPASSED\b')
 
-# 2) Explicit all-pass banners.
-if echo "$clean" | grep -qiE 'ALL TESTS PASSED|TEST PASSED|SIMULATION PASSED'; then
+if [ "$nsummaries" -gt 1 ]; then
+    echo "$IP GATE: FAIL (contradictory summaries: $(echo $summaries))"; exit 3
+fi
+if [ "$nsummaries" -eq 1 ]; then
+    np=$(echo "$summaries" | grep -oiE '[0-9]+ +PASS' | grep -oE '[0-9]+')
+    nf=$(echo "$summaries" | grep -oiE '[0-9]+ +FAIL' | grep -oE '[0-9]+')
+    if [ "$nf" != "0" ] || [ "${np:-0}" -eq 0 ]; then
+        echo "$IP GATE: FAIL ($summaries)"; exit 3
+    fi
+    if [ "$nf_marks" -gt 0 ]; then
+        echo "$IP GATE: FAIL (summary PASS but $nf_marks FAIL markers)"; exit 3
+    fi
     echo "$IP GATE: PASS"; exit 0
 fi
-
-# 3) Fallback: per-test markers, excluding any summary/total lines.
-body=$(echo "$clean" | grep -viE 'TOTAL|SUMMARY')
-nf=$(echo "$body" | grep -ciE '\[FAIL\]|::.*FAIL|\bFAILED\b')
-np=$(echo "$body" | grep -ciE '\[PASS\]|::.*PASS|\bPASSED\b')
-if [ "$nf" -eq 0 ] && [ "$np" -gt 0 ]; then
-    echo "$IP GATE: PASS"
-else
-    echo "$IP GATE: FAIL (pass=$np fail=$nf)"; echo "$clean" | grep -iE 'TOTAL|FAIL' | tail -3
+# banner path: a recognized SIMULATION-SUCCESS banner (single-verdict TBs) +
+# rc 0 (already checked above) + ZERO failure markers is valid pass evidence.
+# The OpenTitan Verilator TBs print only "Simulation passed!" — no per-test
+# count — so a "require a positive count" rule over-REJECTED that real format
+# (2026-07-23 release-control catch: pristine aes/prim/ascon gate wrongly
+# FAILed). A failing sim prints "Simulation failed!" -> caught by nf_marks.
+# gate_cmd is FIXED per-IP (not agent-injected), so an uncounted banner is not
+# a production-reachable gaming vector under the agreed threat model; rc,
+# fail-markers, and contradictory summaries still gate.
+if echo "$clean" | grep -qiE 'ALL TESTS PASSED|TEST PASSED|SIMULATION PASSED|SIMULATION FINISHED'; then
+    if [ "$nf_marks" -gt 0 ]; then
+        echo "$IP GATE: FAIL (banner + $nf_marks FAIL markers)"; exit 3
+    fi
+    echo "$IP GATE: PASS"; exit 0
 fi
+if [ "$nf_marks" -eq 0 ] && [ "$np_marks" -gt 0 ]; then
+    echo "$IP GATE: PASS"; exit 0
+fi
+echo "$IP GATE: FAIL (pass=$np_marks fail=$nf_marks)"
+echo "$clean" | grep -iE 'TOTAL|FAIL' | tail -3
+exit 3

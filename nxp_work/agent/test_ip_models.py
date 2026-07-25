@@ -81,8 +81,12 @@ MEMINIT = {
 def gen_rtl(ip: str, work: Path) -> Path:
     spec = work / f"{ip}.yaml"
     spec.write_text(f"ip_type: {ip}\nname: m_{ip}\n{SPECS[ip]}\n")
+    # use the agent's rtl_gen env (PyYAML shim when PyYAML is absent) so this
+    # suite is valid under the forced-no-PyYAML acceptance path (Codex §6.1.9)
+    import nxp_agent as _A
     r = subprocess.run([sys.executable, str(RTL_GEN), "--spec", str(spec),
-                        "--outdir", str(work)], capture_output=True, text=True)
+                        "--outdir", str(work)], capture_output=True, text=True,
+                       env=_A._rtl_gen_env())
     for ln in r.stdout.splitlines():
         if ln.startswith("[GEN]"):
             p = Path(ln.split("]")[1].strip().split()[0])

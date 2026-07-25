@@ -11,6 +11,7 @@ bind-mounted read-only on top. This makes parallel evaluation collision-free.
 from __future__ import annotations
 
 import subprocess
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,7 +25,13 @@ IMAGE = "iclad-dev:v1"
 WORK = AGENT / "work"        # scratch workspaces, one dir per candidate
 LEDGER_DIR = AGENT / "ledger"  # per-IP JSONL evaluation records
 
-assert REPO.is_dir(), f"NVIDIA repo not found at {REPO}"
+def require_repo() -> None:
+    """Validate contest materials exist. Called at execution boundaries
+    (workspace creation, docker runs) - NOT at import time, so config/contract
+    modules stay importable for unit tooling without contest materials, and the
+    check survives `python -O` (checkpoint-1b, review SS4.2)."""
+    if not REPO.is_dir():
+        raise RuntimeError(f"NVIDIA contest repo not found at {REPO}")
 
 
 @dataclass(frozen=True)
@@ -56,6 +63,22 @@ class IPSpec:
     sv_sources: tuple[str, ...] = ()   # repo-relative editable .sv files
     filelist: str = ""                 # repo-relative *_yosys.f for sv2v args
     clean_dirs: tuple[str, ...] = ()   # stale build dirs to purge in workspaces
+    # source-contract family key resolved by contract.get_contract(); empty ->
+    # classified from sv_sources (sv2v) / else direct. "tmake" is only ever set
+    # explicitly (NVDLA) - never inferred. config never imports contract.
+    contract: str = ""
+    # Optional, per-IP LEC frontend recipe. Empty/default values preserve the
+    # legacy single-command `_read_stanza` byte-for-byte. Large generated IPs
+    # such as NVDLA opt into one deferred read per source plus their exact
+    # define/include environment. These are trusted configuration facts, not
+    # caller-provided command fragments.
+    lec_defines: tuple[str, ...] = ()
+    lec_includes: tuple[str, ...] = ()
+    lec_defer: bool = False
+    # Host-characterized pristine whole-design LEC wall time. A configured
+    # tmake IP gets min(2400, max(1800, 2*pristine)) seconds; None leaves the
+    # conservative existing tmake default (1800 s) unchanged.
+    lec_pristine_seconds: int | None = None
 
 
 IPS: dict[str, IPSpec] = {
@@ -120,11 +143,57 @@ def docker_run(cmd: str, *, root: Path, timeout: int = 3600,
     techlib is bind-mounted read-only at /workspace/techlib (absolute-path
     references in env.sh/syn.tcl), harness scripts at /harness.
     """
+    require_repo()   # execution boundary (P0-4: no import-time check)
+    if (not isinstance(timeout, (int, float)) or isinstance(timeout, bool)
+            or timeout <= 0):
+        raise ValueError(f"docker timeout must be positive, got {timeout!r}")
+    # Two independent watchdogs are intentional:
+    #
+    # 1. An IN-CONTAINER GNU `timeout` owns the payload. It still expires if
+    #    the Python controller/docker client is OOM-killed or otherwise dies.
+    #    That closes the 2026-07-24 failure where attached LEC containers ran
+    #    for ~5 h after the campaign process disappeared.
+    # 2. The host subprocess timeout is a slightly-later backstop. On expiry
+    #    it kills the named container explicitly.
+    #
+    # A marker converts the inner watchdog's rc into TimeoutExpired so every
+    # caller retains the existing fail-closed timeout algebra.
+    name = f"iclad_{uuid.uuid4().hex[:16]}"
+    timeout_s = f"{timeout:g}s"
+    watchdog = (
+        'timeout_s="$1"; payload="$2"; '
+        'timeout --signal=TERM --kill-after=30s "$timeout_s" '
+        'bash -lc "$payload"; rc=$?; '
+        'if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then '
+        'printf "__ICLAD_CONTAINER_TIMEOUT__ %s\\n" "$timeout_s" >&2; '
+        'fi; exit "$rc"'
+    )
     args = [
-        "docker", "run", "--rm",
+        "docker", "run", "--rm", "--name", name,
         "-v", f"{root}:/workspace",
         "-v", f"{REPO / 'techlib'}:/workspace/techlib:ro",
         "-v", f"{HARNESS}:/harness:ro",
-        "-w", "/workspace", IMAGE, "bash", "-lc", cmd,
+        "-w", "/workspace", IMAGE, "bash", "-lc", watchdog,
+        "iclad-watchdog", timeout_s, cmd,
     ]
-    return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+
+    def reap() -> None:
+        # Best effort only: the container may already have exited/--rm'd.
+        try:
+            subprocess.run(["docker", "kill", name],
+                           capture_output=True, timeout=30)
+        except (subprocess.SubprocessError, OSError):
+            pass
+
+    try:
+        result = subprocess.run(
+            args, capture_output=True, text=True, timeout=timeout + 45)
+    except subprocess.TimeoutExpired as e:
+        reap()
+        raise subprocess.TimeoutExpired(
+            cmd, timeout, output=e.output, stderr=e.stderr) from None
+    if "__ICLAD_CONTAINER_TIMEOUT__" in (result.stderr or ""):
+        reap()
+        raise subprocess.TimeoutExpired(
+            cmd, timeout, output=result.stdout, stderr=result.stderr)
+    return result

@@ -1,0 +1,265 @@
+An elegant late-input-cofactor optimization has been applied to `prim_alert_sender.v`. 
+
+### Ledger
+- **Transform Applied**: `late-input-cofactor`
+- **Exact Cone Touched**: `prim_alert_sender` FSM next-state and output logic, cofactored on the late-arriving 1-bit control signal `alert_req` (which is driven by the core's wide-gate-decode error logic).
+- **Changed Signals**:
+  - `state_d`: original `reg [2:0]` -> new `wire [2:0]`
+  - `alert_pd`: original `reg` -> new `wire`
+  - `alert_nd`: original `reg` -> new `wire`
+  - `ping_clr`: original `reg` -> new `wire`
+  - `alert_clr`: original `reg` -> new `wire`
+  - `alert_set_d`: original `wire` -> new `wire`
+  - `alert_test_set_d`: original `wire` -> new `wire`
+  - `ping_set_d`: original `wire` -> new `wire`
+
+By cofactoring the FSM next-state and control outputs on `alert_req`, we compute the FSM outputs early for both `alert_req = 0` and `alert_req = 1`. Since `alert_req` only affects the FSM transitions in state `3'd0`, the duplicated logic is extremely small and clean. This completely removes the complex FSM logic from the critical path of `alert_req_i`, leaving only a single 2-to-1 multiplexer at the very end.
+
+// ── FILES TO OPTIMISE ──
+// FILE: prim_alert_sender.v
+module prim_alert_sender (
+	clk_i,
+	rst_ni,
+	alert_test_i,
+	alert_req_i,
+	alert_ack_o,
+	alert_state_o,
+	alert_rx_i,
+	alert_tx_o
+);
+	reg _sv2v_0;
+	parameter [0:0] AsyncOn = 1'b1;
+	parameter [31:0] SkewCycles = 1;
+	parameter [0:0] IsFatal = 1'b0;
+	input clk_i;
+	input rst_ni;
+	input alert_test_i;
+	input alert_req_i;
+	output wire alert_ack_o;
+	output wire alert_state_o;
+	input wire [3:0] alert_rx_i;
+	output wire [1:0] alert_tx_o;
+	wire ping_sigint;
+	wire ping_event;
+	wire ping_n;
+	wire ping_p;
+	prim_sec_anchor_buf #(.Width(2)) u_prim_buf_ping(
+		.in_i({alert_rx_i[2], alert_rx_i[3]}),
+		.out_o({ping_n, ping_p})
+	);
+	prim_diff_decode #(
+		.AsyncOn(AsyncOn),
+		.SkewCycles(SkewCycles)
+	) u_decode_ping(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.diff_pi(ping_p),
+		.diff_ni(ping_n),
+		.level_o(),
+		.rise_o(),
+		.fall_o(),
+		.event_o(ping_event),
+		.sigint_o(ping_sigint)
+	);
+	wire ack_sigint;
+	wire ack_level;
+	wire ack_n;
+	wire ack_p;
+	prim_sec_anchor_buf #(.Width(2)) u_prim_buf_ack(
+		.in_i({alert_rx_i[0], alert_rx_i[1]}),
+		.out_o({ack_n, ack_p})
+	);
+	prim_diff_decode #(
+		.AsyncOn(AsyncOn),
+		.SkewCycles(SkewCycles)
+	) u_decode_ack(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.diff_pi(ack_p),
+		.diff_ni(ack_n),
+		.level_o(ack_level),
+		.rise_o(),
+		.fall_o(),
+		.event_o(),
+		.sigint_o(ack_sigint)
+	);
+	wire [2:0] state_d;
+	reg [2:0] state_q;
+	wire alert_pq;
+	wire alert_nq;
+	wire alert_pd;
+	wire alert_nd;
+	wire sigint_detected;
+	assign sigint_detected = ack_sigint | ping_sigint;
+	assign alert_tx_o[1] = alert_pq;
+	assign alert_tx_o[0] = alert_nq;
+	wire alert_set_d;
+	reg alert_set_q;
+	wire alert_clr;
+	wire alert_test_set_d;
+	reg alert_test_set_q;
+	wire ping_set_d;
+	reg ping_set_q;
+	wire ping_clr;
+	wire alert_req_trigger;
+	wire alert_test_trigger;
+	wire ping_trigger;
+	wire alert_req;
+	prim_sec_anchor_buf #(.Width(1)) u_prim_buf_in_req(
+		.in_i(alert_req_i),
+		.out_o(alert_req)
+	);
+
+	// Cofactored triggers
+	wire alert_req_trigger_0;
+	wire alert_req_trigger_1;
+	assign alert_req_trigger_0 = alert_set_q;
+	assign alert_req_trigger_1 = 1'b1;
+
+	wire alert_trigger_0;
+	assign alert_test_trigger = alert_test_i | alert_test_set_q;
+	assign alert_trigger_0 = alert_req_trigger_0 | alert_test_trigger;
+
+	assign ping_trigger = ping_set_q | ping_event;
+
+	// Cofactored FSM outputs
+	reg [2:0] state_d_0;
+	reg alert_pd_0;
+	reg alert_nd_0;
+	reg ping_clr_0;
+	reg alert_clr_0;
+
+	always @(*) begin : p_fsm_0
+		state_d_0 = state_q;
+		alert_pd_0 = 1'b0;
+		alert_nd_0 = 1'b1;
+		ping_clr_0 = 1'b0;
+		alert_clr_0 = 1'b0;
+		case (state_q)
+			3'd0:
+				if (alert_trigger_0 || ping_trigger) begin
+					state_d_0 = (alert_trigger_0 ? 3'd1 : 3'd3);
+					alert_pd_0 = 1'b1;
+					alert_nd_0 = 1'b0;
+				end
+			3'd1:
+				if (ack_level)
+					state_d_0 = 3'd2;
+				else begin
+					alert_pd_0 = 1'b1;
+					alert_nd_0 = 1'b0;
+				end
+			3'd2:
+				if (!ack_level) begin
+					state_d_0 = 3'd5;
+					alert_clr_0 = 1'b1;
+				end
+			3'd3:
+				if (ack_level)
+					state_d_0 = 3'd4;
+				else begin
+					alert_pd_0 = 1'b1;
+					alert_nd_0 = 1'b0;
+				end
+			3'd4:
+				if (!ack_level) begin
+					ping_clr_0 = 1'b1;
+					state_d_0 = 3'd5;
+				end
+			3'd5: state_d_0 = 3'd6;
+			3'd6: state_d_0 = 3'd0;
+			default: state_d_0 = 3'd0;
+		endcase
+		if (sigint_detected) begin
+			state_d_0 = 3'd0;
+			alert_pd_0 = 1'b0;
+			alert_nd_0 = 1'b0;
+			ping_clr_0 = 1'b1;
+			alert_clr_0 = 1'b0;
+		end
+	end
+
+	reg [2:0] state_d_1;
+	reg alert_pd_1;
+	reg alert_nd_1;
+	reg ping_clr_1;
+	reg alert_clr_1;
+
+	always @(*) begin : p_fsm_1
+		if (state_q == 3'd0) begin
+			state_d_1 = sigint_detected ? 3'd0 : 3'd1;
+			alert_pd_1 = sigint_detected ? 1'b0 : 1'b1;
+			alert_nd_1 = 1'b0;
+			ping_clr_1 = sigint_detected ? 1'b1 : 1'b0;
+			alert_clr_1 = 1'b0;
+		end else begin
+			state_d_1 = state_d_0;
+			alert_pd_1 = alert_pd_0;
+			alert_nd_1 = alert_nd_0;
+			ping_clr_1 = ping_clr_0;
+			alert_clr_1 = alert_clr_0;
+		end
+	end
+
+	// Final multiplexing of FSM outputs based on late-arriving alert_req
+	assign state_d = alert_req ? state_d_1 : state_d_0;
+	assign alert_pd = alert_req ? alert_pd_1 : alert_pd_0;
+	assign alert_nd = alert_req ? alert_nd_1 : alert_nd_0;
+	assign ping_clr = alert_req ? ping_clr_1 : ping_clr_0;
+	assign alert_clr = alert_req ? alert_clr_1 : alert_clr_0;
+
+	// Cofactored set_d signals
+	wire alert_set_d_0;
+	wire alert_set_d_1;
+	generate
+		if (IsFatal) begin : gen_fatal
+			assign alert_set_d_0 = alert_req_trigger_0;
+			assign alert_set_d_1 = alert_req_trigger_1;
+		end
+		else begin : gen_recov
+			assign alert_set_d_0 = (alert_clr_0 ? 1'b0 : alert_req_trigger_0);
+			assign alert_set_d_1 = (alert_clr_1 ? 1'b0 : alert_req_trigger_1);
+		end
+	endgenerate
+	assign alert_set_d = alert_req ? alert_set_d_1 : alert_set_d_0;
+
+	wire alert_test_set_d_0;
+	wire alert_test_set_d_1;
+	assign alert_test_set_d_0 = (alert_clr_0 ? 1'b0 : alert_test_trigger);
+	assign alert_test_set_d_1 = (alert_clr_1 ? 1'b0 : alert_test_trigger);
+	assign alert_test_set_d = alert_req ? alert_test_set_d_1 : alert_test_set_d_0;
+
+	wire ping_set_d_0;
+	wire ping_set_d_1;
+	assign ping_set_d_0 = (ping_clr_0 ? 1'b0 : ping_trigger);
+	assign ping_set_d_1 = (ping_clr_1 ? 1'b0 : ping_trigger);
+	assign ping_set_d = alert_req ? ping_set_d_1 : ping_set_d_0;
+
+	assign alert_ack_o = alert_clr & alert_set_q;
+	assign alert_state_o = alert_set_q;
+
+	prim_sec_anchor_flop #(
+		.Width(2),
+		.ResetValue(2'b10)
+	) u_prim_flop_alert(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.d_i({alert_nd, alert_pd}),
+		.q_o({alert_nq, alert_pq})
+	);
+	always @(posedge clk_i or negedge rst_ni) begin : p_reg
+		if (!rst_ni) begin
+			state_q <= 3'd0;
+			alert_set_q <= 1'b0;
+			alert_test_set_q <= 1'b0;
+			ping_set_q <= 1'b0;
+		end
+		else begin
+			state_q <= state_d;
+			alert_set_q <= alert_set_d;
+			alert_test_set_q <= alert_test_set_d;
+			ping_set_q <= ping_set_d;
+		end
+	end
+	initial _sv2v_0 = 0;
+endmodule

@@ -1,0 +1,64 @@
+An elegant optimization for the critical path in `tlul_cmd_intg_chk.v` is to apply the **rtlscout-cutpoints** transform. By restructuring the bit-slice extractions of the 109-bit `tl_i` bus into direct, single-concatenation intermediate wires, we eliminate intermediate wire slices and help Yosys/ABC partition the combinatorial boundaries more cleanly. Furthermore, we explicitly isolate the late-arriving SECDED error signals (`cmd_err` and `data_err`) to optimize the final gate mapping.
+
+### Ledger
+- **Transform**: `rtlscout-cutpoints`
+- **Cone**: `tlul_cmd_intg_chk` error detection path
+- **Changed signals**:
+  - `cmd_payload`: original `wire [42:0]` (assigned via multiple slices) -> removed (inlined into `chk_data_i`)
+  - `chk_data_i`: new `wire [63:0]` (direct concatenation for `u_chk` input)
+  - `chk_data_integ_i`: new `wire [38:0]` (direct concatenation for `u_tlul_data_integ_dec` input)
+  - `cmd_err_combined`: new `wire` (intermediate OR reduction for late-arriving command error bits)
+
+---
+
+// FILE: tlul_cmd_intg_chk.v
+module tlul_cmd_intg_chk (
+	tl_i,
+	err_o
+);
+	localparam signed [31:0] prim_mubi_pkg_MuBi4Width = 4;
+	localparam signed [31:0] tlul_pkg_DataIntgWidth = 7;
+	localparam signed [31:0] tlul_pkg_H2DCmdIntgWidth = 7;
+	localparam signed [31:0] top_pkg_TL_AUW = 23;
+	localparam signed [31:0] tlul_pkg_RsvdWidth = ((top_pkg_TL_AUW - prim_mubi_pkg_MuBi4Width) - tlul_pkg_H2DCmdIntgWidth) - tlul_pkg_DataIntgWidth;
+	localparam signed [31:0] top_pkg_TL_AIW = 8;
+	localparam signed [31:0] top_pkg_TL_AW = 32;
+	localparam signed [31:0] top_pkg_TL_DW = 32;
+	localparam signed [31:0] top_pkg_TL_DBW = top_pkg_TL_DW >> 3;
+	localparam signed [31:0] top_pkg_TL_SZW = $clog2($clog2(top_pkg_TL_DBW) + 1);
+
+	// Total width of tl_i is 109 bits [108:0]
+	input wire [108:0] tl_i;
+	output wire err_o;
+
+	// [rtlscout-cutpoints] Direct concatenations to avoid intermediate wire slices
+	// and help the synthesis tool partition the combinatorial paths.
+	wire [63:0] chk_data_i = {tl_i[21:15], 14'b0, tl_i[18:15], tl_i[91:60], tl_i[107:105], tl_i[59:56]};
+	wire [38:0] chk_data_integ_i = {tl_i[14:8], tl_i[55:24]};
+	wire tl_valid = tl_i[108];
+
+	// SECDED Decoding for Command
+	wire [1:0] cmd_err;
+	prim_secded_inv_64_57_dec u_chk(
+		.data_i(chk_data_i),
+		.data_o(),
+		.syndrome_o(),
+		.err_o(cmd_err)
+	);
+
+	// SECDED Decoding for Data
+	wire data_err;
+	tlul_data_integ_dec u_tlul_data_integ_dec(
+		.data_intg_i(chk_data_integ_i),
+		.data_err_o(data_err)
+	);
+
+	// Final error output optimized for late-arriving signals
+	wire cmd_err_combined = cmd_err[1] | cmd_err[0];
+	wire combined_err = cmd_err_combined | data_err;
+	assign err_o = tl_valid & combined_err;
+
+	// Dummy to avoid unused wire warnings
+	wire _unused = &{tl_i};
+
+endmodule

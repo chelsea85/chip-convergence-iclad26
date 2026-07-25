@@ -12,8 +12,8 @@
   },
   "parent": null,
   "strategy": "baseline",
-  "wins": 2.4,
-  "losses": 3.6000000000000005
+  "wins": 3.244212779175905,
+  "losses": 4.755787220824095
  },
  {
   "cid": "e5d027749ade",
@@ -28,6 +28,38 @@
   },
   "parent": "baseline",
   "strategy": "restructure-select",
+  "wins": 1.6884255583518097,
+  "losses": 2.3115744416481903
+ },
+ {
+  "cid": "d17234c34395",
+  "ppa": {
+   "area": 67.812,
+   "cells": 433.0,
+   "ff": 32.0,
+   "setup": -6.76,
+   "hold": 56.2,
+   "timing_met": false,
+   "power": 0.00489
+  },
+  "parent": "e5d027749ade",
+  "strategy": "late-input-cofactor",
+  "wins": 0.0,
+  "losses": 0.0
+ },
+ {
+  "cid": "b199437d8e45",
+  "ppa": {
+   "area": 66.077,
+   "cells": 405.0,
+   "ff": 32.0,
+   "setup": -24.21,
+   "hold": 56.4,
+   "timing_met": false,
+   "power": 0.0054
+  },
+  "parent": "e5d027749ade",
+  "strategy": "compare-decode-prefix",
   "wins": 0.0,
   "losses": 0.0
  }

@@ -36,15 +36,104 @@ from .pool import DesignPool
 from .proposer import (Model, PromptContext, build_prompt, build_reflect_prompt,
                        build_repair_prompt, build_gatefail_repair_prompt,
                        make_model, parse_reflection, parse_response,
-                       pick_strategies, fence_violation, LADDER)
+                       pick_strategies, fence_violation, FENCE, LADDER)
 
+# Tag -> preferred rung order, v2 per the Codex expanded literature review
+# (`NVIDIA_TIMING_STRATEGY_EXPANDED_LITERATURE_REVIEW.md` §8.1/§14).
+# balanced-tree / carry-save are DEMOTED from early selection (kmac evidence:
+# ABC re-balances source-level re-association away; see playbook
+# R-abc-rebalance-caution) — they remain in LADDER only as pick_strategies
+# fallback. arith-carry-chain also carries xor-depth-resynthesize as a BRIDGE:
+# the current classifier's xor+carry rule mislabels XOR-heavy crypto cones as
+# carry chains (kmac path mix was 40% XOR), until a dedicated
+# xor-linear-network tag lands in diagnose.py (sandbox follow-up).
 _TAG_TO_RUNGS = {
-    "arith-carry-chain": ["balanced-tree", "carry-save", "arith-arch"],
-    "mux-select": ["restructure-select", "share-resources"],
-    "wide-gate-decode": ["restructure-select"],
-    "control-boolean-network": ["restructure-select", "micro-opt"],
-    "mixed-comb-depth": ["balanced-tree", "micro-opt"],
+    "arith-carry-chain": ["sum-cluster-expose", "xor-depth-resynthesize",
+                          "late-input-cofactor"],
+    # xor-linear-network: new classifier tag (sta_feedback.classify split,
+    # Codex §3.6) — GF(2) linear layers get the XOR rung first, then the
+    # audited small-cone templates; adder strategies are inert here.
+    "xor-linear-network": ["xor-depth-resynthesize",
+                           "small-cone-arrival-template",
+                           "late-input-cofactor"],
+    "mux-select": ["late-input-cofactor", "priority-prefix-select",
+                   "restructure-select"],
+    "wide-gate-decode": ["compare-decode-prefix", "priority-prefix-select",
+                         "restructure-select"],
+    "control-boolean-network": ["late-input-cofactor",
+                                "compare-decode-prefix",
+                                "small-cone-arrival-template"],
+    "mixed-comb-depth": ["sum-cluster-expose", "late-input-cofactor",
+                         "micro-opt"],
 }
+
+# Safety net for UNKNOWN tags on timing-violated designs (hidden testcases):
+# interleaved into `preferred` by _timing_biased. Order = the review's
+# expected-value ranking of the broadly-applicable approved rungs.
+_TIMING_RUNGS = ["sum-cluster-expose", "late-input-cofactor",
+                 "compare-decode-prefix"]
+
+
+def _sta_prompt_block(ip: str, reports_dir: str | Path) -> str:
+    """Return model-facing flat STA feedback.
+
+    NVDLA's generic report is headed by the host-confirmed reset-distribution
+    artifact. Its diagnosis path independently ranks non-reset paths (and
+    falls back to area), so exposing the generic block would undo that
+    sanitization at the prompt boundary.
+    """
+    if ip == "nvdla":
+        return ("NVDLA raw worst-path feedback suppressed: reset/CDC "
+                "distribution paths are excluded. Use the sanitized "
+                "diagnosis and area ranking above.")
+    return S.feedback(reports_dir, top_k=3)
+
+
+def _timing_biased(preferred: list, setup) -> list:
+    """WNS-aware rung bias (2026-07-23): when the baseline VIOLATES timing
+    (setup < 0), interleave _TIMING_RUNGS with the tag-preferred rungs
+    (tag0, T0, tag1, T1, ...) so every best-of-k batch carries at least one
+    late-arrival/fanout move alongside the historically-proven tag rungs.
+    Timing-met designs are returned unchanged. Search-side only — no gate or
+    acceptance change."""
+    if (setup or 0) >= 0:
+        return list(preferred)
+    merged, t = [], list(_TIMING_RUNGS)
+    for p in preferred:
+        if p not in merged:
+            merged.append(p)
+        if t:
+            nxt = t.pop(0)
+            if nxt not in merged:
+                merged.append(nxt)
+    merged += [x for x in t if x not in merged]
+    return merged
+
+
+# High-delta rungs = the approved literature-backed template strategies
+# (Codex expanded review §10) — the only ones admitted at severe violation.
+_HIGH_DELTA = {"sum-cluster-expose", "xor-depth-resynthesize",
+               "late-input-cofactor", "priority-prefix-select",
+               "compare-decode-prefix", "small-cone-arrival-template"}
+
+
+def _risk_gated(preferred: list, setup, period_ps) -> list:
+    """rho-normalized risk gate (Codex expanded review §8.3):
+    rho = max(0, -WNS) / clock_period.
+      rho < 0.05 (met/near-met): no duplication-class rungs — drop
+        late-input-cofactor; favor clustering/width/template moves.
+      0.05 <= rho <= 1.0: the full interleaved set.
+      rho > 1.0 (severe, e.g. ascon's unmeetable 10 GHz SDC): only
+        high-delta template rungs; generic micro-edit repetition is cut.
+    WNS controls risk appetite; the structure tag controls applicability
+    (§8.2) — this gate never ADDS a rung the tag didn't justify."""
+    out = _timing_biased(preferred, setup)
+    rho = (max(0.0, -(setup or 0.0)) / period_ps) if period_ps else 0.0
+    if rho < 0.05:
+        out = [r for r in out if r != "late-input-cofactor"]
+    elif rho > 1.0:
+        out = [r for r in out if r in _HIGH_DELTA]
+    return out
 
 _SDC_PERIODS = {"sha512": 1500.0, "async_fifo": 300.0,
                 "ascon": 100.0}   # setup-critical clock (ascon: 10GHz, unmeetable)
@@ -93,7 +182,32 @@ _RO_CAP = 6                 # max read-only grounding files sent alongside the
 
 
 def _is_stub(model) -> bool:
-    return type(model).__name__ == "StubModel"
+    """NON-SPOOFABLE execution authority (migration review SS4.2): identity is
+    the actual production class, never a mutable __name__ string - an
+    arbitrary object named 'StubModel' is a REAL model here and is refused
+    while PENDING."""
+    from .proposer import StubModel
+    return isinstance(model, StubModel)
+
+
+def _campaign_gate(spec, model, profile=None):
+    """Capability gate (SS11 step 2): a host-validation-requiring contract
+    (NVDLA/tmake) that is not VALIDATED refuses every REAL model campaign with
+    a persisted structured refusal. Only the genuine keyless StubModel
+    (isinstance-checked) is the explicit validation mode (design rev2.1
+    SSE.4); the matching immutable ValidationProfile flows in via run(profile=)
+    once real H-1 evidence is bound. Invariant: no model call while PENDING."""
+    from . import contract as _C
+    refusal = _C.campaign_refusal(_C.get_contract(spec), profile)
+    if refusal is None or _is_stub(model):
+        return
+    LEDGER_DIR.mkdir(parents=True, exist_ok=True)
+    with open(LEDGER_DIR / "refusals.jsonl", "a") as f:
+        f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                            **refusal}) + "\n")
+    raise _C.ContractError(
+        f"{refusal['reason']}: {spec.name} refuses model campaigns - "
+        f"{refusal['detail']} (refusal persisted to ledger/refusals.jsonl)")
 
 
 def _stage_batch_files(diag, cursor: int, batch: int) -> list[str]:
@@ -186,8 +300,23 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
         emit_best: str | None = None, diagnose: str = "auto",
         stage_batch: int = 1, fresh_pool: bool = False,
         k_first: int = 6, grounding: str = "on",
-        fence: bool = False, focus: list | None = None) -> dict:
+        fence: bool = False, focus: list | None = None,
+        profile=None) -> dict:
     spec = IPS[ip]
+    _campaign_gate(spec, model, profile)  # PENDING never sees a model call
+    # NVDLA's reset/CDC/bus-interface fence is an assurance requirement, not
+    # an optional security-conscious knob. Other IPs retain the existing CLI
+    # behavior exactly.
+    fence = fence or bool(
+        FENCE.get(ip, {}).get("mandatory", False))
+    # ONE worker resolution (SSH.5): contract hard cap applied here, once;
+    # every executor below receives this value (evaluate_many re-clamps only
+    # as an idempotent defense)
+    from . import contract as _C
+    _cap = _C.get_contract(spec).worker_cap()
+    if workers > _cap:
+        print(f"[{ip}] workers resolved {workers} -> {_cap} (contract cap)")
+        workers = _cap
     obj = Objective(mode=mode, clk_period_ps=_sdc_period(ip))
     pool = DesignPool(ip, fresh=fresh_pool)
     frontier = ParetoFrontier()
@@ -288,14 +417,17 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
         rep_dir = E.reports_dir(ip, parent_cid)
         if not (rep_dir / "sta_timing_paths.txt").exists():
             rep_dir = E.reports_dir(ip, "baseline")
-        sta_block = S.feedback(rep_dir, top_k=3)
+        sta_block = _sta_prompt_block(ip, rep_dir)
         # prefer the diagnosis structure tag (per-file critical path) over the
         # flat STA tag when diagnosis is active
         tag = (diag.structure if (diag and diag.structure)
                else S.dominant_tag(rep_dir) or "mixed-comb-depth")
 
-        preferred = _TAG_TO_RUNGS.get(tag, [])
-        rungs = [r for r in LADDER if r["key"] in preferred][:k_now]
+        preferred = _risk_gated(_TAG_TO_RUNGS.get(tag, []),
+                                base_ppa.get("setup"), _sdc_period(ip))
+        rungs = [r for r in LADDER if r["key"] in preferred]
+        rungs.sort(key=lambda r: preferred.index(r["key"]))
+        rungs = rungs[:k_now]
         if len(rungs) < k_now:
             more = pick_strategies(k_now - len(rungs), obj.weights,
                                    exclude={r["key"] for r in rungs})
@@ -693,6 +825,27 @@ def _verify_status(ip: str, cid: str) -> dict:
     return last
 
 
+def _verify_evidence(ip: str, cid: str) -> dict:
+    """Retained normalized layer evidence for the selected candidate.
+
+    In particular, the LEC entry carries recipe/rc/total/proven/unproven so a
+    manifest's PROVEN label can be audited after disposable workspaces are
+    gone. Older ledger rows legitimately return an empty mapping.
+    """
+    led = LEDGER_DIR / f"{ip}.jsonl"
+    if not cid or not led.exists():
+        return {}
+    last = {}
+    for line in led.read_text().splitlines():
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        if d.get("cid") == cid and isinstance(d.get("verify_evidence"), dict):
+            last = dict(d["verify_evidence"])
+    return last
+
+
 def _assurance(v: dict, gate_blind: bool = False) -> str:
     """Summarise the assurance level actually reached for this candidate.
 
@@ -818,6 +971,8 @@ def _emit_best(ip: str, best, pool, base_ppa: dict, summary: dict,
         # for the canonical/baseline result.
         "experimental_best": summary.get("experimental_best"),
         "verification_per_layer": per_layer,       # actual statuses
+        "verification_evidence": (
+            _verify_evidence(ip, best["cid"]) if best else {}),
         "candidate_aware_coverage": ({
             "compile": "candidate .v", "lec": "candidate .v",
             "dualsim": "candidate .v",
@@ -913,6 +1068,11 @@ def main(argv=None):
                          "stubs of instantiated submodules (stubs, config C) "
                          "— A/B/C 2026-07-14")
     a = ap.parse_args(argv)
+
+    # production registrations first (NVDLA): an explicit registry entry can
+    # never fall through to generic discovery (SS11 step 1)
+    from . import registry as _registry
+    _registry.ensure_registered()
 
     if a.ip not in IPS:
         from .discover import get_spec, register
