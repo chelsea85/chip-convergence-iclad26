@@ -58,16 +58,45 @@ NVDLA, OpenTitan aes/ascon/kmac/prim).
 - **sha512: ADP 0.727** — WNS −97.3 → **+334.6 ps (timing MET)**, area 3984→3968; strategy
   `arith-arch` on `sha512_core`; **FULL 5-layer: lint+compile+TB gate PASS, LEC PROVEN, dualsim PASS**;
   8 calls / ~232k tokens. BEAT our best hand-derived rewrite (0.787). Artifact: `submission/sha512/`.
-- **async_fifo: ADP 0.961** — `micro-opt`; **FULL 5-layer (LEC PROVEN + dualsim PASS)**; the IP where
-  published LLM methods score 0.
-- **prim (`prim_crc32`): ADP 0.605** — slack +181.5 ps, area −6%, power −67%; `restructure-select`;
-  6 calls. Assurance = **equivalence+differential** (LEC PROVEN + dualsim PASS; official functional
-  gate SKIPPED because the pristine flow has a pre-existing compile issue — NOT a candidate failure).
+- **async_fifo: ships the BASELINE (ADP 1.0) — deliberately, and this is our most important result.**
+  A candidate reached ADP 0.961 and passed **every** layer including **LEC PROVEN + dualsim PASS**.
+  Banking review then identified it as a **CDC glitch hazard**: it removed the Gray-pointer registers
+  and computed `gray(bin)` combinationally, so the encoder glitches during multi-bit binary
+  transitions while the *other* clock domain samples asynchronously → intermittent pointer
+  corruption. Formal equivalence and zero-delay simulation both operate in a model where glitches do
+  not exist, so **neither can represent this bug** — it is invisible to the entire verification
+  stack. We reverted to the pristine registered-Gray design (`_archive/async_fifo_0.961_UNSAFE_CDC_*/
+  WHY_ARCHIVED.md`). Rebuilding the *separable* timing optimization on the registered base measured
+  **ADP 0.9984 — noise**, proving the apparent 4% win WAS the unsafe register removal. Our answer is
+  a **structural invariant** (CDC-crossing signals stay registered), not more simulation. See
+  "Two hazard classes" below.
+- **prim (`prim_crc32`): ADP 0.5824** — setup −208.95 → **−6.76 ps** (+202.2 ps), area 70.17 → 67.81,
+  **power −70%** (0.0165 → 0.00489); strategy `late-input-cofactor`. Assurance =
+  **equivalence+differential** (LEC PROVEN + dualsim PASS; official functional gate SKIPPED because
+  the pristine flow has a pre-existing compile issue — NOT a candidate failure). Independently
+  reviewed before banking; evidence in `submission/prim/bank_review_evidence.json`.
 - **aes:** fenced power −4.3%, unfenced power −6%; both **ADP-neutral (~1.0)**. Assurance =
   **differential-only** (dualsim PASS; LEC INCONCLUSIVE at ~75k cells, gate skipped). Characterized:
   aes timing headroom is in the masked S-box; cycle-exact dualsim bounds it to power wins.
 - kmac / ascon: offline candidates + baselines (not live-campaigned). NVDLA: baseline only
   (~950k cells; deferred — each synth ~15 min).
+
+**Two hazard classes that formal equivalence and simulation structurally CANNOT see.**
+This is the central engineering finding of the NVIDIA track. LEC and zero-delay simulation reason in
+a model where **glitches and physical side-channels do not exist**, so two real classes of broken
+edit pass every functional check we can run:
+1. **Side-channel masking removal** (aes S-box, kmac DOM-masked Keccak) — un-masking preserves the
+   logic function exactly, so LEC returns PROVEN, while the countermeasure is destroyed.
+2. **CDC glitch hazards** (async_fifo) — de-registering a Gray pointer at a clock-domain crossing
+   makes the combinational encoder glitch mid-transition; the receiving domain samples
+   asynchronously and can latch a corrupt pointer. Cycle-exact zero-delay co-simulation cannot
+   represent the glitch, and LEC proves the two designs equal because *as functions* they are.
+
+**Neither is fixable by adding more checking** — the hazards live outside the model the checkers
+use. Our answer is therefore **structural policy**: FENCEs for (1), and a registered-crossing
+invariant for (2). The async_fifo episode is the proof that this layer earns its keep: a candidate
+that was **fully LEC-PROVEN and dualsim-PASS** was still unsafe, and rebuilding the safe part of the
+optimization showed the entire measured "win" had been the hazard itself.
 
 **Key decisions / findings (see `nvidia_work/NVIDIA_DAILY_RUN_LOG.md`):**
 - Method A (per-module logic depth) vs Method B (hierarchy-preserved STA) DISAGREE on aes; depth
@@ -75,8 +104,16 @@ NVDLA, OpenTitan aes/ascon/kmac/prim).
 - **Context is a strategy (A/B/C ablation)**: A = target file + other critical files read-only
   (3/6 candidates correct); B = target file alone (1/6, but produced the 0.727 win); C = interface
   stubs (0/5). Adopted A as default; strict scope filter drops hallucinated out-of-scope edits.
-- The S-box **fence was our own decision, then removed** — the contest scores tests-pass + PPA only,
-  with no security requirement; `--fence` retained as an option (default off).
+- **Scope FENCEs — per-IP forbidden edit zones, enforced in tooling** (`ppa/proposer.py::FENCE`,
+  `fence_violation()`), not just asked for in the prompt. Three entries: **aes** (S-box
+  implementation files), **kmac** (`keccak_2share`, `keccak_round`, `prim_dom_and` — the DOM-masked
+  core), **nvdla** (reset/CDC/sync, `vmod/vlibs`, RAMs, includes, partition tops, bus interfaces).
+  The aes/kmac fences are opt-in via `--fence on` (default off — the contest scores tests-pass + PPA
+  with no security requirement, so this is the user's call per IP). The **NVDLA fence is `mandatory`
+  and cannot be switched off**: `controller.py` force-enables it (`fence = fence or FENCE[ip]
+  ["mandatory"]`) because reset/CDC scope is an *assurance* requirement, not a security preference.
+  The fence fires on a candidate's SURVIVING edits only — presence of a fenced token in a
+  pass-through line is not a breach (a 2026-07-14 presence-check bug falsely wiped a whole aes stage).
 - Robustness hardening found by live fire: resilient fan-out (one API failure ≠ dead run), HTTP
   timeout, netlist-collapse guard (a candidate that lost half its cells "improves" everything —
   caught at layer 5 then guarded), fence presence→change check, gate-fail/dualsim-fail PPA-ranked repair.
@@ -204,7 +241,7 @@ gate-failed every candidate on a graded clone) — now fixed. Always re-verify f
 
 ## Honest status / open items (for the reviewer)
 
-- **Strongest, scored, in-git:** NVIDIA (0.727 / 0.605 verified) and NXP (perfect solve). These are
+- **Strongest, scored, in-git:** NVIDIA (0.727 / 0.5824 verified) and NXP (perfect solve). These are
   the submission's core.
 - **ASU:** complete verification-first agent + a rigorous, reproducible proof that the benchmark's
   dominant violation class is locally irreducible (needs global legalization). Honest negative result,
@@ -217,7 +254,8 @@ gate-failed every candidate on a graded clone) — now fixed. Always re-verify f
 
 ## Reviewer guidance
 
-Claims to spot-check: the sha512 0.727 and prim 0.605 manifests in `nvidia_work/submission/`; the NXP
+Claims to spot-check: the sha512 0.727 and prim 0.5824 manifests in `nvidia_work/submission/`
+(and async_fifo's `cid: baseline` — the deliberate revert); the NXP
 2-call solve reproduces via `nxp_agent.py --model stub`; the ASU over-constraint via the daily-log
 experimental table. Everything measured is in the logs/ledgers — nothing is asserted without a number.
 The design ethos throughout is **correctness over speed**: prove a mechanism works reliably before
