@@ -1999,3 +1999,55 @@ pass in BOTH normal-PyYAML and forced-no-PyYAML; shim conditional + byte-identic
 inert string). NXP working copy eligible to sync (pending user commit). Docker VM now 23.19GB/12CPU.
 Submission: chip-convergence-iclad26 git still clean @1997ed4 (0 changes); nvidia_work/submission staging
 holds today's user-directed banking. Paid key never used; excluded IPs untouched.
+
+---
+
+## rev 2026-07-24e — host session (Opus 5): TCC restored, submission SYNCED + PUSHED
+
+**TCC resolved.** Full Disk Access granted + app relaunched (macOS binds TCC at process start, so the
+prior session's mid-run revocation was unfixable without the relaunch). Tree, Docker, and git all
+accessible this session; the blocked session recorded in `CLAUDE_TCC_HANDOFF_2026-07-24.md` executed
+nothing, so no state was in doubt.
+
+**§0 verification (all green, pre-sync):** test_migration3 54/54, test_contract 142/142,
+test_nvdla_buildout **28/28** (docs said 25 — three tests added since; raw-log externalization +
+determinism fail-closed), test_cold_start 6/6 (Docker + EDA end-to-end confirmed after the restart).
+Docker VM 24.9 GB / 12 CPU. git HEAD verified `1997ed4` clean before any write.
+
+**User decisions this session:** (1) sync scope = **everything**, including `nvidia_work/agent/**`;
+(2) **Sandbox Claude is retired** — it no longer reviews, so its buildout diff review can never gate,
+making "hold until sandbox GO" a hold-forever; option (a) taken with the green battery as the
+evidence. (3) NVDLA is **no longer NO-GO** — to be revisited after this sync. (4) Slides/talk prep
+Sat+Sun: Hari has been **invited to present at DAC**, so Q&A talking points matter as much as slides.
+
+**ASU doc fix (pre-approved):** `official_submission/agent.py:14` no longer claims no-op "FVR 1.0";
+now states the ~1.25–1.32 the same docstring already gives at lines 31–34. Verified the edit is
+confined to the module docstring (lines 2–41), file parses, no geometry and no emitted bytes changed.
+
+**Tooling defect found + fixed (strictly additive, no gate touched).** `sync.sh:10` carried a
+hardcoded list that copied only **4 of 15** test suites, so the repo shipped the contract/NVDLA
+buildout machinery *without* the battery that verifies it — including test_contract,
+test_nvdla_buildout, test_migration3, test_timing_rungs, test_cone_templates. Replaced with a
+`test_*.py` glob. Re-verified **from the repo copy** (fresh-clone semantics): test_contract 142/142,
+test_migration3 54/54, test_timing_rungs 22/22, test_cone_templates 10/10;
+test_nvdla_buildout correctly reports PREREQ-MISSING (contest NVDLA tree is gitignored) rather than
+falsely passing.
+
+**Pre-commit verification (fail-closed checklist, all confirmed by reading, not assumption):**
+prim manifest cid `d17234c34395` adp **0.5824**, LEC PROVEN + dualsim PASS, `bank_review_evidence.json`
+attached; async_fifo manifest cid `baseline` adp **1.0** with the revert rationale in `result`;
+`_archive/async_fifo_0.961_UNSAFE_CDC_070ce7b90bd0/` present with `WHY_ARCHIVED.md`; NXP agent changes
+present; **zero** `__pycache__`/venv/`.pyc`/scratch/key material staged. Git's two R100 renames confirm
+the unsafe async_fifo RTL moved *out* of the live submission into `_archive/` byte-identically —
+preserved as evidence, not shipped.
+
+**Result: 662 files changed (+109,335 / −212), committed and PUSHED.**
+`1997ed4a0c0b06632af1ff82759dcbdc98fb975b` → **`bb7d17a104350d929f624f9632d356f047ac5dea`**.
+Working tree clean after push. SHA references updated in `HOST_ONBOARDING_FABLE5.md` and
+`CLAUDE_NEXT_STEPS.md` (`CLAUDE_TCC_HANDOFF_2026-07-24.md` left at the old SHA — it is a historical
+record of that session's state).
+
+**Safety §1 held throughout:** `EXPRESS_MODE_KEY` unset in every shell; **zero model calls and zero
+quota consumed this session**; no key printed or committed; no autonomous bank (the prim bank was the
+user-directed, Codex-approved one already staged); no gate loosened — the only machinery change makes
+the submission *more* verifiable; excluded IPs untouched.
