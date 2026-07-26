@@ -255,3 +255,37 @@ reviewer's V2-bar hypothesis and it WORKS.
 
 ASU flips from "honest negative result" to a REAL repair beating the reference denominator on the
 whole public set. The reviewer's exact-geometry reasoning was correct; my "consolidate" call was wrong.
+
+## 2026-07-26 — ASU v2: track-shift breakthrough → 3-round Codex review → Rev3 RESUBMISSION (FVR 0.39–0.58, electrically proven)
+
+Reopened ASU to build on the shipped via-bar (all work in `asu_v2/`; `asu_work/` untouched;
+import-not-copy + frozen-hash guard + parity gate reproducing 178/52/68/167/522 exactly).
+**Zero model tokens throughout.**
+
+**Wins.** (1) TRACK-SHIFT: the grid class (M4/M5/M6.AUX.1, the largest residual) is seeded by
+translating whole tracks off-grid (both edges same delta, all blocks); inverse = translate back
+to the edge grid / 2G routing pitch (offgrid_cl decode), co-translating riding V3/V4 cuts +
+patching M3 end-caps. (2) V1-patch: exact-predicate V1.M1.EN.1 repair (1 site). Falsified with
+exact geometry: V0 widening (188/188 LISD containment), V0 finger reconstruction (16 stepped-pad
+slivers + 21 adjacent-V1 conflicts), M1.S cluster = locally irreducible (global legalization).
+
+**Codex round 1 (NO-GO) — the big finding: the SUBMITTED v1 via-bar merges 49 layer-aware
+electrical components on 4 public blocks** (bars join distinct nets crossing a landing); both
+the 2D credibility proxy and the official source-parsing checker are structurally blind to it.
+Reproduced independently before fixing. → via-bar-SAFE: electrical guard via full-stack
+union-find; offending landings keep their cuts. Round 2 (HOLD): synthetic counterexamples — bar
+guard must be TWO-SIDED (and, our finding: compared PER SIDE — a union hides dropped contacts);
+track acceptance must be layer-aware (projection swap invisible to count+M2-hash). Round 3:
+**ACCEPTED + GO.** Final safety: per-side two-sided bar guard; per-move layer-aware track
+acceptance (no flat-projection path); immutable-anchor partition gate (full SHA-256, fail-closed
+coverage); 12/12 permanent keyless controls (asu_v2/tests/) incl. both Codex counterexamples.
+
+**Rev3 result (runs/rev3b, exit 0 --require beat) and P1-5 official-runner rehearsal
+(run rev3p15): totals EXACTLY 142/35/35/102/444 = official FVR 0.5820/0.5147/0.3933/0.4130/
+0.5804 (v1: 0.73/0.76/0.76/0.68/0.68), valid + connectivity-preserved ×5, emitted hashes ==
+RELEASE_MANIFEST, zero model calls (empty usage ledger + preserved wrapper logs).** Evidence:
+asu_v2/submission/ (artifacts, manifests, P15_OFFICIAL_RUN_ADDENDUM.md), asu_v2/results/,
+review trail in the three ASU_V2_*_CODEX_REVIEW docs + COPY_TO_CODEX packets.
+LANGUAGE RULE: v1 "passes the published source checker"; Rev3 "preserves layer-aware electrical
+connectivity (original→candidate)". The withdrawn 0.24–0.39 package (runs/final1) contains the
+49 inherited shorts — evidence only, not for submission absent an explicit organizer ruling.

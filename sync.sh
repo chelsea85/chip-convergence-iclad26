@@ -70,3 +70,20 @@ echo "synced from $SRC"
 # Slides
 mkdir -p "$DST/docs/slides"
 cp "$SRC/slides"/*.md "$SRC/slides"/*.pdf "$SRC/slides"/build.sh "$DST/docs/slides/" 2>/dev/null || true
+
+# ── ASU v2 (Rev3 resubmission package, 2026-07-26) ──────────────────────────
+# The organizers' entry point asu_work/official_submission/agent.py is the
+# GENERATED Rev3 agent; asu_v2/ carries its sources, tests, and evidence.
+for d in agent tools tests results submission official_submission; do
+  if [ -d "$SRC/asu_v2/$d" ]; then
+    rm -rf "$DST/asu_v2/$d"; mkdir -p "$DST/asu_v2"; cp -R "$SRC/asu_v2/$d" "$DST/asu_v2/"
+  else
+    echo "sync ERROR: required source asu_v2/$d missing" >&2; exit 1
+  fi
+done
+cp "$SRC/asu_v2/README.md" "$DST/asu_v2/"
+cp "$SRC/asu_v2/run_docker.sh" "$DST/asu_v2/"
+mkdir -p "$DST/asu_v2/reviews"
+cp "$SRC"/ASU_V2_*CODEX_REVIEW*.md "$SRC"/COPY_TO_CODEX_ASU_V2_*.md "$DST/asu_v2/reviews/"
+# Rev3 agent replaces the v1 agent at the documented organizer entry point
+cp "$SRC/asu_v2/official_submission/agent.py" "$DST/asu_work/official_submission/agent.py"

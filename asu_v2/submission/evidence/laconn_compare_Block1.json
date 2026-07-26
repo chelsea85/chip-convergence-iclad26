@@ -1,0 +1,16 @@
+{
+ "base_gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/runs/rev3b/Block1/baseline/out.gds",
+ "cand_gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/runs/rev3b/Block1/via-bar-safe+track-shift+v1-patch/out.gds",
+ "anchors": 803,
+ "base_components": 222,
+ "cand_components": 222,
+ "base_uncovered_components": 0,
+ "cand_uncovered_components": 0,
+ "base_floating_vias": 0,
+ "cand_floating_vias": 0,
+ "base_partition_sha256": "7ceb4cef5b73360f80c8219cc353a1d260f8361a83b1869294c426da76e43b0d",
+ "cand_partition_sha256": "7ceb4cef5b73360f80c8219cc353a1d260f8361a83b1869294c426da76e43b0d",
+ "base_anchor_groups": 222,
+ "cand_anchor_groups": 222,
+ "partition_equal": true
+}

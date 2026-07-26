@@ -1,0 +1,681 @@
+{
+ "gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/runs/parity/Block3/baseline/out.gds",
+ "dbu_um": 0.00025,
+ "marker_items": 21,
+ "flagged_v0": 21,
+ "correct_v0": 1235,
+ "flagged_size_hist_dbu": {
+  "72x72": 21
+ },
+ "correct_size_hist_dbu": {
+  "72x72": 1235
+ },
+ "cuts_per_rail_hist": {
+  "1": 21
+ },
+ "precheck_pass": 0,
+ "fail_reasons": {
+  "lisd-en3": 21,
+  "m1-nonrect": 7,
+  "spacing<18nm": 6
+ },
+ "sites": [
+  {
+   "v0": [
+    8172,
+    7380,
+    8244,
+    7452
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    200,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    8152,
+    7380,
+    8352,
+    7452
+   ],
+   "grow_perp_dbu": 128,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    9684,
+    7668,
+    9756,
+    7740
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    432,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    9648,
+    7668,
+    10080,
+    7740
+   ],
+   "grow_perp_dbu": 360,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    8604,
+    5508,
+    8676,
+    5580
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    200,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    8584,
+    5508,
+    8784,
+    5580
+   ],
+   "grow_perp_dbu": 128,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    2988,
+    7380,
+    3060,
+    7452
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    632,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    2536,
+    7380,
+    3168,
+    7452
+   ],
+   "grow_perp_dbu": 560,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    7308,
+    3060,
+    7380,
+    3132
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    7276,
+    3060,
+    7704,
+    3132
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    8388,
+    2268,
+    8460,
+    2340
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    432,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    8352,
+    2268,
+    8784,
+    2340
+   ],
+   "grow_perp_dbu": 360,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    5148,
+    7668,
+    5220,
+    7740
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    2576,
+    864
+   ],
+   "m1_horiz": true,
+   "proposed": [
+    5148,
+    7668,
+    5220,
+    8532
+   ],
+   "grow_perp_dbu": 792,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    4716,
+    9828,
+    4788,
+    9900
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    200,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    4696,
+    9828,
+    4896,
+    9900
+   ],
+   "grow_perp_dbu": 128,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    7092,
+    6228,
+    7164,
+    6300
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    684,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    6480,
+    6228,
+    7164,
+    6300
+   ],
+   "grow_perp_dbu": 612,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    9684,
+    5508,
+    9756,
+    5580
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    432,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    9648,
+    5508,
+    10080,
+    5580
+   ],
+   "grow_perp_dbu": 360,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    10116,
+    3060,
+    10188,
+    3132
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    432,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    10080,
+    3060,
+    10512,
+    3132
+   ],
+   "grow_perp_dbu": 360,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    8604,
+    5220,
+    8676,
+    5292
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    8572,
+    5220,
+    9000,
+    5292
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    9036,
+    10620,
+    9108,
+    10692
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    9004,
+    10620,
+    9432,
+    10692
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    7740,
+    4140,
+    7812,
+    4212
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    7708,
+    4140,
+    8136,
+    4212
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    4716,
+    5220,
+    4788,
+    5292
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    632,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    4264,
+    5220,
+    4896,
+    5292
+   ],
+   "grow_perp_dbu": 560,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    7956,
+    10620,
+    8028,
+    10692
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    432,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    7920,
+    10620,
+    8352,
+    10692
+   ],
+   "grow_perp_dbu": 360,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    10332,
+    4140,
+    10404,
+    4212
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    644,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    9868,
+    4140,
+    10512,
+    4212
+   ],
+   "grow_perp_dbu": 572,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    9900,
+    9828,
+    9972,
+    9900
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    200,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    9880,
+    9828,
+    10080,
+    9900
+   ],
+   "grow_perp_dbu": 128,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    6876,
+    9828,
+    6948,
+    9900
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    6844,
+    9828,
+    7272,
+    9900
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    3852,
+    6588,
+    3924,
+    6660
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    644,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    3820,
+    6588,
+    4464,
+    6660
+   ],
+   "grow_perp_dbu": 572,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    6012,
+    6588,
+    6084,
+    6660
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    632,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    5560,
+    6588,
+    6192,
+    6660
+   ],
+   "grow_perp_dbu": 560,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  }
+ ]
+}

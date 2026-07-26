@@ -1,0 +1,1042 @@
+{
+ "gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/runs/parity/Block1/via-bar/out.gds",
+ "layers": {
+  "M4": {
+   "grid_dbu": 96,
+   "offgrid_polys": 18,
+   "same_delta": 18,
+   "delta_hist": {
+    "24": 6,
+    "48": 6,
+    "-24": 6
+   },
+   "polys": [
+    {
+     "bbox": [
+      2688,
+      3192,
+      3104,
+      3288
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 24,
+     "delta_hi_dbu": 24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      13488,
+      3192,
+      13904,
+      3288
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 24,
+     "delta_hi_dbu": 24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      1920,
+      4272,
+      2336,
+      4368
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 48,
+     "delta_hi_dbu": 48,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        11612
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      12720,
+      4272,
+      13136,
+      4368
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 48,
+     "delta_hi_dbu": 48,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        11612
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      2688,
+      5352,
+      3104,
+      5448
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": -24,
+     "delta_hi_dbu": -24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      13488,
+      5352,
+      13904,
+      5448
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": -24,
+     "delta_hi_dbu": -24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      2688,
+      7512,
+      3104,
+      7608
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 24,
+     "delta_hi_dbu": 24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      13488,
+      7512,
+      13904,
+      7608
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 24,
+     "delta_hi_dbu": 24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      1920,
+      8592,
+      2336,
+      8688
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 48,
+     "delta_hi_dbu": 48,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        11612
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      12720,
+      8592,
+      13136,
+      8688
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 48,
+     "delta_hi_dbu": 48,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        11612
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      2688,
+      9672,
+      3104,
+      9768
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": -24,
+     "delta_hi_dbu": -24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      13488,
+      9672,
+      13904,
+      9768
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": -24,
+     "delta_hi_dbu": -24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      2688,
+      11832,
+      3104,
+      11928
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 24,
+     "delta_hi_dbu": 24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      13488,
+      11832,
+      13904,
+      11928
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 24,
+     "delta_hi_dbu": 24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      1920,
+      12912,
+      2336,
+      13008
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 48,
+     "delta_hi_dbu": 48,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        11612
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      12720,
+      12912,
+      13136,
+      13008
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": 48,
+     "delta_hi_dbu": 48,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        11612
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      2688,
+      13992,
+      3104,
+      14088
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": -24,
+     "delta_hi_dbu": -24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      13488,
+      13992,
+      13904,
+      14088
+     ],
+     "wh": [
+      416,
+      96
+     ],
+     "rect": true,
+     "delta_lo_dbu": -24,
+     "delta_hi_dbu": -24,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V3",
+       "wh": [
+        72,
+        96
+       ],
+       "other_metal_slack_dbu": 20
+      },
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    }
+   ]
+  },
+  "M5": {
+   "grid_dbu": 96,
+   "offgrid_polys": 4,
+   "same_delta": 4,
+   "delta_hist": {
+    "-32": 2,
+    "16": 2
+   },
+   "polys": [
+    {
+     "bbox": [
+      1888,
+      2068,
+      2368,
+      13680
+     ],
+     "wh": [
+      480,
+      11612
+     ],
+     "rect": true,
+     "delta_lo_dbu": -32,
+     "delta_hi_dbu": -32,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        11612
+       ],
+       "other_metal_slack_dbu": 160
+      },
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 0
+      },
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      12688,
+      2068,
+      13168,
+      13680
+     ],
+     "wh": [
+      480,
+      11612
+     ],
+     "rect": true,
+     "delta_lo_dbu": 16,
+     "delta_hi_dbu": 16,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        11612
+       ],
+       "other_metal_slack_dbu": 160
+      },
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 0
+      },
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 0
+      },
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      2656,
+      3148,
+      3136,
+      14132
+     ],
+     "wh": [
+      480,
+      10984
+     ],
+     "rect": true,
+     "delta_lo_dbu": -32,
+     "delta_hi_dbu": -32,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 160
+      },
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 0
+      },
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    },
+    {
+     "bbox": [
+      13456,
+      3148,
+      13936,
+      14132
+     ],
+     "wh": [
+      480,
+      10984
+     ],
+     "rect": true,
+     "delta_lo_dbu": 16,
+     "delta_hi_dbu": 16,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V4",
+       "wh": [
+        96,
+        10984
+       ],
+       "other_metal_slack_dbu": 160
+      },
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 0
+      }
+     ]
+    }
+   ]
+  },
+  "M6": {
+   "grid_dbu": 128,
+   "offgrid_polys": 3,
+   "same_delta": 3,
+   "delta_hist": {
+    "64": 1,
+    "-32": 1,
+    "-16": 1
+   },
+   "polys": [
+    {
+     "bbox": [
+      1888,
+      2240,
+      13168,
+      2880
+     ],
+     "wh": [
+      11280,
+      640
+     ],
+     "rect": true,
+     "delta_lo_dbu": 64,
+     "delta_hi_dbu": 64,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 1932
+      }
+     ]
+    },
+    {
+     "bbox": [
+      2656,
+      3168,
+      13936,
+      3808
+     ],
+     "wh": [
+      11280,
+      640
+     ],
+     "rect": true,
+     "delta_lo_dbu": -32,
+     "delta_hi_dbu": -32,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 1004
+      }
+     ]
+    },
+    {
+     "bbox": [
+      1888,
+      13040,
+      13168,
+      13680
+     ],
+     "wh": [
+      11280,
+      640
+     ],
+     "rect": true,
+     "delta_lo_dbu": -16,
+     "delta_hi_dbu": -16,
+     "same_delta": true,
+     "vias": [
+      {
+       "via": "V5",
+       "wh": [
+        11280,
+        128
+       ],
+       "other_metal_slack_dbu": 256
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

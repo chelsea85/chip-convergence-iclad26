@@ -56,16 +56,25 @@ Each `submission/<ip>/manifest.json` records the true `verification_per_layer` +
 **Official submission package** (what the organizers run): `asu_work/official_submission/`
 — a self-contained, stdlib-only `agent.py` that needs **no KLayout at agent runtime**
 (the official image is `python:3.10-slim`; the evaluator renders/scores afterward on the
-host). It applies the deterministic via-bar repair; its output is **byte-identical** to the
-independently re-scored `asu_work/submission/Block*_repaired.py` (FVR 0.68–0.76, eligible,
-connectivity-preserved).
+host). **v2 Rev3 (2026-07-26):** applies the deterministic via-bar-safe + track-shift +
+v1-patch repairs; its output is **byte-identical** to the independently re-scored
+`asu_v2/submission/Block*_repaired.py` — **FVR 0.393–0.582** (was 0.68–0.76), eligible,
+passes the published connectivity checker, AND **preserves layer-aware electrical
+connectivity original→repaired exactly** (immutable-anchor partition proof; three-round
+independent review + P1-5 official-runner rehearsal in `asu_v2/` — see
+`asu_v2/README.md`, `asu_v2/reviews/`, `asu_v2/submission/RELEASE_MANIFEST.json` and
+`P15_OFFICIAL_RUN_ADDENDUM.md`). The v1 via-bar-only artifacts remain under
+`asu_work/submission/` as history; a layer-aware audit found 49 electrical merges in
+them that the published checkers cannot see (documented in `asu_v2/reviews/`), which
+Rev3 removes.
 
 ```bash
 # Official runner (needs Docker + EXPRESS_MODE_KEY for the model-wrapper, though the
 # deterministic agent makes no model call):
 python3 official_eval/run_official_eval.py --run-id r1 \
     --submission-dir <this_repo>/asu_work/official_submission --agent-entrypoint agent.py
-#   -> emits BlockN_repaired.py; the host evaluator scores FVR ~0.68-0.76
+#   -> emits BlockN_repaired.py; the host evaluator scores FVR 0.393-0.582
+#      (rehearsed 2026-07-26, run rev3p15: totals 142/35/35/102/444, zero model calls)
 
 # Dev agent (keep-best loop; needs KLayout 0.30.1 image — for local measurement/ablation):
 docker build --platform linux/amd64 -t asu-klayout:0.30.1 asu_work/docker
@@ -98,7 +107,7 @@ python3 -m ppa.evaluate --ip sha512 --variant-dir ../submission/sha512/sha512/sr
 # ASU — the submitted agent is DETERMINISTIC (no model call); official runner scores after:
 python3 <contest>/.../ICLAD26-ASU-Problems/official_eval/run_official_eval.py --run-id r1 \
     --submission-dir <this_repo>/asu_work/official_submission --agent-entrypoint agent.py
-#   -> BlockN_repaired.py (FVR 0.68-0.76). Runner requires EXPRESS_MODE_KEY even though
+#   -> BlockN_repaired.py (FVR 0.393-0.582). Runner requires EXPRESS_MODE_KEY even though
 #      our ASU agent makes no model call.
 ```
 

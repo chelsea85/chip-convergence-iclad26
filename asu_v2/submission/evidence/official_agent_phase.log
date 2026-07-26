@@ -1,0 +1,134 @@
+[OFFICIAL] docker version
+Client:
+ Version:           29.3.1
+ API version:       1.54
+ Go version:        go1.25.8
+ Git commit:        c2be9cc
+ Built:             Wed Mar 25 16:12:49 2026
+ OS/Arch:           darwin/arm64
+ Context:           desktop-linux
+
+Server: Docker Desktop 4.68.0 (223695)
+ Engine:
+  Version:          29.3.1
+  API version:      1.54 (minimum version 1.40)
+  Go version:       go1.25.8
+  Git commit:       f78c987
+  Built:            Wed Mar 25 16:14:30 2026
+  OS/Arch:          linux/arm64
+  Experimental:     false
+ containerd:
+  Version:          v2.2.1
+  GitCommit:        dea7da592f5d1d2b7755e3a161be07f43fad8f75
+ runc:
+  Version:          1.3.4
+  GitCommit:        v1.3.4-0-gd6d73eb8
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+[OFFICIAL] docker build -f /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/official_eval/Dockerfile -t iclad26-asu-official:latest /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 247B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.10-slim
+#2 DONE 0.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 233B done
+#3 DONE 0.0s
+
+#4 [1/4] FROM docker.io/library/python:3.10-slim@sha256:123f8aa87ae9112f0fccc9b9cc342c79e2f8f1e2b2e10395cd6b2453d1b42bd1
+#4 resolve docker.io/library/python:3.10-slim@sha256:123f8aa87ae9112f0fccc9b9cc342c79e2f8f1e2b2e10395cd6b2453d1b42bd1 done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 64B done
+#5 DONE 0.0s
+
+#6 [2/4] WORKDIR /workspace
+#6 CACHED
+
+#7 [3/4] COPY requirements.txt /tmp/requirements.txt
+#7 CACHED
+
+#8 [4/4] RUN python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
+#8 CACHED
+
+#9 exporting to image
+#9 exporting layers done
+#9 exporting manifest sha256:80727c7a6ca4c43ca07d9ad3ba45b39a692f77eadb3764403d451f8977351a81 done
+#9 exporting config sha256:d10a0068d047d961969ab2e763bed871a57268e707520dd311d7ae2c15c8e99a done
+#9 exporting attestation manifest sha256:9727c7c2a349f8a00ee17821d70065feae77d6192939306245c9c873cfc30738 done
+#9 exporting manifest list sha256:c6db449d6dcf4ce398d14ec29078433b3c334205f4e19257fa27d388bcf5de2d done
+#9 naming to docker.io/library/iclad26-asu-official:latest done
+#9 unpacking to docker.io/library/iclad26-asu-official:latest done
+#9 DONE 0.0s
+[OFFICIAL] docker network create --internal iclad-eval-rev3p15-Block1
+bc9d9da5dd63197c28318e07f08d6f697701a4d4d3837d6938c7a55f86322354
+[OFFICIAL] docker run -d --name iclad-wrapper-rev3p15-Block1 --network bridge -e EXPRESS_MODE_KEY -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /tmp/iclad26_asu_official/rev3p15/usage:/secure/usage:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/scripts/model_service.py --host 0.0.0.0 --port 8080 --model gemini-3.5-flash --run-id rev3p15 --case-name Block1 --design-type block --task-type repair --usage-path /secure/usage/Block1_usage.json
+318008b288cd9427fc262dafb63ac14b0f9a5f96325c839cbf158cf1f0fe12d6
+[OFFICIAL] docker network connect --alias model-wrapper iclad-eval-rev3p15-Block1 iclad-wrapper-rev3p15-Block1
+[OFFICIAL] docker run --rm --name iclad-agent-rev3p15-Block1 --network iclad-eval-rev3p15-Block1 --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m -e PYTHONDONTWRITEBYTECODE=1 -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:rw -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission/agent.py /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/task/rev3p15/block/repair/Block1_info.json --model gemini-3.5-flash
+[asu-official] Block1: via-bar-safe + track-shift + v1-patch repair applied
+[asu-official] Block1: wrote /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15/block/repair/Block1/Block1_repaired.py (385,923 chars)
+[asu-official] usage write skipped (read-only, expected under official runner): OSError
+[OFFICIAL] docker network create --internal iclad-eval-rev3p15-Block2
+d2cecfe65360ae48ad979c5f358e39bf4b907e4b9a626962ccc47432aad5c6aa
+[OFFICIAL] docker run -d --name iclad-wrapper-rev3p15-Block2 --network bridge -e EXPRESS_MODE_KEY -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /tmp/iclad26_asu_official/rev3p15/usage:/secure/usage:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/scripts/model_service.py --host 0.0.0.0 --port 8080 --model gemini-3.5-flash --run-id rev3p15 --case-name Block2 --design-type block --task-type repair --usage-path /secure/usage/Block2_usage.json
+52deba71a57e2b67f10108c1b4c479582e13c5d7f2fd26b7c4469896ca2d767b
+[OFFICIAL] docker network connect --alias model-wrapper iclad-eval-rev3p15-Block2 iclad-wrapper-rev3p15-Block2
+[OFFICIAL] docker run --rm --name iclad-agent-rev3p15-Block2 --network iclad-eval-rev3p15-Block2 --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m -e PYTHONDONTWRITEBYTECODE=1 -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:rw -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission/agent.py /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/task/rev3p15/block/repair/Block2_info.json --model gemini-3.5-flash
+[asu-official] Block2: via-bar-safe + track-shift + v1-patch repair applied
+[asu-official] Block2: wrote /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15/block/repair/Block2/Block2_repaired.py (240,907 chars)
+[asu-official] usage write skipped (read-only, expected under official runner): OSError
+[OFFICIAL] docker network create --internal iclad-eval-rev3p15-Block3
+db88de5c92baf48ca7e414596bde8ce59806443ebdae23011b9488288f1f94ed
+[OFFICIAL] docker run -d --name iclad-wrapper-rev3p15-Block3 --network bridge -e EXPRESS_MODE_KEY -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /tmp/iclad26_asu_official/rev3p15/usage:/secure/usage:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/scripts/model_service.py --host 0.0.0.0 --port 8080 --model gemini-3.5-flash --run-id rev3p15 --case-name Block3 --design-type block --task-type repair --usage-path /secure/usage/Block3_usage.json
+3776a5de63591cb14565fb50219c4a87695fa9b76f878c1e17316ccf1f7e2787
+[OFFICIAL] docker network connect --alias model-wrapper iclad-eval-rev3p15-Block3 iclad-wrapper-rev3p15-Block3
+[OFFICIAL] docker run --rm --name iclad-agent-rev3p15-Block3 --network iclad-eval-rev3p15-Block3 --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m -e PYTHONDONTWRITEBYTECODE=1 -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:rw -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission/agent.py /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/task/rev3p15/block/repair/Block3_info.json --model gemini-3.5-flash
+[asu-official] Block3: via-bar-safe + track-shift + v1-patch repair applied
+[asu-official] Block3: wrote /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15/block/repair/Block3/Block3_repaired.py (293,543 chars)
+[asu-official] usage write skipped (read-only, expected under official runner): OSError
+[OFFICIAL] docker network create --internal iclad-eval-rev3p15-Block4
+f534b738cd81b63a7d205cc1ba64ba81311161a4b981620bf3358131b2122675
+[OFFICIAL] docker run -d --name iclad-wrapper-rev3p15-Block4 --network bridge -e EXPRESS_MODE_KEY -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /tmp/iclad26_asu_official/rev3p15/usage:/secure/usage:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/scripts/model_service.py --host 0.0.0.0 --port 8080 --model gemini-3.5-flash --run-id rev3p15 --case-name Block4 --design-type block --task-type repair --usage-path /secure/usage/Block4_usage.json
+bca7df1dfb769caeaa4c52badad1695f079e7024c088294b1f35ff57add1f7a6
+[OFFICIAL] docker network connect --alias model-wrapper iclad-eval-rev3p15-Block4 iclad-wrapper-rev3p15-Block4
+[OFFICIAL] docker run --rm --name iclad-agent-rev3p15-Block4 --network iclad-eval-rev3p15-Block4 --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m -e PYTHONDONTWRITEBYTECODE=1 -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:rw -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission/agent.py /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/task/rev3p15/block/repair/Block4_info.json --model gemini-3.5-flash
+[asu-official] Block4: via-bar-safe + track-shift + v1-patch repair applied
+[asu-official] Block4: wrote /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15/block/repair/Block4/Block4_repaired.py (371,327 chars)
+[asu-official] usage write skipped (read-only, expected under official runner): OSError
+[OFFICIAL] docker network create --internal iclad-eval-rev3p15-Block5
+84b0e083c36ae0a8fc9f6f8714e0aa1f3fe1ba8257dc569a65f0b44e2efbf558
+[OFFICIAL] docker run -d --name iclad-wrapper-rev3p15-Block5 --network bridge -e EXPRESS_MODE_KEY -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /tmp/iclad26_asu_official/rev3p15/usage:/secure/usage:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/scripts/model_service.py --host 0.0.0.0 --port 8080 --model gemini-3.5-flash --run-id rev3p15 --case-name Block5 --design-type block --task-type repair --usage-path /secure/usage/Block5_usage.json
+8f182b05d097630d4220f44c69eee9d330e3c26b173f7a7586eeae8bd35a38c0
+[OFFICIAL] docker network connect --alias model-wrapper iclad-eval-rev3p15-Block5 iclad-wrapper-rev3p15-Block5
+[OFFICIAL] docker run --rm --name iclad-agent-rev3p15-Block5 --network iclad-eval-rev3p15-Block5 --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m -e PYTHONDONTWRITEBYTECODE=1 -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:rw -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission/agent.py /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/task/rev3p15/block/repair/Block5_info.json --model gemini-3.5-flash
+[asu-official] Block5: via-bar-safe + track-shift + v1-patch repair applied
+[asu-official] Block5: wrote /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15/block/repair/Block5/Block5_repaired.py (218,942 chars)
+[asu-official] usage write skipped (read-only, expected under official runner): OSError
+[OFFICIAL] docker network create --internal iclad-eval-rev3p15-Block6
+0aadcebc592e2dca093862bf5dfaaaf2e78e82d0973eaeeb073cf1b8ff7f640f
+[OFFICIAL] docker run -d --name iclad-wrapper-rev3p15-Block6 --network bridge -e EXPRESS_MODE_KEY -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /tmp/iclad26_asu_official/rev3p15/usage:/secure/usage:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/scripts/model_service.py --host 0.0.0.0 --port 8080 --model gemini-3.5-flash --run-id rev3p15 --case-name Block6 --design-type block --task-type repair --usage-path /secure/usage/Block6_usage.json
+16279c31fe143ad0943b98312017ebf1f1465297b14cfd8ec1ce867f64dd85de
+[OFFICIAL] docker network connect --alias model-wrapper iclad-eval-rev3p15-Block6 iclad-wrapper-rev3p15-Block6
+[OFFICIAL] docker run --rm --name iclad-agent-rev3p15-Block6 --network iclad-eval-rev3p15-Block6 --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m -e PYTHONDONTWRITEBYTECODE=1 -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:rw -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission/agent.py /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/task/rev3p15/block/repair/Block6_info.json --model gemini-3.5-flash
+[asu-official] Block6: via-bar-safe + track-shift + v1-patch repair applied
+[asu-official] Block6: wrote /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15/block/repair/Block6/Block6_repaired.py (486,827 chars)
+[asu-official] usage write skipped (read-only, expected under official runner): OSError
+[OFFICIAL] docker network create --internal iclad-eval-rev3p15-Block7
+124df52e545cb9016890a9fc6225f428eadd2f2e89a1ee128acef2cfdcfab1b9
+[OFFICIAL] docker run -d --name iclad-wrapper-rev3p15-Block7 --network bridge -e EXPRESS_MODE_KEY -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /tmp/iclad26_asu_official/rev3p15/usage:/secure/usage:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/scripts/model_service.py --host 0.0.0.0 --port 8080 --model gemini-3.5-flash --run-id rev3p15 --case-name Block7 --design-type block --task-type repair --usage-path /secure/usage/Block7_usage.json
+6b2be00561cbe7f9c78d68d2455f559648aeeb70dce32c769557a7941a192335
+[OFFICIAL] docker network connect --alias model-wrapper iclad-eval-rev3p15-Block7 iclad-wrapper-rev3p15-Block7
+[OFFICIAL] docker run --rm --name iclad-agent-rev3p15-Block7 --network iclad-eval-rev3p15-Block7 --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m -e PYTHONDONTWRITEBYTECODE=1 -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission:ro -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15:rw -v /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/rev3p15:rw iclad26-asu-official:latest python3 /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/official_submission/agent.py /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/task/rev3p15/block/repair/Block7_info.json --model gemini-3.5-flash
+[asu-official] Block7: via-bar-safe + track-shift + v1-patch repair applied
+[asu-official] Block7: wrote /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15/block/repair/Block7/Block7_repaired.py (1,036,093 chars)
+[asu-official] usage write skipped (read-only, expected under official runner): OSError
+[OFFICIAL] Usage artifacts: /tmp/iclad26_asu_official/rev3p15/usage
+[OFFICIAL] Result artifacts: /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/rev3p15
+[OFFICIAL] Factor artifacts: /Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/factors/rev3p15

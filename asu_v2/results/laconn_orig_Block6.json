@@ -1,0 +1,18 @@
+{
+ "gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/runs/parity/Block6/baseline/out.gds",
+ "components": 218,
+ "floating_vias": 0,
+ "metal_polys": {
+  "19": 389,
+  "20": 223,
+  "30": 148,
+  "40": 50,
+  "50": 9,
+  "60": 4,
+  "70": 0,
+  "80": 0,
+  "90": 0,
+  "96": 0
+ },
+ "m2_partition_sha16": "f464402dfe86747e"
+}

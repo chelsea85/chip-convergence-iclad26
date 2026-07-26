@@ -1,0 +1,398 @@
+{
+ "gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/asu_v2/runs/parity/Block2/baseline/out.gds",
+ "dbu_um": 0.00025,
+ "marker_items": 12,
+ "flagged_v0": 12,
+ "correct_v0": 944,
+ "flagged_size_hist_dbu": {
+  "72x72": 12
+ },
+ "correct_size_hist_dbu": {
+  "72x72": 944
+ },
+ "cuts_per_rail_hist": {
+  "1": 12
+ },
+ "precheck_pass": 0,
+ "fail_reasons": {
+  "lisd-en3": 12,
+  "spacing<18nm": 3,
+  "m1-nonrect": 2
+ },
+ "sites": [
+  {
+   "v0": [
+    7308,
+    8748,
+    7380,
+    8820
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    7276,
+    8748,
+    7704,
+    8820
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    6444,
+    3348,
+    6516,
+    3420
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    6412,
+    3348,
+    6840,
+    3420
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    6444,
+    6588,
+    6516,
+    6660
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    632,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    6424,
+    6588,
+    7056,
+    6660
+   ],
+   "grow_perp_dbu": 560,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    3852,
+    4428,
+    3924,
+    4500
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    3820,
+    4428,
+    4248,
+    4500
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    3852,
+    6588,
+    3924,
+    6660
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    3820,
+    6588,
+    4248,
+    6660
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    9468,
+    3060,
+    9540,
+    3132
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    200,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    9448,
+    3060,
+    9648,
+    3132
+   ],
+   "grow_perp_dbu": 128,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    7308,
+    5508,
+    7380,
+    5580
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    7276,
+    5508,
+    7704,
+    5580
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    2772,
+    6588,
+    2844,
+    6660
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    432,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    2736,
+    6588,
+    3168,
+    6660
+   ],
+   "grow_perp_dbu": 360,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    5148,
+    4428,
+    5220,
+    4500
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    632,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    5128,
+    4428,
+    5760,
+    4500
+   ],
+   "grow_perp_dbu": 560,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    7740,
+    6588,
+    7812,
+    6660
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    428,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    7708,
+    6588,
+    8136,
+    6660
+   ],
+   "grow_perp_dbu": 356,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    7740,
+    2268,
+    7812,
+    2340
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    632,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    7288,
+    2268,
+    7920,
+    2340
+   ],
+   "grow_perp_dbu": 560,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "spacing<18nm",
+    "lisd-en3"
+   ]
+  },
+  {
+   "v0": [
+    5364,
+    2268,
+    5436,
+    2340
+   ],
+   "v0_wh_dbu": [
+    72,
+    72
+   ],
+   "m1_wh_dbu": [
+    432,
+    864
+   ],
+   "m1_horiz": false,
+   "proposed": [
+    5328,
+    2268,
+    5760,
+    2340
+   ],
+   "grow_perp_dbu": 360,
+   "in_lisd": true,
+   "interacts_lig": false,
+   "precheck_pass": false,
+   "notes": [
+    "m1-nonrect",
+    "spacing<27nm(warn)",
+    "lisd-en3"
+   ]
+  }
+ ]
+}

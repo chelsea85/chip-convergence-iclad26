@@ -1,0 +1,43 @@
+{
+ "block": "Block6",
+ "script_sha256": "5f627e981e06abcebf0cfe24a559390752e18244a449c128bb090d7a44d0b90c",
+ "passes": [
+  "via-bar-safe",
+  "track-shift",
+  "v1-patch"
+ ],
+ "total": 102,
+ "fvr": 0.41295546558704455,
+ "repair_rate": 0.6032388663967612,
+ "eligible": true,
+ "credible": true,
+ "credible_why": "conducting-area drop 0.27% (anti-deletion)",
+ "conn_proxy_component_delta": -3,
+ "la_equal": true,
+ "la_anchors": 771,
+ "la_uncovered": [
+  0,
+  0
+ ],
+ "la_components": [
+  218,
+  218
+ ],
+ "la_partition_sha256_base": "81621f0c99c65d12b01ca0578fd5e6d70f1a91170f4e1f11be96b48d60768633",
+ "la_partition_sha256_cand": "81621f0c99c65d12b01ca0578fd5e6d70f1a91170f4e1f11be96b48d60768633",
+ "per_rule": {
+  "V0.M1.AUX.3": 21,
+  "M1.S.2": 12,
+  "M1.S.4": 1,
+  "M1.S.6": 4,
+  "V1.M1.EN.1": 10,
+  "M5.AUX.4": 1,
+  "V4.AUX.1": 2,
+  "V4.M5.AUX.2": 26,
+  "V5.AUX.1": 1,
+  "V5.M6.AUX.2": 24
+ },
+ "shipped_v1_total": 167,
+ "shipped_v1_fvr": 0.6761,
+ "measured_run": "asu_v2/runs/rev3b"
+}

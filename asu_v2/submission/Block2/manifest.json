@@ -1,0 +1,39 @@
+{
+ "block": "Block2",
+ "script_sha256": "451be8733d07882331e34d958e312bf5b0e17f119aeb52d7cdb7b6b4e82672af",
+ "passes": [
+  "via-bar-safe",
+  "track-shift",
+  "v1-patch"
+ ],
+ "total": 35,
+ "fvr": 0.5147058823529411,
+ "repair_rate": 0.5147058823529411,
+ "eligible": true,
+ "credible": true,
+ "credible_why": "conducting-area drop 0.07% (anti-deletion)",
+ "conn_proxy_component_delta": 0,
+ "la_equal": true,
+ "la_anchors": 286,
+ "la_uncovered": [
+  0,
+  0
+ ],
+ "la_components": [
+  93,
+  93
+ ],
+ "la_partition_sha256_base": "ddb7635570e28a267ceeae4b28f0862acbf3a93035c6520463a15a3d629986c7",
+ "la_partition_sha256_cand": "ddb7635570e28a267ceeae4b28f0862acbf3a93035c6520463a15a3d629986c7",
+ "per_rule": {
+  "V0.M1.AUX.3": 12,
+  "M1.S.2": 2,
+  "V1.M1.EN.1": 2,
+  "M4.S.5": 1,
+  "V4.AUX.1": 2,
+  "V4.M5.AUX.2": 16
+ },
+ "shipped_v1_total": 52,
+ "shipped_v1_fvr": 0.7647,
+ "measured_run": "asu_v2/runs/rev3b"
+}
