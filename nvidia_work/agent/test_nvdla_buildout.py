@@ -102,7 +102,17 @@ def main():
           == V._read_stanza(files, "top", for_sat=True, spec=default_spec))
 
     # Compare all 323 frontend commands with the retained host-proven recipe.
-    diag = (PROJECT / "nvdla_lec_diag/nvdla_lec.ys").read_text()
+    # That recipe is host EVIDENCE kept at the project root, not part of the
+    # submission repo — so a fresh clone does not have it. SKIP that comparison
+    # instead of dying with FileNotFoundError: a judge running the battery from
+    # a clone should see a clean prerequisite notice, not a traceback
+    # (2026-07-26, found by cloning our own submission and running it).
+    _diag_ys = PROJECT / "nvdla_lec_diag/nvdla_lec.ys"
+    if not _diag_ys.is_file():
+        print(f"PREREQ-MISSING: host LEC recipe not present at {_diag_ys} "
+              f"— skipping the 323-command frontend comparison")
+        return 3
+    diag = _diag_ys.read_text()
     diag_reads = []
     for line in diag.splitlines():
         if line.startswith("hierarchy "):
