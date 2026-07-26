@@ -193,7 +193,7 @@ def main():
     trace_tokens, trace_timeout = R._validated_trace_settings(
         R.NVDLA_TRACE_TESTS, R.NVDLA_TRACE_TIMEOUT_SEC)
     check("host single-trace revision is scope-matched and timeout-bounded",
-          trace_tokens == ("pdp_1x1x1_3x3_ave_int8_0",)
+          trace_tokens == ("pdp_1x3x8_8x8_ave_int8_0",)
           and trace_timeout == 4500
           and R._trace_family(allowed) == "pdp")
     raises_contract(
@@ -295,7 +295,7 @@ def main():
               packet["released"] and all(packet["checks"].values())
               and "dualsim SKIP(size)" in packet["assurance_policy"]
               and packet["trace_selection"]["prefixes"]
-                  == ["pdp_1x1x1_3x3_ave_int8_0"]
+                  == ["pdp_1x3x8_8x8_ave_int8_0"]
               and packet["trace_selection"]["per_trace_timeout_s"] == 4500
               and packet["campaign_status"].endswith(
                   "PENDING_REVIEW_AND_PROFILE_BINDING"))

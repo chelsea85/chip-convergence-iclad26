@@ -57,11 +57,12 @@ NVDLA_DEFAULT_MUTATION = \
 # in-loop gate needs a trace that EXERCISES the mutated unit (the negative
 # control's purpose); suite BREADTH belongs to banking-time validation of the
 # one finalist; LEC-v2 PROVEN remains the equivalence authority throughout.
-# Default = the smallest PDP trace (1x1x1 cube, ~2000x less data than the
-# 59-min trace) matching the default PDP-leaf mutation. The organizer runner
-# natively supports these env overrides (TEST_PREFIXES / TEST_TIMEOUT_SEC) —
-# no organizer files are modified. CLI: --trace-tests / --trace-timeout.
-NVDLA_TRACE_TESTS = "pdp_1x1x1_3x3_ave_int8_0"
+# Default = a non-degenerate PDP trace confirmed passing on the pristine
+# design. The former 1x1x1 trace lacks PDP data and fails pristine, making
+# every candidate look broken. The organizer runner natively supports these
+# env overrides (TEST_PREFIXES / TEST_TIMEOUT_SEC); no organizer files are
+# modified. CLI: --trace-tests / --trace-timeout.
+NVDLA_TRACE_TESTS = "pdp_1x3x8_8x8_ave_int8_0"
 NVDLA_TRACE_TIMEOUT_SEC = 4500
 _TRACE_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 

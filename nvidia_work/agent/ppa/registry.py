@@ -16,6 +16,7 @@ from __future__ import annotations
 from .config import IPS, ClockSpec, IPSpec
 from .contract import (TMAKE_REGISTRY, TmakeLayout, TmakeRegistration,
                        register_tmake)
+from .gate import TraceGatePlan
 
 # Exact frontend environment from NVDLA/syn/yosys_syn/nvdla_yosys.f and the
 # host-proven nvdla_lec_diag/nvdla_lec.ys. Keep the diagnostic's define order:
@@ -66,6 +67,30 @@ NVDLA_LAYOUT = TmakeLayout(
     generator_cwd="NVDLA",
     generator_cmd="./tools/bin/tmake -clean -build vmod")
 
+NVDLA_TRACE_TARGET_ROOT = "NVDLA/vmod/nvdla/pdp"
+NVDLA_DEFAULT_TARGET = \
+    "NVDLA/vmod/nvdla/pdp/NV_NVDLA_PDP_nan.v"
+NVDLA_DEFAULT_TRACE = "pdp_1x3x8_8x8_ave_int8_0"
+NVDLA_TRACE_TIMEOUT_SEC = 4500
+NVDLA_TRACE_PLAN = TraceGatePlan(
+    clean_dirs=("NVDLA/outdir/nv_small/verilator",),
+    regen_cmd="cd NVDLA && ./tools/bin/tmake -clean -build vmod",
+    build_cmd="cd NVDLA && ./tools/bin/tmake -build verilator",
+    exe_path="NVDLA/outdir/nv_small/verilator/VNV_nvdla",
+    test_cwd="NVDLA/verif/verilator",
+    test_env=(
+        ("PROJECT", "nv_small"),
+        ("OUTDIR", "outdir"),
+        ("TEST_PREFIXES", NVDLA_DEFAULT_TRACE),
+        ("TEST_TIMEOUT_SEC", str(NVDLA_TRACE_TIMEOUT_SEC)),
+    ),
+    test_driver="run_all_trace_tests.sh",
+    # The declared trace exercises PDP.  The controller must choose its exact
+    # one-file campaign scope from this partition; a plan for another
+    # partition requires a separately registered trace recipe.
+    editable_roots=(NVDLA_TRACE_TARGET_ROOT,),
+)
+
 
 def ensure_registered() -> None:
     """Idempotent production registration, called from CLI entry points
@@ -89,3 +114,23 @@ def ensure_registered() -> None:
                                 "literal production spec")
     else:
         IPS["nvdla"] = NVDLA_SPEC
+
+    # Consumer wiring is just as canonical as the source contract.  Partial
+    # registration is refused by evaluate.evaluate_many(); verify a prior
+    # process-local binding rather than overwriting it.
+    from . import gate as G
+    prior_plan = G.get_gate_plan("nvdla")
+    if prior_plan is None:
+        G.register_gate_plan("nvdla", NVDLA_TRACE_PLAN)
+    elif prior_plan != NVDLA_TRACE_PLAN:
+        raise ContractError(
+            "existing nvdla gate plan differs from the canonical trace plan")
+
+    from . import measure_tmake as MT
+    prior_measure = MT.get_measure_provider("nvdla")
+    if prior_measure is None:
+        MT.register_measure_provider("nvdla", MT.make_measure_fn)
+    elif prior_measure is not MT.make_measure_fn:
+        raise ContractError(
+            "existing nvdla measure provider differs from the canonical "
+            "tmake provider")

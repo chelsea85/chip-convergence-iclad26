@@ -38,6 +38,38 @@ def _strip_comments(text: str) -> str:
 
 
 # ── port contract ─────────────────────────────────────────────────────────────
+_HDL_KEYWORDS = {
+    "module", "endmodule", "input", "output", "inout", "reg", "wire", "logic",
+    "integer", "parameter", "localparam", "initial", "always", "assign",
+    "begin", "end", "if", "else", "case", "endcase", "for", "while", "repeat",
+    "task", "function", "generate", "endgenerate", "posedge", "negedge",
+    "defparam", "genvar", "real", "time", "event", "specify", "endspecify",
+}
+
+
+def skeleton_top_name(skel_text: str) -> str | None:
+    """The DUT module name the skeleton TB instantiates.
+
+    The agent must NOT assume a fixed top: `easy` instantiates
+    `secure_periph_soc`, `medium` -> `noc_aes_soc`, `hard` -> `crypto_soc`, and
+    an unseen organizer testcase may use anything. Hardcoding the easy name
+    made the generated top unusable on every other problem — 22 correct IPs
+    would still fail elaboration with "Unknown module type" (2026-07-25).
+
+    A DUT instantiation is `<module> <instance> ( .port(sig), ... );` — the
+    NAMED port connection is what distinguishes it from a declaration, so we
+    key off that and reject HDL keywords. Returns None when nothing matches,
+    and callers must then fail closed rather than guess.
+    """
+    t = _strip_comments(skel_text)
+    for m in re.finditer(r"\b([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*\(\s*\.", t):
+        mod = m.group(1)
+        if mod.lower() in _HDL_KEYWORDS:
+            continue
+        return mod
+    return None
+
+
 def skeleton_contract(skel_text: str, top: str = "secure_periph_soc") -> dict:
     """Expected ports from the skeleton TB: {name: (dir, width)} where dir is
     from the DUT's perspective (TB reg -> input, TB wire -> output)."""
@@ -73,6 +105,22 @@ def top_ports(top_text: str, top: str = "secure_periph_soc") -> dict:
     if not m:
         raise ValueError(f"module {top} not found")
     header = m.group(1)
+    # Skip an optional #(...) PARAMETER block before the port list. Without
+    # this, `module dma0 #( parameter DATA_W = 32 )( input wire aclk, ... )`
+    # parsed the PARAMETERS as the port list: no input/output keywords appear
+    # there, so the module reported ZERO ports and every direction check
+    # silently passed (2026-07-25 — this is why the constant-driven-output
+    # gate saw nothing on the AXI DMA).
+    j = 0
+    while j < len(header) and header[j].isspace():
+        j += 1
+    if j < len(header) and header[j] == "#":
+        k = header.find("(", j)
+        if k >= 0:
+            try:
+                header = header[_scan_paren(header, k):]
+            except (ValueError, IndexError):
+                pass
     i = header.find("(")
     if i < 0:
         return {}
@@ -185,7 +233,7 @@ def yaml_validator(yaml_texts: list[str]) -> tuple[bool, list[str]]:
 
 
 # ── reset lint (stitched top) ─────────────────────────────────────────────────
-def reset_lint(top_text: str) -> tuple[bool, list[str]]:
+def reset_lint(top_text: str, strict_names: bool = True) -> tuple[bool, list[str]]:
     t = _strip_comments(top_text)
     errors = []
     # por_n may feed ONLY the reset synchronizer instance
@@ -208,8 +256,17 @@ def reset_lint(top_text: str) -> tuple[bool, list[str]]:
         errors.append(f"reset: multiple different reset nets {sorted(nets)} — "
                       f"expected one synchronized net")
     # accept prefixed/suffixed synchronizer module names (models name their
-    # instances e.g. u_reset_sync — the YAML `name` becomes the MODULE name)
-    if not re.search(r"reset_sync|rst_sync", t):
+    # instances e.g. u_reset_sync — the YAML `name` becomes the MODULE name).
+    # NAME-PATTERN check only: the SUBSTANTIVE rules above (raw por_n may feed
+    # only a synchronizer, no IP reset pin on raw por_n, one common reset net)
+    # are protocol-independent and always enforced. The literal
+    # `reset_sync|rst_sync` spelling is an EASY-tier convention — on `medium`
+    # the model legitimately named its synchronizer `u_rst` and this fired as a
+    # FALSE violation, burning all three re-prompts on a design that elaborated
+    # correctly (2026-07-25). Outside easy, accept any reset-ish module name,
+    # which is exactly the vocabulary the por_n rule above already trusts.
+    pattern = r"reset_sync|rst_sync" if strict_names else r"(?i)reset|rst"
+    if not re.search(pattern, t):
         errors.append("reset: no reset synchronizer instance found in top")
     return not errors, errors
 
@@ -286,6 +343,104 @@ def _assign_map(t: str) -> dict:
 
 
 _IDS = lambda expr: re.findall(r"[A-Za-z_]\w*", expr)
+
+
+_LITERAL = re.compile(
+    r"""^(?:
+          \d*\s*'\s*[sS]?[bBoOdDhH]?[0-9a-fA-FxXzZ_?]+   # 1'b1, 4'hF, 2'd0
+        | \d+                                            # bare 0, 1, 42
+        )$""", re.X)
+
+
+def _is_literal(expr: str) -> bool:
+    """True only for an UNAMBIGUOUS constant. Deliberately conservative: a
+    concatenation, slice, identifier or anything with a name in it is left
+    alone, because a false accusation costs a re-prompt on correct RTL."""
+    e = expr.strip()
+    if not e:
+        return False                     # `.port()` = intentionally unconnected
+    return bool(_LITERAL.match(e))
+
+
+def instance_port_directions(top_text: str, gen_files
+                             ) -> tuple[bool, list[str]]:
+    """An instance's OUTPUT/INOUT port may not be driven by a constant.
+
+    Why this gate exists (2026-07-25). The stitcher tied literals to output
+    ports — `.p0_d_size(3'd3)` on a TileLink router, `.m_rready(1'b1)` on an
+    AXI DMA master. Verilog rejects both ("Output port expression must support
+    a continuous assignment") so elaboration dies and the design scores zero.
+
+    The port DIRECTIONS were already in the prompt (`output wire [1:0]
+    p0_d_param`) and a prompt rule forbidding it was added — the model still
+    complied on one problem and violated on another. That is the project's
+    recurring lesson: a model instruction is probabilistic, a deterministic
+    gate is not. This converts a hard compile failure into a typed error the
+    existing re-prompt loop can repair, naming the exact instance and port.
+
+    Tying an output high is often what the designer MEANT (an always-ready
+    AXI master); the legal spelling is a wire, or `.port()` to leave it
+    unconnected — both are suggested in the error text.
+    """
+    errors = []
+    directions = {}
+    for f in gen_files:
+        try:
+            text = Path(f).read_text()
+        except OSError:
+            continue
+        m = re.search(r"\bmodule\s+(\w+)", _strip_comments(text))
+        if not m:
+            continue
+        try:
+            directions[m.group(1)] = top_ports(text, m.group(1))
+        except ValueError:
+            continue                     # unparseable header -> no opinion
+    if not directions:
+        return True, []
+    for mod, inst, conns in parse_instances(top_text, list(directions)):
+        ports = directions.get(mod, {})
+        for port, expr in conns.items():
+            d = ports.get(port, (None, None))[0]
+            if d in ("output", "inout") and _is_literal(expr):
+                errors.append(
+                    f"port-direction: {inst}.{port} is an {d} of {mod} but is "
+                    f"driven by constant '{expr}' — illegal Verilog. Connect it "
+                    f"to a declared wire, or leave it unconnected as .{port}()")
+    return not errors, errors
+
+
+def repair_constant_driven_outputs(top_text: str, gen_files
+                                   ) -> tuple[str, list[str]]:
+    """LAST-RESORT mechanical repair: `.out_port(1'b1)` -> `.out_port()`.
+
+    Only reached when the model has failed to fix the violation across every
+    re-prompt. Leaving an output unconnected is legal Verilog and lets the
+    design ELABORATE; shipping the constant guarantees a compile failure and a
+    zero. A partially-correct design that builds beats one that does not, which
+    is the same reasoning as the existing "ship best-effort" path.
+
+    Deliberately narrow: only connections this module already flagged, only
+    literal constants, and every edit is RETURNED as a note so the repair is
+    logged rather than silent. Never touches inputs.
+    """
+    ok, errs = instance_port_directions(top_text, gen_files)
+    if ok:
+        return top_text, []
+    notes, out = [], top_text
+    for e in errs:
+        m = re.match(r"port-direction: (\w+)\.(\w+) is an (\w+) of", e)
+        if not m:
+            continue
+        inst, port = m.group(1), m.group(2)
+        # rewrite only inside THIS instance's connection list
+        pat = re.compile(rf"(\b{re.escape(inst)}\b[^;]*?\.{re.escape(port)}\s*\()"
+                         rf"\s*[^()]*?\s*(\))", re.S)
+        new, n = pat.subn(r"\1\2", out, count=1)
+        if n:
+            out = new
+            notes.append(f"repaired {inst}.{port}: constant -> unconnected")
+    return out, notes
 
 
 def structural_diff(top_text: str, gen_modules: list,

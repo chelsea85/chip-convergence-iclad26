@@ -244,6 +244,65 @@ def fence_violation(ip: str, files: dict) -> str | None:
             break   # token lines identical to pristine — pass-through, fine
     return None
 
+
+def cdc_ff_violation(spec, base_ppa: dict, cand_ppa: dict) -> str | None:
+    """Structural invariant for MULTI-CLOCK designs: a candidate may not remove
+    flip-flops relative to the PRISTINE BASELINE.
+
+    Why this exists (async_fifo, 2026-07-24). A candidate replaced a REGISTERED
+    Gray pointer with a combinational `gray(bin)`. As a *function* the two are
+    identical, so lint, compile, the testbench, **yosys LEC (PROVEN)** and
+    cycle-exact dual-instance simulation all passed — it was our best-verified
+    candidate. It was also broken: at a clock-domain crossing a combinational
+    encoder GLITCHES during multi-bit binary transitions, and the receiving
+    domain samples asynchronously, so it can latch a corrupt pointer. Formal
+    equivalence and zero-delay simulation both reason in a model where glitches
+    do not exist, so NEITHER CAN EVER SEE THIS BUG. More checking cannot fix
+    that; only structural policy can. Rebuilding the separable timing win on
+    the registered base measured ADP 0.9984 (noise) — the entire apparent 4%
+    gain WAS the hazard.
+
+    The proxy: at a crossing, the register is what guarantees the single-bit
+    transition property, so *removing flip-flops in a multi-clock design* is
+    the observable signature of de-registering a crossing. This is deliberately
+    conservative — it will also refuse a legitimate FF-reducing area win
+    elsewhere in a CDC design. That trade is correct: the cost of a false
+    refusal is a missed optimization; the cost of a false accept is silicon
+    that fails intermittently and passes every test we own.
+
+    Compared against the BASELINE, never the parent: the shipped async_fifo
+    pool already contains a de-registered candidate, and a parent-relative
+    check would let an existing violation persist and drift further.
+
+    Fails closed: if either FF count is missing or unusable, the candidate is
+    refused rather than admitted.
+
+    Returns a reason string if the candidate violates the invariant, else None.
+    """
+    # spec is None only for an IP absent from IPS. Real campaigns cannot hit
+    # this: config carries the static IPs and discover.py registers every
+    # auto-onboarded one (`IPS[spec.name] = spec`) before evaluation, so an
+    # unregistered name occurs only in synthetic/unit contexts. LIMITATION,
+    # stated plainly: with no spec we cannot know the clock count, so no
+    # invariant is applied — this path is fail-OPEN by necessity, which is why
+    # it must stay unreachable from the campaign path.
+    if spec is None or len(getattr(spec, "clocks", ()) or ()) <= 1:
+        return None                      # single-clock: no crossing, no hazard
+    base_ff, cand_ff = base_ppa.get("ff"), cand_ppa.get("ff")
+    for label, v in (("baseline", base_ff), ("candidate", cand_ff)):
+        if not isinstance(v, (int, float)) or v != v or v < 0:
+            return (f"cdc-invariant: {label} flip-flop count unavailable "
+                    f"({v!r}) — refusing rather than admitting unverifiable "
+                    f"structure in a multi-clock design")
+    if cand_ff < base_ff:
+        return (f"cdc-invariant: removes {base_ff - cand_ff:.0f} flip-flop(s) "
+                f"vs pristine baseline ({cand_ff:.0f} < {base_ff:.0f}) in a "
+                f"{len(spec.clocks)}-clock design — de-registering a "
+                f"clock-domain crossing is a glitch hazard that LEC and "
+                f"zero-delay simulation cannot represent")
+    return None
+
+
 _TEMPLATE = """You are an expert RTL engineer optimizing Verilog PPA on the ASAP7 7nm library
 (Yosys synthesis + OpenSTA timing). Optimization goal weights: {weights}.
 
@@ -343,23 +402,39 @@ def build_prompt(ctx: PromptContext, strategy: dict) -> str:
         directive=strategy["directive"], budget=ctx.budget_line, rtl=rtl)
 
 
-def parse_response(ip: str, text: str) -> dict[str, str]:
+def parse_response(ip: str, text: str,
+                   allowed_paths: list[str] | tuple[str, ...] | None = None
+                   ) -> dict[str, str]:
     """'// FILE: name.v' blocks -> {repo-relative path: content}.
 
     Fallback (real-model finding, 2026-07-12: Gemini often emits plain
     fenced code blocks despite the FILE-block instruction): map each
     ``` fence to a source file by its declared module name."""
     spec = IPS[ip]
+    exact_by_name = {}
+    if allowed_paths is not None:
+        for rel in allowed_paths:
+            name = Path(rel).name
+            if name in exact_by_name:
+                raise ValueError(
+                    f"ambiguous allowed basename {name!r}: "
+                    f"{exact_by_name[name]} vs {rel}")
+            exact_by_name[name] = rel
     out = {}
     for name, code in re.findall(
             r"//\s*FILE:\s*(\S+\.s?v)\s*\n(.*?)(?=//\s*FILE:|\Z)",
             text, re.DOTALL):
         code = re.sub(r"^```\w*\s*$", "", code, flags=re.M).strip()
         if code:
-            out[f"{spec.rtl_dir}/{Path(name).name}"] = code + "\n"
+            rel = (exact_by_name.get(Path(name).name)
+                   if allowed_paths is not None
+                   else f"{spec.rtl_dir}/{Path(name).name}")
+            if rel is not None:
+                out[rel] = code + "\n"
     if out:
         return out
-    stems = {Path(s).stem: s for s in spec.sources}
+    stems = {Path(s).stem: s for s in (
+        allowed_paths if allowed_paths is not None else spec.sources)}
     for block in re.findall(r"```(?:\w+)?\s*\n(.*?)```", text, re.DOTALL):
         block = block.strip()
         m = re.search(r"\bmodule\s+([A-Za-z_]\w*)\b", block)

@@ -20,6 +20,7 @@ import json
 import math
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -372,6 +373,146 @@ def _refuse_tmake(ip: str, where: str):
             f"refuses tmake)")
 
 
+def _tmake_image_digest() -> str:
+    """Resolve the immutable local image identity used by evaluation IDs."""
+    from . import contract as _C
+    r = subprocess.run(
+        ["docker", "image", "inspect", IMAGE, "--format", "{{.Id}}"],
+        capture_output=True, text=True)
+    digest = (r.stdout or "").strip()
+    if r.returncode != 0 or not (
+            digest.startswith("sha256:")
+            and _C._is_sha256(digest[7:])):
+        raise _C.ContractError(
+            f"cannot bind tmake evaluation to {IMAGE!r} image digest")
+    return digest
+
+
+def _evidence_ref(payload: dict) -> str:
+    return hashlib.sha256(json.dumps(
+        payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _valid_ppa(ppa) -> bool:
+    if not isinstance(ppa, dict):
+        return False
+    for k in _REQ_POSITIVE:
+        v = ppa.get(k)
+        if (not isinstance(v, (int, float)) or isinstance(v, bool)
+                or not math.isfinite(v) or v <= 0):
+            return False
+    return all(isinstance(ppa.get(k), (int, float))
+               and not isinstance(ppa.get(k), bool)
+               and math.isfinite(ppa.get(k)) for k in _REQ_FINITE)
+
+
+def _tmake_adapter_result(cand: Candidate, rec: dict,
+                          wall_s: float) -> EvalResult:
+    """Map rich policy evidence to the legacy controller's narrow result.
+
+    Only an eligible policy row can become ``measured``.  Diagnostic PPA may
+    be retained on an ineligible result (notably PENDING validation), but the
+    controller cannot pool it because the status remains non-measured.
+    """
+    verify = rec.get("verify") if isinstance(rec.get("verify"), dict) else {}
+    ppa = rec.get("ppa") if _valid_ppa(rec.get("ppa")) else None
+    gate = rec.get("gate") or {}
+    proof = rec.get("proof") or {}
+    meas = rec.get("measurement") or {}
+    classification = rec.get("classification")
+
+    if classification != "proceed":
+        status = "regen-fail"
+    elif not gate.get("passed"):
+        status = ("gate-fail" if gate.get("tests", [0, 0])[1] > 0
+                  else "gate-flow-fail")
+    elif proof.get("verdict") != "PROVEN":
+        status = ("lec-error" if proof.get("verdict") == "ERROR"
+                  else "lec-inconclusive")
+    elif not meas.get("ok") or ppa is None:
+        status = "synth-fail"
+    elif rec.get("refusal_reason") == "CONTRACT_VALIDATION_PENDING":
+        status = "contract-pending"
+    elif not rec.get("eligible"):
+        status = "policy-reject"
+    else:
+        status = "measured"
+    return EvalResult(
+        cid=rec.get("cid") or cand.cid, status=status, verify=verify,
+        ppa=ppa, detail=rec.get("detail") or rec.get("assurance", ""),
+        wall_s=wall_s)
+
+
+def _evaluate_tmake_many(cands: list[Candidate], *, scope, profile,
+                         container_digest: str | None,
+                         tool_versions: dict | None) -> list[EvalResult]:
+    from . import contract as _C
+    from . import gate as _G
+    from . import measure_tmake as _MT
+    from . import orchestrate as _O
+    from . import policy as _P
+    from .proposer import fence_violation
+
+    ip = cands[0].ip
+    plan = _G.get_gate_plan(ip)
+    provider = _MT.get_measure_provider(ip)
+    if plan is None or provider is None or scope is None:
+        missing = [
+            name for name, value in (
+                ("canonical gate plan", plan),
+                ("measurement provider", provider),
+                ("campaign scope", scope))
+            if value is None]
+        _refuse_tmake(ip, "evaluate_many (partial tmake wiring: "
+                      + ", ".join(missing) + ")")
+    ctr = _C.get_contract(IPS[ip])
+    _C.check_scope_compat(ctr, scope)
+    base = baseline(ip)
+    period_ps = (IPS[ip].clocks[0].period_ns * 1000.0
+                 if IPS[ip].clocks else None)
+    if not period_ps or period_ps <= 0:
+        raise _C.ContractError(
+            f"{ip}: tmake measurement requires a positive clock period")
+    image_digest = container_digest or _tmake_image_digest()
+    versions = tool_versions or {"toolchain_image": IMAGE}
+
+    out = []
+    for cand in cands:
+        t0 = time.time()
+        violation = fence_violation(ip, cand.files)
+        checks_payload = {
+            "schema": "tmake-template-scope-check-v1",
+            "ip": ip, "scope": scope.scope_id(),
+            "paths": sorted(cand.files), "fence_violation": violation,
+        }
+        checks = _P.CheckEvidence(
+            ok=violation is None, ref=_evidence_ref(checks_payload))
+        proxy = _P.CheckEvidence(
+            ok=True, ref=_evidence_ref({
+                "schema": "tmake-proxy-policy-v1",
+                "decision": "full measurement required; cheap legacy proxy "
+                            "does not express contract inputs"}))
+        budget_ok = cand.meta.get("budget_authorized") is True
+        budget = _P.CheckEvidence(
+            ok=budget_ok, ref=_evidence_ref({
+                "schema": "controller-budget-v1",
+                "authorized": budget_ok,
+                "round": cand.meta.get("round"),
+                "strategy": cand.meta.get("strategy"),
+            }))
+        record = []
+        full_cid = _O.source_cid(cand.files)
+        measure_fn = provider(
+            base["ppa"], period_ps, label=f"{ip}-{full_cid[:12]}",
+            record=record)
+        rec = _O.evaluate_tmake_candidate(
+            ip, cand.files, scope, plan, profile=profile,
+            measure_fn=measure_fn, checks=checks, proxy=proxy, budget=budget,
+            container_digest=image_digest, tool_versions=versions)
+        out.append(_tmake_adapter_result(cand, rec, time.time() - t0))
+    return out
+
+
 def _clamped_workers(ip: str, requested: int) -> int:
     """Contract hard worker cap consumed at the executor (SS11 step 3 /
     SSH.5): min(requested, contract cap). NVDLA/tmake: 1 (743 MB workspaces +
@@ -386,14 +527,21 @@ def _clamped_workers(ip: str, requested: int) -> int:
 
 
 def evaluate_many(cands: list[Candidate], *, max_workers: int = 4,
-                  use_proxy: bool = True, full_verify: bool = False) -> list[EvalResult]:
+                  use_proxy: bool = True, full_verify: bool = False,
+                  scope=None, profile=None, container_digest: str | None = None,
+                  tool_versions: dict | None = None) -> list[EvalResult]:
     assert cands
     ip = cands[0].ip
     if any(c.ip != ip for c in cands):
         raise ValueError(f"evaluate_many: mixed-IP batch "
                          f"({sorted({c.ip for c in cands})}) - the contract "
                          f"worker cap and baseline are per-IP authorities")
-    _refuse_tmake(ip, "evaluate_many")
+    from . import contract as _C
+    if _C.get_contract(IPS[ip]).name == "tmake":
+        max_workers = _clamped_workers(ip, max_workers)
+        return _evaluate_tmake_many(
+            cands, scope=scope, profile=profile,
+            container_digest=container_digest, tool_versions=tool_versions)
     max_workers = _clamped_workers(ip, max_workers)
     base = baseline(ip)
     fps: list[tuple] = []

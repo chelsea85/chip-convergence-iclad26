@@ -36,7 +36,8 @@ from .pool import DesignPool
 from .proposer import (Model, PromptContext, build_prompt, build_reflect_prompt,
                        build_repair_prompt, build_gatefail_repair_prompt,
                        make_model, parse_reflection, parse_response,
-                       pick_strategies, fence_violation, FENCE, LADDER)
+                       pick_strategies, fence_violation, cdc_ff_violation,
+                       FENCE, LADDER)
 
 # Tag -> preferred rung order, v2 per the Codex expanded literature review
 # (`NVIDIA_TIMING_STRATEGY_EXPANDED_LITERATURE_REVIEW.md` §8.1/§14).
@@ -158,14 +159,15 @@ def _sdc_period(ip: str) -> float | None:
     return _SDC_PERIODS.get(ip)
 
 
-def _dossier(ip: str) -> str:
+def _dossier(ip: str, sources: tuple[str, ...] | list[str] | None = None
+             ) -> str:
     spec = IPS[ip]
     lines = [f"## Design dossier: {ip}"]
     lines.append(f"Top module: {spec.top}. Clocks: " +
                  ", ".join(f"{c.name} ({c.period_ns}ns sim)" for c in spec.clocks) +
                  ". Resets: " + ", ".join(f"{n} (active-{lvl})"
                                           for n, lvl in spec.resets) + ".")
-    for rel in spec.sources:
+    for rel in (spec.sources if sources is None else sources):
         text = pristine_source(ip, rel)
         n = text.count("\n")
         lines.append(f"- {Path(rel).name}: {n} lines")
@@ -313,7 +315,10 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
     # every executor below receives this value (evaluate_many re-clamps only
     # as an idempotent defense)
     from . import contract as _C
-    _cap = _C.get_contract(spec).worker_cap()
+    ctr = _C.get_contract(spec)
+    is_tmake = ctr.name == "tmake"
+    requested_workers = workers
+    _cap = ctr.worker_cap()
     if workers > _cap:
         print(f"[{ip}] workers resolved {workers} -> {_cap} (contract cap)")
         workers = _cap
@@ -330,6 +335,7 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
     diag = None
     _large = len(spec.sources) > _DIAG_MIN_FILES
     _want = (diagnose == "on" or
+             (diagnose == "auto" and is_tmake) or
              (diagnose == "auto" and _large and not _is_stub(model)))
     if _want:
         from .diagnose import diagnose as _run_diag
@@ -351,7 +357,8 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
         # --focus: explicit cursor override (basenames). The campaign walks
         # THESE files in the given order instead of the diagnosis ranking —
         # for targeted campaigns (e.g. unfenced aes S-box) and DAC-day triage.
-        by_name = {Path(s).name: s for s in spec.sources}
+        by_name = {Path(s).name: s for s in (
+            diag.critical_files if is_tmake else spec.sources)}
         want = [by_name[n] for n in focus if n in by_name]
         missing = [n for n in focus if n not in by_name]
         if missing:
@@ -360,11 +367,53 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
             diag.critical_files = want
             print(f"[{ip}] focus cursor: {[Path(f).name for f in want]}")
 
+    campaign_scope = None
+    source_paths = list(spec.sources)
+    if is_tmake:
+        from . import gate as _G
+        from . import registry as _registry
+        plan = _G.get_gate_plan(ip)
+        if not isinstance(plan, _G.TraceGatePlan):
+            raise _C.ContractError(
+                f"{ip}: ordinary campaign requires a registered "
+                "TraceGatePlan")
+        ranked = [
+            rel for rel in (diag.critical_files if diag else ())
+            if plan.scope_compatible(_C.CampaignScope(
+                ip=ip, editable_targets=(rel,),
+                verification_policy="trace-gate+lec-v2+measurement",
+                requested_workers=requested_workers))]
+        target = (ranked[0] if ranked
+                  else _registry.NVDLA_DEFAULT_TARGET)
+        if focus:
+            focused = [rel for rel in (diag.critical_files if diag else ())
+                       if Path(rel).name in set(focus)]
+            if focused:
+                target = focused[0]
+        campaign_scope = _C.CampaignScope(
+            ip=ip, editable_targets=(target,),
+            verification_policy="trace-gate+lec-v2+measurement",
+            requested_workers=requested_workers,
+            max_changed_files=1)
+        if not plan.scope_compatible(campaign_scope):
+            raise _C.ContractError(
+                f"{ip}: selected target {target} is not exercised by the "
+                "registered trace plan")
+        source_paths = [target]
+        # NVDLA v1 is an explicit one-target campaign. Diagnosis still ranks
+        # the real design, but the controller walks only the highest-ranked
+        # target covered by the registered PDP trace.
+        if diag is not None:
+            diag.critical_files = [target]
+        print(f"[{ip}] trace-bound campaign target: {target}")
+
     # ── baseline state (measure + reports, cached) ───────────────────────────
     base = E.baseline(ip)
     base_ppa = base["ppa"]
     if "baseline" not in pool.states:
         pool.add("baseline", base_ppa,
+                 ctr.pristine_editable_state(campaign_scope)
+                 if is_tmake else
                  {rel: pristine_source(ip, rel) for rel in spec.sources},
                  parent=None, strategy="baseline")
     if not (E.reports_dir(ip, "baseline") / "sta_timing_paths.txt").exists():
@@ -377,7 +426,7 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
     for s in pool.states.values():
         frontier.offer(s.cid, s.ppa, {"strategy": s.strategy})
 
-    dossier = _dossier(ip)
+    dossier = _dossier(ip, source_paths)
     best_adp_history: list[float] = []
     summary = {"rounds": [], "accepted": 0}
     # staged-context cursor (only used when diag is active)
@@ -391,7 +440,11 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
             # k after), walking one file/stage until the turn budget runs out.
             # Last stage may be partial (whatever budget remains). No regime
             # tapering — turns are spent covering files, cleanly.
-            k_stage = k_first if scope_cursor == 0 else k
+            # A trace-bound tmake run has one expensive target and honors the
+            # user's --k literally; the legacy k_first fan-out would turn the
+            # documented k=1 validation command into six 2-hour evaluations.
+            k_stage = (k if is_tmake
+                       else k_first if scope_cursor == 0 else k)
             k_now = min(k_stage, max_calls - model.proposal_calls)
         else:
             k_now = _k_for_regime(k, frac)     # BATS 70/30/10 regime
@@ -410,8 +463,10 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
             parent_cid, sel_mode = pool.select_parent()
         parent = pool.states[parent_cid]
         parent_files = (pool.files_of(parent_cid) if parent_cid != "baseline"
-                        else {rel: pristine_source(ip, rel)
-                              for rel in spec.sources})
+                        else (ctr.pristine_editable_state(campaign_scope)
+                              if is_tmake else
+                              {rel: pristine_source(ip, rel)
+                               for rel in spec.sources}))
         parent_adp = round(obj.adp_ratio(parent.ppa, base_ppa) or 1.0, 4)
 
         rep_dir = E.reports_dir(ip, parent_cid)
@@ -522,7 +577,9 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
             if resp is None:            # dropped by resilient fan-out
                 continue
             _dump_raw(ip, rnd, rung["key"], resp)
-            files = parse_response(ip, resp)
+            files = parse_response(
+                ip, resp,
+                allowed_paths=(batch_paths if is_tmake else None))
             if not files:
                 print(f"  [{rung['key']}] no usable code blocks — skipped "
                       f"(raw kept in ledger/raw/{ip}/)")
@@ -555,9 +612,36 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
             edited = [Path(r).name for r in files]
             merged = dict(parent_files)
             merged.update(files)
-            cands.append(E.Candidate(ip, merged, meta={
+            cand_meta = {
                 "strategy": rung["key"], "parent": parent_cid, "round": rnd,
-                "edited": edited}))
+                "edited": edited, "budget_authorized": True}
+            if is_tmake:
+                from .orchestrate import source_cid as _source_cid
+                cands.append(E.Candidate(
+                    ip, merged, cid=_source_cid(merged), meta=cand_meta))
+            else:
+                cands.append(E.Candidate(ip, merged, meta=cand_meta))
+
+        # The genuine StubModel is the accepted keyless validation mode for a
+        # PENDING tmake contract.  With no replay queue it intentionally emits
+        # no RTL; synthesize one semantics-neutral comment-only delta so the
+        # materialize -> trace -> LEC -> measure chain is still exercised.
+        # The policy remains ineligible while PENDING, so this candidate can
+        # never enter the pool or be emitted.
+        if is_tmake and _is_stub(model) and not cands:
+            rel = campaign_scope.editable_targets[0]
+            text = parent_files[rel].rstrip() + (
+                f"\n// P0-4 keyless validation candidate round {rnd}\n")
+            files = {rel: text}
+            from .orchestrate import source_cid as _source_cid
+            cands.append(E.Candidate(
+                ip, files, cid=_source_cid(files),
+                meta={"strategy": "stub-validation", "parent": parent_cid,
+                      "round": rnd, "edited": [Path(rel).name],
+                      "budget_authorized": True,
+                      "validation_only": True}))
+            print(f"  [stub-validation] generated comment-only delta for "
+                  f"{Path(rel).name}")
         if not cands:
             summary["rounds"].append({"round": rnd, "accepted": 0,
                                       "note": "no candidates"})
@@ -579,8 +663,9 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
                 break
             continue
 
-        results = E.evaluate_many(cands, max_workers=workers,
-                                  full_verify=True)
+        results = E.evaluate_many(
+            cands, max_workers=workers, full_verify=True,
+            scope=campaign_scope, profile=profile)
 
         # self-debug: compile failures get <=2 cheap repair attempts with the
         # tool stderr fed back (doesn't count as a full round)
@@ -600,7 +685,9 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
                     print(f"  [repair] model call failed "
                           f"({type(e).__name__}: {str(e)[:80]}) — skipped")
                     break
-                fixed = parse_response(ip, resp)
+                fixed = parse_response(
+                    ip, resp,
+                    allowed_paths=(batch_paths if is_tmake else None))
                 if diag:      # strict scope applies to compile repair too
                     fixed = {rr: tt for rr, tt in fixed.items()
                              if rr in set(batch_paths)}
@@ -627,6 +714,19 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
                       f"parent {parent.ppa['cells']:.0f} — elaboration broke")
                 pool.backup(parent_cid, 0.10)
                 continue
+            # CDC structural invariant (2026-07-25, async_fifo finding): in a
+            # MULTI-CLOCK design, removing flip-flops relative to the pristine
+            # baseline is the signature of de-registering a clock-domain
+            # crossing — a glitch hazard that LEC (PROVEN) and zero-delay
+            # dualsim (PASS) both structurally cannot see. Refuse before the
+            # candidate can be compared, pooled, or become canonical.
+            if res.ppa:
+                cdcv = cdc_ff_violation(spec, base_ppa, res.ppa)
+                if cdcv:
+                    print(f"  reject {cand.cid[:12]} "
+                          f"[{cand.meta['strategy']}] {cdcv}")
+                    pool.backup(parent_cid, 0.10)
+                    continue
             adp = (obj.adp_ratio(res.ppa, parent.ppa)
                    if res.ppa else None)
             reward = pool.reward_from_eval(res.status, adp)
@@ -634,7 +734,10 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
             verdict, reason = (obj.better(res.ppa, parent.ppa)
                                if res.status == "measured" and res.ppa
                                else (False, res.status))
-            dualsim_ok = res.verify.get("dualsim", {}).get("status") == "PASS"
+            dualsim_ok = (
+                res.verify.get("dualsim", {}).get("status") == "PASS"
+                or (is_tmake and res.status == "measured"
+                    and res.verify.get("lec", {}).get("status") == "PROVEN"))
             if verdict and dualsim_ok:
                 pool.add(cand.cid, res.ppa, cand.files, parent_cid,
                          cand.meta["strategy"])
@@ -656,7 +759,8 @@ def run(ip: str, rounds: int, k: int, model: Model, *,
         # their real PPA, keep the ones that WOULD improve, repair the top-2
         # (1 attempt each). Repair calls are OFF the turn budget (proposals
         # only) — gated by the token budget, not proposal count.
-        if accepted == 0 and _budget_line(model, 0, max_tokens)[1] > 0.05:
+        if (not is_tmake and accepted == 0
+                and _budget_line(model, 0, max_tokens)[1] > 0.05):
             # "broken but maybe promising" = gate-fail (TB caught it) OR
             # dualsim-fail (IPs whose TB is skipped — aes — fail at layer 5
             # instead; 2026-07-14). dualsim-fail candidates were already
@@ -879,6 +983,8 @@ def _canonical_best(ip: str, pool, obj, base_ppa: dict):
     LEC-PROVEN improvements, return the best-ADP one; None if none exists (caller
     ships the eligible baseline). An unproven (INCONCLUSIVE/ERROR) candidate is
     never canonical, however good its ADP."""
+    spec = IPS.get(ip)   # None only for unregistered/synthetic IPs; see
+                         # cdc_ff_violation() on why that is unreachable live
     proven = []
     for s in pool.states.values():
         if s.cid == "baseline":
@@ -886,6 +992,18 @@ def _canonical_best(ip: str, pool, obj, base_ppa: dict):
         adp = obj.adp_ratio(s.ppa, base_ppa)
         if adp is None or adp >= 1.0:
             continue                                  # not an ADP improvement
+        # CDC structural invariant, re-checked AT SELECTION (2026-07-25). The
+        # admission check in the round loop only guards candidates produced
+        # from now on; a pool persisted BEFORE that check existed can still
+        # contain a de-registered CDC candidate (the shipped async_fifo pool
+        # contains exactly one, d8364e88b637, ff=162 vs baseline 170). Because
+        # such a candidate is LEC-PROVEN, the proven-preferring rule below is
+        # precisely what would promote it. Re-check here so no persisted state
+        # can ever become canonical, regardless of when it entered the pool.
+        cdcv = cdc_ff_violation(spec, base_ppa, s.ppa)
+        if cdcv:
+            print(f"[{ip}] canonical: REFUSING {s.cid[:12]} — {cdcv}")
+            continue
         if _verify_status(ip, s.cid).get("lec") == "PROVEN":
             proven.append((adp, s))
     if not proven:

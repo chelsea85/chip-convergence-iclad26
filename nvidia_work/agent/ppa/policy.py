@@ -97,9 +97,10 @@ class EvaluationEvidence:
         if self.receipt is None and self.failure is None:
             raise C.ContractError(
                 "either a receipt or an explicit failure reason is required")
-        if self.gate is not None and not isinstance(self.gate,
-                                                    GT.GateEvidence):
-            raise C.ContractError("gate must be a GateEvidence")
+        if self.gate is not None and type(self.gate) not in (
+                GT.GateEvidence, GT.TraceGateEvidence):
+            raise C.ContractError(
+                "gate must be an exact GateEvidence or TraceGateEvidence")
         if self.proof is not None and not isinstance(self.proof,
                                                      V.ProofEvidence):
             raise C.ContractError("proof must be a ProofEvidence")

@@ -294,19 +294,102 @@ def module_interfaces(gen_files) -> str:
     return "\n\n".join(out)
 
 
-def prompt_top(spec, skel, gen_files):
+# Prompt budgets. The old fixed caps (6000/4000/4000) were sized for the EASY
+# problem's 8 IPs and silently truncated everything larger: on `medium` the
+# interface block is 29,835 chars, so 14 of 22 IPs -- every router, every SRAM
+# -- were NEVER SHOWN to the model, which then invented their ports and the
+# design could not elaborate (2026-07-25). Truncating the PORT CONTRACT is the
+# worst of the three: the model cannot honour ports it never sees.
+# These are generous but still bounded, and truncation is now LOUD.
+# EASY keeps the caps it was PROVEN with. Raising them was measured on
+# 2026-07-25 to make the easy real-model path worse (contract clean on attempt
+# 1 / 2 calls -> struct-irq violations across 3 attempts / 4 calls, gate and
+# KAT still green). More context is not automatically better, and easy is the
+# validated result — so only tiers that CANNOT work under the old caps get the
+# larger budgets.
+CAPS_PROVEN  = dict(iface=6000,   spec=4000,  skel=4000)   # easy, untouched
+# `iface` is the AUTHORITATIVE port list and the most damaging thing to clip —
+# an IP whose header is cut gets its ports GUESSED, which is exactly how the
+# medium tier failed. Sized for the largest real problem with headroom: `hard`
+# needs 68,555 chars for 56 IPs, so 60,000 silently dropped the tail
+# (2026-07-25). Keep this comfortably above the biggest design we have seen.
+CAPS_GENERAL = dict(iface=200000, spec=24000, skel=12000)  # medium/hard/unseen
+
+
+def _caps(problem: str) -> dict:
+    return CAPS_PROVEN if problem == "easy" else CAPS_GENERAL
+
+
+def _clip(text: str, cap: int, what: str) -> str:
+    """Bounded include that ANNOUNCES loss instead of hiding it."""
+    if len(text) <= cap:
+        return text
+    print(f"[3!] WARNING: {what} truncated {len(text):,} -> {cap:,} chars; "
+          f"the model will not see the remainder")
+    return text[:cap]
+
+
+def prompt_top(spec, skel, gen_files, top_name="secure_periph_soc",
+               problem="easy"):
+    """Top-stitching prompt.
+
+    Two things used to be pinned to the EASY problem and broke every other
+    tier (2026-07-25):
+      * the top module NAME was hardcoded `secure_periph_soc`, so a generated
+        top could never elaborate against a skeleton instantiating
+        `noc_aes_soc` / `crypto_soc` / an unseen organizer name;
+      * the wiring directive described the easy TOPOLOGY (AHB -> bridge ->
+        APB fabric -> slaves). On a 2x3 TileLink NoC with AES engines that is
+        not merely useless, it actively misdirects the model toward buses the
+        design does not have.
+    `top_name` is now derived from the skeleton, and the topology directive is
+    only asserted for the tier it was validated on; every other tier gets a
+    directive that defers to the architecture document. The generic branch is
+    deliberately conservative — it constrains FORM (exact ports, no dangling,
+    exact IP names) and leaves TOPOLOGY to the spec.
+    """
+    cap = _caps(problem)
     irq_map = doc_irq_map(spec)
-    return (f"TASK: TOP\nWrite secure_periph_soc.v stitching these generated IPs: "
+    if problem == "easy":
+        # proven easy-tier directive - unchanged, byte-for-byte
+        wiring = ("Wire CPU AHB -> bridge -> APB fabric -> slaves; the reset "
+                  "synchronizer drives the system reset (por_n feeds ONLY it); "
+                  "aggregate all peripheral IRQs into the aggregator's irq_src. ")
+    else:
+        wiring = ("Wire the IPs EXACTLY as the architecture document below "
+                  "specifies — follow its interconnect, address map and reset "
+                  "topology; do not assume any bus protocol it does not state. "
+                  "EVERY port in the port contract must be connected to real "
+                  "logic: no top-level port may be left dangling, tied off, or "
+                  "driven by a constant unless the architecture says so. "
+                  "Instantiate every generated IP listed above at least once. ")
+    return (f"TASK: TOP\nWrite {top_name}.v stitching these generated IPs: "
             f"{', '.join(Path(f).name for f in gen_files)}.\nThe top module MUST be named "
-            f"secure_periph_soc with EXACTLY the skeleton ports. Verilog-2001 (iverilog -g2005). "
-            f"Wire CPU AHB -> bridge -> APB fabric -> slaves; the reset synchronizer drives the "
-            f"system reset (por_n feeds ONLY it); aggregate all peripheral IRQs into the "
-            f"aggregator's irq_src. Use the EXACT module and port names from the interfaces "
-            f"below — do not invent or rename ports. Emit one ```verilog``` block.\n\n"
-            f"## Generated IP interfaces (authoritative)\n{module_interfaces(gen_files)[:6000]}\n\n"
+            f"{top_name} with EXACTLY the skeleton ports. Verilog-2001 (iverilog -g2005). "
+            + wiring +
+            f"Use the EXACT module and port names from the interfaces "
+            f"below — do not invent or rename ports. "
+            # PORT-DIRECTION RULE (2026-07-25, medium tier). The model tied
+            # constants to OUTPUT ports of an instantiated router
+            # (.p0_d_param(2'd0), .p0_d_size(3'd3), ...). That is illegal
+            # Verilog — "Output port expression must support a continuous
+            # assignment" — and kills elaboration. The declarations WERE in
+            # the prompt (`output wire [1:0] p0_d_param`), so the model had
+            # the direction and ignored it: this is a compliance gap, not an
+            # information gap, and it needs the prohibition stated as a RULE.
+            f"DIRECTION RULE: an instance's OUTPUT or INOUT port may NEVER be "
+            f"connected to a constant, literal or expression "
+            f"(e.g. `.p0_d_size(3'd3)` is ILLEGAL and fails elaboration). "
+            f"Connect every output either to a declared wire, or leave it "
+            f"explicitly unconnected as `.port_name()`. Only INPUT ports may "
+            f"take constants. Check the `output`/`input` keyword in each "
+            f"interface below before you wire it. "
+            f"Emit one ```verilog``` block.\n\n"
+            f"## Generated IP interfaces (authoritative)\n{_clip(module_interfaces(gen_files), cap['iface'], 'IP interfaces')}\n\n"
             + (f"## IRQ source map (from the architecture — wire irq_src "
                f"EXACTLY this way)\n{irq_map}\n\n" if irq_map else "")
-            + f"## Architecture\n{spec[:4000]}\n\n## Port contract\n{skel[:4000]}\n")
+            + f"## Architecture\n{_clip(spec, cap['spec'], 'architecture')}\n\n"
+            + f"## Port contract\n{_clip(skel, cap['skel'], 'port contract')}\n")
 
 def extract_blocks(text, kind):
     blocks = re.findall(rf"```(?:{kind})?\s*\n(.*?)```", text, re.DOTALL|re.IGNORECASE)
@@ -430,6 +513,18 @@ def run(model: Model, P: Paths, deep: bool = False):
     print(f"=== NXP agent (model={type(model).__name__}, problem={P.problem}) "
           f"— arch={P.arch.name if P.arch else '?'} ===")
     spec = read_spec(P); skel = P.tb_skeleton.read_text()
+    # The DUT name comes from the SKELETON, never a constant: easy ->
+    # secure_periph_soc, medium -> noc_aes_soc, hard -> crypto_soc, and an
+    # unseen organizer testcase may use anything (2026-07-25). Fall back to the
+    # easy name only when the skeleton is unparseable, and say so loudly — a
+    # wrong top elaborates as "Unknown module type" and scores zero.
+    top_name = V.skeleton_top_name(skel)
+    if not top_name:
+        top_name = "secure_periph_soc"
+        print(f"[0] WARNING: could not read the DUT name from "
+              f"{P.tb_skeleton.name}; falling back to {top_name!r}")
+    else:
+        print(f"[0] top module from skeleton: {top_name}")
     # clean output dir
     P.out_dir.mkdir(parents=True, exist_ok=True)
     for p in P.out_dir.glob("*.v"): p.unlink()
@@ -492,7 +587,8 @@ def run(model: Model, P: Paths, deep: bool = False):
     top_errs = []
     for attempt in range(3):
         top_resp = model.generate(
-            prompt_top(spec, skel, gen) +
+            prompt_top(spec, skel, gen, top_name=top_name,
+                       problem=P.problem) +
             ("" if not top_errs else
              "\n\nYour previous top violated the contract — fix ONLY these:\n- "
              + "\n- ".join(top_errs[:12])))
@@ -500,24 +596,32 @@ def run(model: Model, P: Paths, deep: bool = False):
         if not tops:
             print("[3] WARNING: model returned no top module"); break
         top_text = tops[0].strip() + "\n"
-        ok_p, perrs = V.port_contract(top_text, skel)
-        ok_r, rerrs = V.reset_lint(top_text)
-        ok_s, serrs = V.structural_diff(top_text, gen_mods)
-        top_errs = perrs + rerrs + serrs
-        if ok_p and ok_r and ok_s:
-            (P.out_dir/"secure_periph_soc.v").write_text(top_text)
-            print(f"[3] wrote secure_periph_soc.v (contract clean, "
+        ok_p, perrs = V.port_contract(top_text, skel, top=top_name)
+        ok_r, rerrs = V.reset_lint(top_text,
+                                   strict_names=(P.problem == "easy"))
+        ok_s, serrs = V.structural_diff(top_text, gen_mods,
+                                        top=top_name)
+        ok_d, derrs = V.instance_port_directions(top_text, gen)
+        top_errs = perrs + rerrs + serrs + derrs
+        if ok_p and ok_r and ok_s and ok_d:
+            (P.out_dir/f"{top_name}.v").write_text(top_text)
+            print(f"[3] wrote {top_name}.v (contract clean, "
                   f"attempt {attempt+1})")
             break
         print(f"[3v] contract violations ({len(top_errs)}): {top_errs[:4]}")
         if isinstance(model, StubModel):
-            (P.out_dir/"secure_periph_soc.v").write_text(top_text)
+            (P.out_dir/f"{top_name}.v").write_text(top_text)
             print("[3] stub: wrote top DESPITE violations (fix reference!)")
             break
         if attempt == 2:
             # out of re-prompts: ship the best-effort top anyway — a partial
-            # score beats the guaranteed 0 of a missing module
-            (P.out_dir/"secure_periph_soc.v").write_text(top_text)
+            # score beats the guaranteed 0 of a missing module. Before doing
+            # so, mechanically repair constant-driven OUTPUT ports: those are
+            # a guaranteed elaboration failure, and `.port()` is legal.
+            top_text, fixes = V.repair_constant_driven_outputs(top_text, gen)
+            for f in fixes:
+                print(f"[3r] {f}")
+            (P.out_dir/f"{top_name}.v").write_text(top_text)
             print("[3] wrote top DESPITE violations (re-prompts exhausted)")
 
     # Step 4: fractional gate with stage-localized failure

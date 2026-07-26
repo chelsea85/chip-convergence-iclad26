@@ -36,8 +36,9 @@ def source_cid(cand_files: dict) -> str:
 
 
 def evaluate_tmake_candidate(ip: str, cand_files: dict, scope,
-                             plan: "G.GatePlan | None" = None, *, ws=None,
-                             runner=None, profile=None, measure_fn=None,
+                             plan: "G.GatePlan | G.TraceGatePlan | None" = None,
+                             *, ws=None, runner=None, profile=None,
+                             measure_fn=None,
                              checks=None, proxy=None, budget=None,
                              container_digest: str, tool_versions: dict
                              ) -> dict:
@@ -75,13 +76,23 @@ def evaluate_tmake_candidate(ip: str, cand_files: dict, scope,
                         raise C.ContractError(
                             "measure_fn must return MeasurementEvidence")
 
+        if not mrun.ok:
+            failure = f"{mrun.mat.classification}: {mrun.mat.detail}"
+        elif gate_ev is None:
+            failure = "gate evidence missing"
+        elif not gate_ev.passed:
+            failure = f"gate refused: {gate_ev.detail}"
+        elif receipt is None:
+            failure = "gate passed without a frozen receipt"
+        else:
+            failure = None
+
         ev = P.EvaluationEvidence(
             run_context=run_ctx,
             refusal_reason=refusal["reason"] if refusal else None,
             expected_top=spec.top,
             receipt=receipt,
-            failure=(None if receipt is not None
-                     else f"{mrun.mat.classification}: {mrun.mat.detail}"),
+            failure=failure,
             gate=gate_ev, proof=proof_ev, measurement=meas_ev,
             checks=checks, proxy=proxy, budget=budget)
         result = P.evaluate_policy(ev)
@@ -91,16 +102,43 @@ def evaluate_tmake_candidate(ip: str, cand_files: dict, scope,
             container_digest=container_digest, tool_versions=tool_versions
         ) if receipt is not None else None
 
+        gate_status = None
+        if gate_ev is not None:
+            gate_status = ("PASS" if gate_ev.passed else
+                           "FAIL" if gate_ev.tests_failed > 0
+                           else "FLOW_ERROR")
+        proof_status = (proof_ev.result.verdict
+                        if proof_ev is not None else None)
+        raw_ppa = getattr(measure_fn, "last_ppa", None)
+        verify = {}
+        if gate_status is not None:
+            verify["gate"] = {
+                "status": gate_status, "detail": gate_ev.detail}
+        if proof_status is not None:
+            verify["lec"] = {
+                "status": proof_status,
+                "detail": (f"recipe={proof_ev.result.recipe_id} "
+                           f"rc={proof_ev.result.rc} "
+                           f"total={proof_ev.result.total} "
+                           f"proven={proof_ev.result.proven} "
+                           f"unproven={proof_ev.result.unproven} "
+                           f"reason={proof_ev.result.reason}")}
+            verify["dualsim"] = {
+                "status": "SKIP(size)",
+                "detail": "whole-design NVDLA dualsim is diagnostic-only"}
+
         record = {
             "cid": cid, "ip": ip,
             "evaluation_id": eval_id,
             "classification": mrun.mat.classification,
-            "detail": mrun.mat.detail,
+            "detail": failure or mrun.mat.detail,
             "h4_root": mrun.mat.h4_root if mrun.mat.h4 else "",
             "h5_root": mrun.mat.h5_root if mrun.mat.h5 else "",
             "eligible": result.eligible,
             "assurance": result.assurance_label,
             "policy": result.record(),
+            "refusal_reason": refusal["reason"] if refusal else None,
+            "verify": verify,
             "receipt_ref": receipt.ref() if receipt else None,
             "gate": {"passed": gate_ev.passed,
                      "candidate_aware": gate_ev.candidate_aware,
@@ -118,6 +156,17 @@ def evaluate_tmake_candidate(ip: str, cand_files: dict, scope,
                       "script_sha": proof_ev.script_sha,
                       "log_sha": proof_ev.log_sha,
                       "ref": proof_ev.ref()} if proof_ev else None,
+            "measurement": {
+                "ok": meas_ev.ok,
+                "adp": meas_ev.adp,
+                "base_adp": meas_ev.base_adp,
+                "ref": meas_ev.ref,
+                "ppa": raw_ppa,
+            } if meas_ev else None,
+            # The ordinary controller consumes this exact dict.  It remains
+            # subordinate to the policy result: an ineligible row can carry a
+            # diagnostic measurement but can never be mapped to "measured".
+            "ppa": raw_ppa,
         }
         ledger_append(ip, record)
         return record
