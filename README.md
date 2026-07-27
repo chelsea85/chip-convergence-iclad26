@@ -25,8 +25,11 @@ before anything is accepted. Detailed engineering logs: `nvidia_work/NVIDIA_DAIL
    Docker (`iclad-dev:v1` built per the contest repo's ENV_PREPARATION.md) + ASAP7 in
    `ICLAD-Hackathon-2026/.../techlib/`; for ASU, Docker + the pinned KLayout 0.30.1 image
    (`docker build --platform linux/amd64 -t asu-klayout:0.30.1 asu_work/docker`).
-3. Model access: `pip install google-genai`; export `EXPRESS_MODE_KEY` (Vertex AI Express
-   Mode, per AgentSetup.md) or `GEMINI_API_KEY` (AI Studio). See `docs/GEMINI_SETUP.md`.
+3. Model access: `pip install google-genai`; export ONE of `EXPRESS_MODE_KEY` (Vertex AI
+   Express Mode, per AgentSetup.md) or `GEMINI_API_KEY` (AI Studio — the hackathon-provided
+   key type). NOTE: auto-detection prefers `EXPRESS_MODE_KEY` if BOTH are set — to run on
+   the hackathon AI Studio key, export only `GEMINI_API_KEY` and leave `EXPRESS_MODE_KEY`
+   unset. See `docs/GEMINI_SETUP.md`. The ASU agent needs NEITHER (zero model calls).
 
 ## Quickstart — NXP
 
@@ -59,6 +62,9 @@ Each `submission/<ip>/manifest.json` records the true `verification_per_layer` +
 host). **v2 Rev3 (2026-07-26):** applies the deterministic via-bar-safe + track-shift +
 v1-patch repairs; its output is **byte-identical** to the independently re-scored
 `asu_v2/submission/Block*_repaired.py` — **FVR 0.393–0.582** (was 0.68–0.76), eligible,
+**Organizers only need `asu_work/official_submission/` as the `--submission-dir`** — the
+agent is a single stdlib-only file with no runtime dependency on `asu_v2/` (which holds
+sources, tests, and evidence).
 passes the published connectivity checker, AND **preserves layer-aware electrical
 connectivity original→repaired exactly** (immutable-anchor partition proof; three-round
 independent review + P1-5 official-runner rehearsal in `asu_v2/` — see
@@ -69,8 +75,9 @@ them that the published checkers cannot see (documented in `asu_v2/reviews/`), w
 Rev3 removes.
 
 ```bash
-# Official runner (needs Docker + EXPRESS_MODE_KEY for the model-wrapper, though the
-# deterministic agent makes no model call):
+# Official runner (needs Docker + EXPRESS_MODE_KEY exported for the model-wrapper to
+# START; the deterministic ASU agent makes ZERO model calls, so no key is ever charged —
+# for keyless verification any placeholder value works, e.g. EXPRESS_MODE_KEY=unused):
 python3 official_eval/run_official_eval.py --run-id r1 \
     --submission-dir <this_repo>/asu_work/official_submission --agent-entrypoint agent.py
 #   -> emits BlockN_repaired.py; the host evaluator scores FVR 0.393-0.582
