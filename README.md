@@ -6,7 +6,7 @@ Solo team (Hari Krishnan), Cloud track. **Three agents, one verification-first a
 |-------|-------|------------------------------------------------|
 | **NVIDIA** — RTL PPA optimization | `nvidia_work/agent/` | sha512 **ADP 0.727**, WNS −97→**+335 ps (MET), LEC-proven** (agent's live rewrite beat our best hand-derived 0.787); prim **ADP 0.5824** (power −70%, `late-input-cofactor`). Equally important — async_fifo **ships baseline on purpose**: a fully **LEC-PROVEN** 0.961 candidate was withdrawn as a **CDC glitch hazard** that formal and simulation structurally cannot see |
 | **NXP** — SoC generation from diagrams | `nxp_work/agent/` | **2 model calls / 42 s, perfect against our full verification stack**: self-test 30/30, KAT 79/79 on both oracles, STG differential cycle-identical to reference over 3,662 cycles (organizer hidden testbench is not in the public checkout, so the official score is organizer-confirmed only) |
-| **ASU** — block DRC repair | `asu_work/agent/` | **Final-violation-rate 0.68–0.76 on all 5 public blocks** (via-bar repair, derived from the exact rule) — eligible + rendered-connectivity-credible; version-exact KLayout 0.30.1 Dockerized env; verify identical to the official scorer |
+| **ASU** — block DRC repair | `asu_work/official_submission/` (v2 Rev3; sources in `asu_v2/`) | **Final-violation-rate 0.374–0.582 on all 7 blocks** (mean 0.477; via-bar-safe + track-shift + v1-patch, derived from the exact rules) — eligible, connectivity-preserved under the published checker, AND **layer-aware electrical partition proven identical** original→repaired; Block4/5 (released Jul 25) scored **blind** = the agent's two best results; version-exact KLayout 0.30.1 env; verify identical to the official scorer; 3-round independent review trail in `asu_v2/reviews/` |
 
 All three agents are verification-first: every model output passes deterministic gates
 (equivalence checks, port contracts, structural diffs, known-answer tests, DRC/connectivity)
@@ -122,9 +122,20 @@ python3 <contest>/.../ICLAD26-ASU-Problems/official_eval/run_official_eval.py --
 | NVIDIA model interface | `nvidia_work/agent$ python3 test_model_iface.py` | 13/13 |
 | NVIDIA cold-start drill | `python3 test_cold_start.py` (needs Docker) | 6/6 |
 | NVIDIA discovery fixtures | `python3 -m ppa.discover --validate` | 3 MATCH |
-| ASU 5-block repair | `asu_agent.py <info.json> --model none` (in KLayout 0.30.1 image) | 5/5 FVR 0.68–0.76, eligible + credible |
+| ASU v2 safety controls + composer | `asu_v2/tests/run_controls.sh` (needs Docker) | 12/12 PASS |
+| ASU official agent (v2 Rev3) | `official_eval/run_official_eval.py --submission-dir asu_work/official_submission` | 7/7 FVR 0.374–0.582, eligible + electrically proven |
+| ASU v1 dev agent (historical) | `asu_agent.py <info.json> --model none` (in KLayout 0.30.1 image) | superseded by v2 — see `asu_v2/` |
 
 ## Repo layout
+
+**Why both `asu_work/` and `asu_v2/`:** the organizers' documented ASU entry point is
+`asu_work/official_submission/agent.py`, and that file IS the current v2 Rev3 agent
+(generated from `asu_v2/agent/v2_repairs.py`). `asu_v2/` carries the v2 sources, safety
+controls, frozen artifacts + manifests, and the independent review trail; the rest of
+`asu_work/` is the v1 development history (kept intact — including the v1 artifacts whose
+49 layer-aware electrical merges the v2 review found and fixed). The v2 code deliberately
+IMPORTS the v1 verifier from `asu_work/agent/` so "verify == official scorer" has a single
+source of truth — the two-folder layout is that architecture, not duplication.
 
 - `nvidia_work/` — ppa agent package, learned playbook, evidence ledgers (baselines,
   round logs, raw model responses), proven variants (exp1/exp2), `submission/` emit-best

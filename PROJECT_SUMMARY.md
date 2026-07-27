@@ -182,9 +182,12 @@ connectivity. Scored gated-lexicographic: eligibility (renders + DRC runs AND co
 - `docker/Dockerfile` — **version-exact KLayout 0.30.1** (the evaluator hard-rejects other versions);
   amd64 image (runs under emulation on Apple Silicon). **The agent runs INSIDE this image.**
 
-**Status:** **repaired all 5 public blocks below FVR 1.0** (Block1 0.730, Block2 0.765, Block3 0.764,
-Block6 0.676, Block7 0.682) — eligible AND rendered-connectivity-credible. Environment calibrated
-(11/14 DRC rules match the reference report exactly).
+**Status (v2 Rev3, 2026-07-26): all 7 blocks repaired, FVR 0.374–0.582** (Block1 0.582, Block2
+0.515, Block3 0.393, Block4 0.374, Block5 0.485, Block6 0.413, Block7 0.580; mean 0.477) —
+eligible, connectivity-preserved, and **layer-aware electrical partition proven identical**
+original→repaired. Block4/5 (released by the organizers 2026-07-25) were scored BLIND by the
+frozen agent and are its two best results. Environment calibrated (11/14 DRC rules match the
+reference report exactly). Evidence + 3-round review trail: `asu_v2/`.
 
 **The result (the via-bar repair):** the seeded errors split each via-in-wide-metal landing into a
 MULTI-CUT array of minimum vias; every min-via then fails the exact via-width-match rule (V.M.AUX.2/.3
@@ -193,9 +196,11 @@ flagged array with ONE continuous via BAR spanning the metal's length, keeping t
 thickness so the lower metal needs NO widening (which is what sank every earlier grow-via attempt). Its
 ends coincide with the metal edges → rule satisfied; no enclosure/spacing cascade. Applied to the
 upper routing pairs (V2/M3, V4/M5, V5/M6; device layer V0/M1 EXCLUDED — bars there explode enclosure +
-break nets): **all 5 blocks drop to FVR 0.68-0.76, eligible + rendered-connectivity-credible.** The
-agent's production keep-best ENFORCES a rendered-connectivity credibility check (net count + conducting
-area) so the win is a real physical repair, not an evaluator artifact. Provenance: a review-and-falsify
+break nets): **v1 dropped all 5 then-public blocks to FVR 0.68-0.76.** A later layer-aware review
+found some v1 bars electrically joined distinct nets crossing the landing (invisible to the published
+checker); the **v2 Rev3 agent** (via-bar-safe with per-side electrical guards + track-shift + v1-patch)
+removes those merges and reaches **FVR 0.374-0.582 on all 7 blocks** with electrical preservation
+proven per block (immutable-anchor partition comparison, `asu_v2/`). Provenance: a review-and-falsify
 loop — the metal-neck idea was falsified by exact DRC (net +1, M3.S.4 shoulders); reshaping the VIA
 into a bar was the win. Full record in ASU_DAILY_RUN_LOG + ASU_PHASE0_FINDINGS.
 

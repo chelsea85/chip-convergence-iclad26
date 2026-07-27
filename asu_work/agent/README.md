@@ -1,4 +1,12 @@
-# Chip Convergence — ASU Block-Repair Agent
+# Chip Convergence — ASU Block-Repair Agent (v1, historical)
+
+> **SUPERSEDED (2026-07-26):** the submitted agent is now **v2 Rev3** —
+> `asu_work/official_submission/agent.py`, generated from `asu_v2/agent/v2_repairs.py`
+> (FVR 0.374–0.582 on all 7 blocks, layer-aware electrical preservation proven).
+> This directory documents the v1 development agent; its verifier (`verify.py`) is
+> still imported by v2 as the single source of scoring truth. A layer-aware review
+> found the v1 via-bar output contained 49 electrical merges invisible to the
+> published checker — see `asu_v2/reviews/` for the full trail.
 
 Repairs ASAP7 KLayout Python layout scripts to reduce DRC violations while preserving
 connectivity. Same verification-first architecture as our NVIDIA/NXP agents.
