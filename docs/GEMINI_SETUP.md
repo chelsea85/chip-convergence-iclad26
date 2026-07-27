@@ -38,7 +38,14 @@ EOF
 If `gemini-3-flash-preview` 404s on an AI Studio key, retry with
 `gemini-2.0-flash` and pass that via `--model-name` below.
 
-## 4. First real rounds (in order)
+## 4. First real rounds — HISTORICAL RUNBOOK (already executed)
+
+> These campaigns were run during development and their results are banked in
+> the submission manifests/ledgers. Re-running them consumes real tokens and
+> is NOT needed to verify any claim — the keyless paths in the root README
+> (NXP `--model stub`, NVIDIA `ppa.evaluate`, ASU placeholder key) reproduce
+> everything. Kept for provenance. Current default model at evaluation time:
+> `gemini-3.5-flash`.
 
 ```bash
 # NVIDIA: one careful round on sha512 (bounded: ~4 calls)
