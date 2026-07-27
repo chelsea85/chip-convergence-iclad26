@@ -1,0 +1,16 @@
+{
+ "base_gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/eval/b45base/block/repair/Block4/Block4.gds",
+ "cand_gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/eval/rev3p15/block/repair/Block4/Block4.gds",
+ "anchors": 568,
+ "base_components": 170,
+ "cand_components": 170,
+ "base_uncovered_components": 0,
+ "cand_uncovered_components": 0,
+ "base_floating_vias": 0,
+ "cand_floating_vias": 0,
+ "base_partition_sha256": "b2489ba0a9411046288b9b7913636ac5f0c954a14156ea09e02a35b6aef76ec6",
+ "cand_partition_sha256": "b2489ba0a9411046288b9b7913636ac5f0c954a14156ea09e02a35b6aef76ec6",
+ "base_anchor_groups": 170,
+ "cand_anchor_groups": 170,
+ "partition_equal": true
+}

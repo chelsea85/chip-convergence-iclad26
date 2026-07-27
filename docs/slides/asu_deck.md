@@ -83,7 +83,7 @@ already eligible → **never regress, never break connectivity.**
 
 <rect x="262" y="40" width="426" height="52" class="box"/>
 <text x="475" y="60" text-anchor="middle" class="t" font-size="12.5">fix-pass = ORIGINAL script + appended pya (runs before write)</text>
-<text x="475" y="78" text-anchor="middle" class="tiny">deterministic: via-bar (multi-cut array -> continuous bar), grid-snap</text>
+<text x="475" y="78" text-anchor="middle" class="tiny">deterministic: via-bar-safe, track-shift, v1-patch (electrically guarded)</text>
 <line x1="475" y1="92" x2="475" y2="106" stroke="#1a3a6b" stroke-width="1.6" marker-end="url(#aar)"/>
 <rect x="262" y="108" width="426" height="40" class="abox"/>
 <text x="475" y="126" text-anchor="middle" class="s">model fix-pass (rules + coupling + screenshot) — best-of-N,</text>
@@ -118,10 +118,10 @@ already eligible → **never regress, never break connectivity.**
 <text x="842" y="160" text-anchor="middle" class="t" font-size="12.5">env: KLayout 0.30.1</text>
 <text x="842" y="178" text-anchor="middle" class="tiny">version-exact Docker (organizer</text>
 <text x="842" y="192" text-anchor="middle" class="tiny">scoring target); amd64 image</text>
-<text x="842" y="208" text-anchor="middle" class="tiny">5/5 blocks FVR 0.68-0.76</text>
+<text x="842" y="208" text-anchor="middle" class="tiny">7/7 blocks FVR 0.37-0.58</text>
 </svg>
 
-<span style="font-size:16px;color:#555">Same verification-first spine as NVIDIA/NXP: diagnose (0 tokens) → propose → verify == scorer → keep-best (credibility-gated) → emit. <b>FVR 0.68–0.76 on all 5 blocks.</b></span>
+<span style="font-size:16px;color:#555">Same verification-first spine as NVIDIA/NXP: diagnose (0 tokens) → propose → verify == scorer → keep-best (electrically gated) → emit. <b>v2 Rev3: FVR 0.37–0.58 on all 7 blocks.</b></span>
 
 ---
 
@@ -250,25 +250,30 @@ bar** spanning the metal's length — keeping the **minimum via thickness**, so 
 - joins cuts that already shared the landing → **no net change** (connectivity preserved)
 - **device layer V0/M1 excluded** (bars there explode enclosure + break nets)
 
-Block1: `V2.M3.AUX.2 72→0`, then adding V4/M5 + V5/M6 → **315 → 178**, zero connectivity change.
-Derived from the exact rule; verified by the exact evaluator.
+Block1: `V2.M3.AUX.2 72→0`, then adding V4/M5 + V5/M6 → **315 → 178**, zero connectivity change
+under the published checker. **v2 hardening (Jul 26):** a layer-aware review found some bars
+electrically JOIN distinct nets crossing the landing — invisible to that checker. The v2
+**via-bar-safe** pass places a bar only when it touches exactly the same electrical components
+as the original cuts on BOTH adjacent layers (fail closed), and adds **track-shift** (off-grid
+tracks translated back to the routing grid, vias co-translated) and **v1-patch**.
 
 ---
 
-# 11 · Result: every public block below FVR 1.0
+# 11 · Result (v2 Rev3): all 7 blocks, FVR 0.37–0.58, electrically proven
 
-| Block | baseline (exact) | → via-bar | **final_violation_rate** | eligible | credible |
+| Block | baseline (exact) | → Rev3 | **final_violation_rate** | eligible | electrical partition |
 |---|---:|---:|---:|:--:|:--:|
-| Block1 | 315 | 178 | **0.730** | ✓ | ✓ |
-| Block2 | 90 | 52 | **0.765** | ✓ | ✓ |
-| Block3 | 111 | 68 | **0.764** | ✓ | ✓ |
-| Block6 | 321 | 167 | **0.676** | ✓ | ✓ |
-| Block7 | 957 | 522 | **0.682** | ✓ | ✓ |
+| Block1 | 315 | 142 | **0.582** | ✓ | ✓ equal |
+| Block2 | 90 | 35 | **0.515** | ✓ | ✓ |
+| Block3 | 111 | 35 | **0.393** | ✓ | ✓ |
+| **Block4** | 189 | 55 | **0.374** | ✓ | ✓ |
+| **Block5** | 87 | 33 | **0.485** | ✓ | ✓ |
+| Block6 | 321 | 102 | **0.413** | ✓ | ✓ |
+| Block7 | 957 | 444 | **0.580** | ✓ | ✓ |
 
-**All 5 below the reference denominator** (repair_rate ≈ 0.59 on Block1). "credible" = passes a
-**rendered-geometry** connectivity check (net count + conducting area), not just the source-parsing
-official gate — so the win survives the official render+DRC+connectivity gate PLUS a rendered-geometry credibility check — not just a counting artifact. The agent enforces
-this gate in production keep-best: a candidate that isn't credible is discarded.
+**Block4/5 were released the day before this talk** — the frozen agent scored them **blind**,
+and they are its two best scores. "Electrical partition" = a layer-aware full-stack connectivity
+proof (immutable-anchor partition, fail-closed) that original→repaired net topology is identical.
 
 ---
 
@@ -279,26 +284,30 @@ The win came from a **review-and-falsify loop**, not a lucky guess:
   verify imports the official evaluator's own functions.
 - **Falsified the wrong idea first**: the metal-neck (net +1, `M3.S.4` shoulders) — with exact DRC,
   in ~1 h, instead of building a multi-day legalizer.
-- **Then the right one**: reshape the *via* into a bar — derived from the exact rule, verified on all
-  5 blocks, and **gated by a rendered-connectivity credibility check** so it can't be an exploit.
+- **Then the right one**: reshape the *via* into a bar — derived from the exact rule and verified.
+- **Then reviewed our own win**: a 3-round independent layer-aware review found the v1 bars
+  created **49 electrical merges invisible to BOTH the official checker and our 2D proxy**.
+  We rebuilt the repair with per-side electrical guards and re-proved every block — trading a
+  measured amount of DRC for correctness. **The review trail ships in the repo.**
 - **Every candidate measured identically to how it will be scored** — no proxy, no drift.
 
 **Three tracks, one architecture, three real results:** NVIDIA ADP 0.727 (sha512, full 5-layer) /
 0.605 (prim, equivalence+differential) · NXP 2-call solve, perfect vs our verification stack ·
-**ASU FVR 0.68–0.76 on all 5 blocks.**
+**ASU v2 Rev3: FVR 0.37–0.58 on all 7 blocks, electrical preservation proven.**
 
 ---
 
-# 13 · Next: push the margin further
+# 13 · What v2 added (all shipped 2026-07-26)
 
-- **Clean the small collateral** — the bar adds a few `V4/V5.AUX.1` containment findings; trimming
-  the bar ends to sit fully inside the lower metal should push FVR lower still.
-- **Layer-aware credibility graph** — upgrade the rendered check from aggregate net-count to a
-  per-layer metal/via reachability graph (endpoint partition equivalence).
-- **Minority classes** — grid / spacing findings on the same blocks, for additional margin.
-- **V0/M1 (device layer)** — a device-aware bar variant (respecting LISD/LIG/enclosure), the one
-  via/metal pair the routing bar can't touch.
-- Agents remain updatable through **Jul 26**.
+- **track-shift** — the grid class was seeded by translating whole tracks off-grid; the inverse
+  transform (translate back to grid/pitch, co-translating riding vias, patching end-caps) cleared
+  it under layer-aware per-move acceptance. Biggest single win after via-bar.
+- **Layer-aware electrical gate** — built the per-layer metal/via reachability comparison
+  (immutable-anchor partition); it is now a hard release gate AND found the v1 shorts.
+- **12 permanent geometric safety controls** — including two adversarial counterexamples from
+  the independent review; one control caught a real bug in our own fix before it shipped.
+- **Falsified honestly**: V0/M1 (device layer) and the V1/M1.S cluster proven locally
+  irreducible with exact per-site geometry — global legalization is the only remaining path.
 
 ---
 

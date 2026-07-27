@@ -107,7 +107,10 @@ Every fix that touched the **metal** broke a neighbour — measured, not asserte
 We almost concluded "block repair is global legalization." **The escape was to stop reshaping the
 metal and reshape the *via*:** the seeding had split each landing into a multi-cut min-via array;
 replacing it with one continuous **via bar** (min thickness → no metal widening) fixed the class
-cleanly — **315 → 178, FVR 0.73**, all 5 blocks 0.68–0.76.
+cleanly — **315 → 178, FVR 0.73**, all 5 blocks 0.68–0.76. (The v2 agent later hardened this to
+**via-bar-safe** — a layer-aware review found some bars electrically joined distinct nets crossing
+the landing, invisible to the published checker — and added **track-shift**, taking all 7 blocks to
+**FVR 0.37–0.58** with electrical preservation *proven*, not assumed.)
 
 **Lesson:** a run of failing transforms is not proof of impossibility. It usually means you're
 moving the wrong object. Exhaust the *object*, not just the *parameters*.

@@ -1,0 +1,97 @@
+{
+  "case_name": "Block4",
+  "design_type": "block",
+  "task_type": "repair",
+  "run_id": "b45base",
+  "valid_repair": true,
+  "repaired_script": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/result/b45base/block/repair/Block4/Block4_repaired.py",
+  "repaired_script_size_bytes": 351491,
+  "connectivity_preserved": true,
+  "connectivity_sources_checked": 588,
+  "missing_connectivity_sources": 0,
+  "pin_endpoint_mismatches": 0,
+  "routing_endpoint_count_mismatches": 0,
+  "connectivity_details": "All 588 connectivity source(s) verified. Connectivity preserved.",
+  "repair_rate": 0.0,
+  "new_violation_rate": 0.2857142857142857,
+  "final_violation_rate": 1.2857142857142858,
+  "original_violations": 147,
+  "final_violations": 189,
+  "removed_violations": 0,
+  "new_violations": 42,
+  "original_rules_violated": 13,
+  "final_rules_violated": 13,
+  "rendered_gds": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/eval/b45base/block/repair/Block4/Block4.gds",
+  "repaired_drc_report": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/eval/b45base/block/repair/Block4/Block4.lyrpt",
+  "repaired_drc_json": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/eval/b45base/block/repair/Block4/Block4.drc.json",
+  "render_log": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/eval/b45base/block/repair/Block4/Block4_render.log",
+  "drc_log": "/Users/harikrishnankumarapillaichandrikakutty/Documents/Hari/DAC_2026_hackathon/ICLAD-Hackathon-2026/problem-categories/ICLAD26-ASU-Problems/temp/eval/b45base/block/repair/Block4/Block4_drc.log",
+  "factors": {
+    "α": {
+      "name": "valid_evaluation",
+      "description": "KLayout render and DRC completed for the repaired script.",
+      "raw_value": 1.0,
+      "direction": "maximize"
+    },
+    "β": {
+      "name": "connectivity_preserved",
+      "description": "Block connectivity was preserved by the repaired script.",
+      "raw_value": 1.0,
+      "direction": "maximize"
+    },
+    "γ": {
+      "name": "repair_rate",
+      "description": "Original DRC violations fixed divided by original DRC violations.",
+      "raw_value": 0.0,
+      "direction": "maximize"
+    },
+    "δ": {
+      "name": "new_violation_rate",
+      "description": "New DRC violations introduced divided by original DRC violations.",
+      "raw_value": 0.2857142857142857,
+      "direction": "minimize"
+    },
+    "ε": {
+      "name": "final_violation_rate",
+      "description": "Final DRC violations divided by original DRC violations.",
+      "raw_value": 1.2857142857142858,
+      "direction": "minimize"
+    }
+  },
+  "scoring": {
+    "policy": "gated_lexicographic_score",
+    "eligible_for_scoring": true,
+    "score_exclusion_reason": null,
+    "eligibility_conditions": [
+      {
+        "field": "valid_evaluation",
+        "description": "The repaired script completed KLayout render, DRC execution, and DRC report parsing.",
+        "satisfied": true
+      },
+      {
+        "field": "connectivity_preserved",
+        "description": "The repaired script preserved the reference connectivity for the case.",
+        "satisfied": true
+      }
+    ],
+    "score_order": [
+      {
+        "field": "final_violation_rate",
+        "direction": "minimize",
+        "priority": 1,
+        "description": "Primary score comparison metric among eligible submissions."
+      },
+      {
+        "field": "repair_rate",
+        "direction": "maximize",
+        "priority": 2,
+        "role": "tie_breaker",
+        "description": "Tie-breaker when final violation rates are equal."
+      }
+    ],
+    "score_values": {
+      "final_violation_rate": 1.2857142857142858,
+      "repair_rate": 0.0
+    }
+  }
+}

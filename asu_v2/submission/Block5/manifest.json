@@ -1,0 +1,17 @@
+{
+ "block": "Block5",
+ "note": "post-audit addition 2026-07-26: organizers released Block4/5 on 2026-07-25 (contest commit 11643cd); these are the UNMODIFIED rev3p15 official-runner outputs, scored blind (no tuning).",
+ "script_sha256": "dc922334670533e3b11c97ee52a698b589eae7fb679077ce9d444fe0cfc2728b",
+ "total": 33,
+ "fvr": 0.4852941176470588,
+ "repair_rate": 0.5588235294117647,
+ "valid_repair": true,
+ "connectivity_preserved": true,
+ "baseline_total": 87,
+ "la_equal": true,
+ "la_components": [
+  58,
+  58
+ ],
+ "measured_run": "rev3p15 (agent) + b45base (baseline) via official evaluator"
+}
