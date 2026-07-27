@@ -17,6 +17,10 @@ style: |
   .bad { color: #b03030; font-weight: 600; }
   footer { font-size: 14px; color: #888; }
 footer: "Chip Convergence — ICLAD-DAC 2026 — NXP SoC Generation"
+
+> **HISTORICAL DECK — SUPERSEDED.** Use `combined_deck.pdf` as the current
+> source of truth for numbers and status. the TileLink router description here predates the organizers' 2026-07-25 generator update (now 5-port XY; our reference model synced, 12/12), and STG output is --deep/live-only.
+
 ---
 
 <!-- _class: lead -->

@@ -25,7 +25,9 @@ before anything is accepted. Detailed engineering logs: `nvidia_work/NVIDIA_DAIL
    Docker (`iclad-dev:v1` built per the contest repo's ENV_PREPARATION.md) + ASAP7 in
    `ICLAD-Hackathon-2026/.../techlib/`; for ASU, Docker + the pinned KLayout 0.30.1 image
    (`docker build --platform linux/amd64 -t asu-klayout:0.30.1 asu_work/docker`).
-3. Model access: `pip install google-genai`; export ONE of `EXPRESS_MODE_KEY` (Vertex AI
+3. Python: the NVIDIA agent/evaluator requires **Python >= 3.10** (3.12 recommended on
+   macOS — commands below use `python3`; substitute `python3.12` if your default is older).
+4. Model access: `pip install google-genai`; export ONE of `EXPRESS_MODE_KEY` (Vertex AI
    Express Mode, per AgentSetup.md) or `GEMINI_API_KEY` (AI Studio — the hackathon-provided
    key type). NOTE: auto-detection prefers `EXPRESS_MODE_KEY` if BOTH are set — to run on
    the hackathon AI Studio key, export only `GEMINI_API_KEY` and leave `EXPRESS_MODE_KEY`
@@ -75,13 +77,21 @@ them that the published checkers cannot see (documented in `asu_v2/reviews/`), w
 Rev3 removes.
 
 ```bash
-# Official runner (needs Docker + EXPRESS_MODE_KEY exported for the model-wrapper to
-# START; the deterministic ASU agent makes ZERO model calls, so no key is ever charged —
-# for keyless verification any placeholder value works, e.g. EXPRESS_MODE_KEY=unused):
+# Official runner (lives in the CONTEST checkout, not this repo; needs Docker +
+# EXPRESS_MODE_KEY exported for the model-wrapper to START — the deterministic ASU agent
+# makes ZERO model calls, so any placeholder works, e.g. EXPRESS_MODE_KEY=unused):
+cd <contest>/problem-categories/ICLAD26-ASU-Problems
 python3 official_eval/run_official_eval.py --run-id r1 \
     --submission-dir <this_repo>/asu_work/official_submission --agent-entrypoint agent.py
-#   -> emits BlockN_repaired.py; the host evaluator scores FVR 0.393-0.582
-#      (rehearsed 2026-07-26, run rev3p15: totals 142/35/35/102/444, zero model calls)
+#   -> emits BlockN_repaired.py for all 7 blocks; evaluator scores FVR 0.374-0.582
+#      (fresh totals 142/35/35/55/33/102/444 for Block1/2/3/4/5/6/7; zero model calls
+#       — independently reproduced from a cold public clone on 2026-07-26)
+# If the host has no KLayout 0.30.1 (the evaluator hard-rejects other versions), add
+# --skip-eval above, then run the evaluator inside the pinned image:
+#   docker run --rm --platform linux/amd64 -v <abs-paths>:<abs-paths> asu-klayout:0.30.1 \
+#     bash -c 'cd <contest>/.../ICLAD26-ASU-Problems && for B in Block1 Block2 Block3 \
+#       Block4 Block5 Block6 Block7; do python3 evaluator/evaluate_repair.py \
+#       --case $B --run-id r1; done'
 
 # Dev agent (keep-best loop; needs KLayout 0.30.1 image — for local measurement/ablation):
 docker build --platform linux/amd64 -t asu-klayout:0.30.1 asu_work/docker
@@ -114,7 +124,7 @@ python3 -m ppa.evaluate --ip sha512 --variant-dir ../submission/sha512/sha512/sr
 # ASU — the submitted agent is DETERMINISTIC (no model call); official runner scores after:
 python3 <contest>/.../ICLAD26-ASU-Problems/official_eval/run_official_eval.py --run-id r1 \
     --submission-dir <this_repo>/asu_work/official_submission --agent-entrypoint agent.py
-#   -> BlockN_repaired.py (FVR 0.393-0.582). Runner requires EXPRESS_MODE_KEY even though
+#   -> BlockN_repaired.py (FVR 0.374-0.582, all 7 blocks). Runner requires EXPRESS_MODE_KEY even though
 #      our ASU agent makes no model call.
 ```
 

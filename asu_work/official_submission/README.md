@@ -35,15 +35,20 @@ repair passes that execute inside the organizer's KLayout render:
 On a block with no matching flagged geometry every pass is a no-op and the
 original renders unchanged (eligible floor).
 
-## Verified results (public blocks, official-runner rehearsal `rev3p15`)
+## Verified results (ALL 7 blocks — official runner `rev3p15` + cold-clone reproduction)
 
 | Block | violations | official FVR | v1 (history) |
 |---|---|---|---|
 | Block1 | 315→142 | 0.5820 | 0.7295 |
 | Block2 | 90→35 | 0.5147 | 0.7647 |
 | Block3 | 111→35 | 0.3933 | 0.7640 |
+| Block4 (blind) | 189→55 | **0.3741** | 0.6939 |
+| Block5 (blind) | 87→33 | **0.4853** | 0.7941 |
 | Block6 | 321→102 | 0.4130 | 0.6761 |
 | Block7 | 957→444 | 0.5804 | 0.6824 |
+
+Block4/5 were released by the organizers on 2026-07-25 and scored blind by the
+hash-frozen agent — its two best results.
 
 All valid + connectivity-preserved under the published checker, and —
 verified separately — the **layer-aware electrical partition is preserved

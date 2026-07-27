@@ -1,5 +1,18 @@
 # Chip Convergence — ICLAD-DAC 2026 GenAI Chip Hackathon — Project Summary
 
+> **RECONCILIATION NOTICE (2026-07-26).** This summary accumulated entries across the
+> whole campaign and several sections describe superseded states. The AUTHORITATIVE
+> sources are: root `README.md` (headline results + regression table),
+> `nvidia_work/submission/*/manifest.json` (NVIDIA per-IP truth incl. assurance),
+> `asu_v2/submission/RELEASE_INDEX.json` (ASU seven-block record), and
+> `docs/slides/combined_deck.pdf` (current presentation). Known-stale statements
+> below include: any "5 public blocks" ASU status (now 7, FVR 0.374–0.582,
+> electrically proven — NOT a negative result); kmac/ascon described as
+> not-live-campaigned (both ran: ascon banked ADP 0.97918 LEC-proven, kmac honestly
+> ships baseline after 3 probes); playbook entry counts; a top-level `slides/`
+> mirror (it is `docs/slides/`); and the ASU fresh-clone command that exercises the
+> historical v1 dev agent instead of `asu_work/official_submission/agent.py`.
+
 **Purpose of this file:** a complete handoff for a reviewing agent. It describes what was built
 across all three contest tracks, the results (with exact numbers), the architecture, the key
 decisions and findings, where the evidence lives, and the honest status of each track.

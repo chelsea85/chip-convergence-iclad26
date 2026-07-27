@@ -1,0 +1,43 @@
+{
+ "generated": "2026-07-26",
+ "what": "Seven-block release index (manifest-of-manifests). The audited five-block record and the two later blind blocks keep their original provenance.",
+ "blocks": {
+  "Block1": {
+   "record": "RELEASE_MANIFEST.json",
+   "fvr": 0.5819672131147541,
+   "total": 142
+  },
+  "Block2": {
+   "record": "RELEASE_MANIFEST.json",
+   "fvr": 0.5147058823529411,
+   "total": 35
+  },
+  "Block3": {
+   "record": "RELEASE_MANIFEST.json",
+   "fvr": 0.39325842696629215,
+   "total": 35
+  },
+  "Block4": {
+   "record": "Block4/manifest.json (blind, post-audit; BLOCK45_ADDENDUM.md)",
+   "fvr": 0.3741496599,
+   "total": 55
+  },
+  "Block5": {
+   "record": "Block5/manifest.json (blind, post-audit; BLOCK45_ADDENDUM.md)",
+   "fvr": 0.4852941176,
+   "total": 33
+  },
+  "Block6": {
+   "record": "RELEASE_MANIFEST.json",
+   "fvr": 0.41295546558704455,
+   "total": 102
+  },
+  "Block7": {
+   "record": "RELEASE_MANIFEST.json",
+   "fvr": 0.5803921568627451,
+   "total": 444
+  }
+ },
+ "mean_fvr": 0.477,
+ "independent_reproduction": "FULL_REPRO (cold public clone, 2026-07-26): all totals, hashes, eligibility, and layer-aware partitions reproduced; zero model calls."
+}

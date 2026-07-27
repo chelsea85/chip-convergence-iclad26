@@ -17,6 +17,10 @@ style: |
   .bad { color: #b03030; font-weight: 600; }
   footer { font-size: 14px; color: #888; }
 footer: "Chip Convergence — ICLAD-DAC 2026 — NVIDIA RTL PPA Optimization"
+
+> **HISTORICAL DECK — SUPERSEDED.** Use `combined_deck.pdf` as the current
+> source of truth for numbers and status. async_fifo is shown as a 0.961 win here; the CANONICAL submission deliberately ships baseline ADP 1.0 after the CDC review, and prim is ADP 0.5824 (not 0.6045).
+
 ---
 
 <!-- _class: lead -->

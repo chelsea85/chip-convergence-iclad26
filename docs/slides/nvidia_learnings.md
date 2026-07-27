@@ -17,6 +17,10 @@ style: |
   .bad { color: #b03030; font-weight: 600; }
   footer { font-size: 14px; color: #888; }
 footer: "Chip Convergence — ICLAD-DAC 2026 — Engineering Learnings (companion deck)"
+
+> **HISTORICAL DECK — SUPERSEDED.** Use `combined_deck.pdf` as the current
+> source of truth for numbers and status.
+
 ---
 
 <!-- _class: lead -->

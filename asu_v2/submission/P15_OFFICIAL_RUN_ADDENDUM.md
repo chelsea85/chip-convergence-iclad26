@@ -1,5 +1,11 @@
 # P1-5 official-runner rehearsal — PASSED (2026-07-26, run `rev3p15`)
 
+> **HISTORICAL SNAPSHOT (five blocks):** this rehearsal predates the organizers'
+> Block4/5 release becoming known to us; the agent phase in fact processed all
+> seven blocks, and Block4/5 were scored afterwards — see `BLOCK45_ADDENDUM.md`
+> and `RELEASE_INDEX.json` for the seven-block record. The submission directory
+> now also contains a `README.md` alongside `agent.py`.
+
 Release control required by `ASU_V2_REV3_CODEX_REVIEW_2026-07-26.md` §8.2/§9.
 Target: the GENERATED official agent (`asu_v2/official_submission/agent.py`,
 sha256 in `RELEASE_MANIFEST.json`), not the development driver.

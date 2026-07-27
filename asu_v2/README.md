@@ -1,18 +1,15 @@
 # ASU v2 — build on top of the shipped via-bar repair
 
-**STATUS (2026-07-26 REV3, post 2nd Codex review): all Rev3 checklist items
-done, awaiting re-review GO.** Stack = **via-bar-safe + track-shift + v1-patch**
-(run `runs/rev3b`, driver exit 0 under `--require beat`): 142/35/35/102/444
-violations = FVR **0.39–0.58** (v1 shipped 0.68–0.76). Layer-aware everywhere:
-per-side two-sided bar guard; per-move track acceptance (same-layer + stationary
-adjacent-via + riding-cut host contact sets; NO flat-projection path); immutable-
-anchor partition gate (full SHA-256, fail-closed coverage, all 5 blocks equal);
-driver credibility = anti-deletion area + partition gate (v1 2D count recorded as
-info only). **12/12 permanent keyless controls** (`tests/run_controls.sh`) incl.
-both Codex counterexamples + a drop control that caught a real guard bug.
-Composer byte-identity ×5, read-only slim emission ×5, full-hash
-RELEASE_MANIFEST. Packet: `../COPY_TO_CODEX_ASU_V2_REV3_2026-07-26.md`.
-Remaining: Codex GO + P1-5 official runner (EXPRESS_MODE_KEY) + Hari's push.
+**STATUS (FINAL, 2026-07-26): RELEASED & INDEPENDENTLY REPRODUCED.** Codex Rev3 review =
+ACCEPTED/GO; P1-5 official-runner rehearsal PASSED (zero model calls); resubmission pushed;
+a cold public-clone reproduction re-executed everything green. **All SEVEN blocks** (organizers
+added Block4/5 on 2026-07-25): FVR **0.374–0.582**, totals 142/35/35/55/33/102/444, all valid +
+connectivity-preserved + layer-aware electrical partition equal. Blocks 4/5 were scored BLIND by
+the hash-frozen agent and are its two best results. Release evidence: `submission/`
+(RELEASE_INDEX.json = 7-block index → RELEASE_MANIFEST.json [audited 5-block record] +
+Block4/5 manifests + BLOCK45_ADDENDUM.md + P15 addendum [historical 5-block rehearsal]).
+Review trail: `reviews/` (3 rounds + full-repro review). Earlier text in this file describing
+in-progress status is superseded by this block.
 
 Goal: improve on the submitted ASU result (FVR 0.68–0.76, all 5 public blocks)
 and **resubmit if better**. `asu_work/` is the submitted artifact and is never
