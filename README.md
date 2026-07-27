@@ -176,3 +176,12 @@ source of truth — the two-folder layout is that architecture, not duplication.
    kick never reloads while counting.
 3. NXP `dma_engine`: generated RTL does not compile (`cfg_rdata` declared wire, driven
    procedurally); our agent auto-patches behavior-neutrally.
+
+## Privacy note (deliberate)
+
+This is a solo competition entry presented publicly at DAC 2026. The author's
+name and contact email in commits and slides are intentional public contact
+information. Absolute local paths appearing in committed run logs/evidence are
+retained as-is: they are part of byte-exact, independently-audited evidence
+records, contain no credentials, and rewriting them (or git history) would
+invalidate the reviewed hashes. Decision recorded 2026-07-26.
