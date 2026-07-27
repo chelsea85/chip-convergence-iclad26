@@ -8,8 +8,10 @@ Same discipline as ref_models.py: transcribed statement-for-statement from
 the library's generated RTL with Verilog NBA semantics (conditions evaluate
 pre-edge state, textual order, last write wins), library quirks preserved —
 the AES core IGNORES its `encrypt` input (encrypt-only; inv_sbox unused) and
-the TileLink router does NOT implement its documented XY mesh routing (all
-A-traffic goes to the local port, D-responses broadcast).
+the TileLink router computes its XY decision but only DELIVERS local-destined
+packets (non-local traffic is granted ready and consumed; inter-router
+forwarding is a top-level concern), with D-responses broadcast to the
+current arbitration winner.
 
 Uniform interface, validated by test_ip_models.py lockstep against the
 generated RTL:
@@ -417,43 +419,66 @@ class AxiLiteXbar:
         return self._comb(ins, self.rr, self.rr_rd)
 
 
-# ── tilelink_router (library "simplified": all A -> local, D broadcast) ───────
+# ── tilelink_router (5-port XY, contest generator 8c68299 2026-07-25) ────────
+# The library's current router: 4 direction A-in/D-out ports (0=N 1=S 2=E 3=W)
+# + a Local A-out/D-in port; NODE_X/NODE_Y are module PARAMETERS (not ports).
+# XY decision from addr[AW-1:AW-4]=dest_x, addr[AW-5:AW-8]=dest_y; only
+# LOCAL-destined packets are delivered (inter-router forwarding is wired at
+# the top level — non-local packets are granted ready and consumed).
+# D-channel: local response broadcast, valid gated to the current A-winner.
+# Fully combinational; transcribed statement-for-statement from the RTL.
+_TL_AF = [("opcode", 3), ("param", 3), ("size", 3), ("source", 4),
+          ("addr", 32), ("mask", 4), ("data", 32), ("valid", 1)]
+_TL_DF = [("opcode", 3), ("param", 2), ("size", 3), ("source", 4),
+          ("data", 32), ("valid", 1)]
+
+
 class TlRouter:
-    PORTS = ([(f"p{p}_a_{n}", w, "i") for p in (0, 1) for n, w in
-              [("opcode", 3), ("param", 3), ("size", 3), ("source", 4),
-               ("addr", 32), ("mask", 4), ("data", 32), ("valid", 1)]] +
-             [(f"p{p}_a_ready", 1, "o") for p in (0, 1)] +
-             [(f"p{p}_d_{n}", w, "o") for p in (0, 1) for n, w in
-              [("opcode", 3), ("param", 2), ("size", 3), ("source", 4),
-               ("data", 32), ("valid", 1)]] +
-             [(f"p{p}_d_ready", 1, "i") for p in (0, 1)] +
-             [(f"loc_a_{n}", w, "o") for n, w in
-              [("opcode", 3), ("param", 3), ("size", 3), ("source", 4),
-               ("addr", 32), ("mask", 4), ("data", 32), ("valid", 1)]] +
+    PORTS = ([(f"p{p}_a_{n}", w, "i") for p in (0, 1, 2, 3) for n, w in _TL_AF] +
+             [(f"p{p}_a_ready", 1, "o") for p in (0, 1, 2, 3)] +
+             [(f"p{p}_d_{n}", w, "o") for p in (0, 1, 2, 3) for n, w in _TL_DF] +
+             [(f"p{p}_d_ready", 1, "i") for p in (0, 1, 2, 3)] +
+             [(f"loc_a_{n}", w, "o") for n, w in _TL_AF] +
              [("loc_a_ready", 1, "i")] +
-             [(f"loc_d_{n}", w, "i") for n, w in
-              [("opcode", 3), ("param", 2), ("size", 3), ("source", 4),
-               ("data", 32), ("valid", 1)]] +
-             [("loc_d_ready", 1, "o"), ("my_x", 4, "i"), ("my_y", 4, "i")])
+             [(f"loc_d_{n}", w, "i") for n, w in _TL_DF] +
+             [("loc_d_ready", 1, "o")])
     CLKS = [("clk", "rst_n")]
 
     def __init__(self, node_x=1, node_y=1, data_width=32, addr_width=32):
-        pass
+        self.nx, self.ny, self.aw = node_x & 0xF, node_y & 0xF, addr_width
 
     def step(self, ins):
         pass                                        # purely combinational
 
     def outputs(self, i):
-        sel = "p0" if i["p0_a_valid"] else "p1"
-        o = {f"loc_a_{n}": i[f"{sel}_a_{n}"] for n in
-             ("opcode", "param", "size", "source", "addr", "mask", "data")}
-        o["loc_a_valid"] = int(bool(i["p0_a_valid"] or i["p1_a_valid"]))
-        o["p0_a_ready"] = int(bool(i["loc_a_ready"] and i["p0_a_valid"]))
-        o["p1_a_ready"] = int(bool(i["loc_a_ready"] and not i["p0_a_valid"]))
-        for p in (0, 1):
-            for n in ("opcode", "param", "size", "source", "data", "valid"):
-                o[f"p{p}_d_{n}"] = i[f"loc_d_{n}"]
-        o["loc_d_ready"] = int(bool(i["p0_d_ready"] or i["p1_d_ready"]))
+        v = [int(bool(i[f"p{p}_a_valid"])) for p in (0, 1, 2, 3)]
+        any_in = int(any(v))
+        # RTL priority mux p0>p1>p2>p3 falls through to p3 when none valid
+        sel = 0 if v[0] else 1 if v[1] else 2 if v[2] else 3
+        f = {n: i[f"p{sel}_a_{n}"] for n, _ in _TL_AF}
+        dest_x = (f["addr"] >> (self.aw - 4)) & 0xF
+        dest_y = (f["addr"] >> (self.aw - 8)) & 0xF
+        go_local = any_in and dest_x == self.nx and dest_y == self.ny
+        go_dir = any_in and not go_local        # east/west/north/south cases
+        o = {f"loc_a_{n}": f[n] for n, _ in _TL_AF if n != "valid"}
+        o["loc_a_valid"] = int(bool(go_local))
+        la = int(bool(i["loc_a_ready"]))
+        grant = la if go_local else (1 if go_dir else 0)
+        o["p0_a_ready"] = int(bool(v[0] and grant))
+        o["p1_a_ready"] = int(bool(not v[0] and v[1] and (la if go_local else 1)))
+        o["p2_a_ready"] = int(bool(not v[0] and not v[1] and v[2]
+                                   and (la if go_local else 1)))
+        o["p3_a_ready"] = int(bool(not v[0] and not v[1] and not v[2] and v[3]
+                                   and (la if go_local else 1)))
+        winner = [v[0], not v[0] and v[1], not v[0] and not v[1] and v[2],
+                  not v[0] and not v[1] and not v[2] and v[3]]
+        for p in (0, 1, 2, 3):
+            for n, _ in _TL_DF:
+                if n != "valid":
+                    o[f"p{p}_d_{n}"] = i[f"loc_d_{n}"]
+            o[f"p{p}_d_valid"] = int(bool(i["loc_d_valid"] and winner[p]))
+        o["loc_d_ready"] = int(bool(i["p0_d_ready"] or i["p1_d_ready"]
+                                    or i["p2_d_ready"] or i["p3_d_ready"]))
         return o
 
 

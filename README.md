@@ -125,7 +125,7 @@ python3 <contest>/.../ICLAD26-ASU-Problems/official_eval/run_official_eval.py --
 | NXP e2e (offline) | `nxp_work/agent$ python3 nxp_agent.py --model stub` | 30/30, KAT 79/79 ×2 |
 | NXP structural sabotage | `python3 test_structural.py` | 8/8 |
 | NXP runner contract | `python3 test_runner_mode.py` | 6/6 |
-| NXP IP reference models | `python3 test_ip_models.py` | 12/12 |
+| NXP IP reference models | `python3 test_ip_models.py` | 12/12 (synced 2026-07-26 to contest rtl_gen_lib `8c68299`; new `apb_fabric6` = documented dev-model coverage gap) |
 | NVIDIA model interface | `nvidia_work/agent$ python3 test_model_iface.py` | 13/13 |
 | NVIDIA cold-start drill | `python3 test_cold_start.py` (needs Docker) | 6/6 |
 | NVIDIA discovery fixtures | `python3 -m ppa.discover --validate` | 3 MATCH |

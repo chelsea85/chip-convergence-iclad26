@@ -1,5 +1,13 @@
 # Chip Convergence — NXP SoC-Generation Agent
 
+> **2026-07-26 library sync:** the contest `rtl_gen_lib` was updated by the
+> organizers on 2026-07-25 (commit `8c68299`): `tilelink_router` is now a
+> 5-port XY design with NODE_X/NODE_Y parameters, and a new `apb_fabric6` IP
+> was added. `ip_models.TlRouter` has been synchronized (12/12 lockstep
+> restored). `apb_fabric6` has no reference model yet — a KNOWN coverage gap
+> in the dev differential vocabulary only; the agent emits all IP RTL via the
+> contest's own generator, so emitted RTL always tracks the current library.
+
 Generates the `secure_periph_soc` from the architecture diagram: infers YAML specs per IP,
 drives `rtl_gen_lib`, stitches the top, and gates everything through a deterministic
 correctness firewall. Stdlib-only Python + iverilog (the guaranteed eval environment).
@@ -65,7 +73,8 @@ Expected (stub and, as of 2026-07-12, live vertex):
 [4] GATE: PASS — 30/30 PASS
 [4b] KAT(golden): PASS — 79/79
 [4b] KAT(model):  PASS — 79/79
-[5] STG-DIFF: MATCH — 3662 cycles, 0 differing
+[5] STG-DIFF: MATCH — 3662 cycles, 0 differing   (--deep / live runs only;
+                                                  not printed by default stub)
 ```
 
 ## Regression suites
